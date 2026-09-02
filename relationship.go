@@ -1,0 +1,328 @@
+package mwanachamataskmanager
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/aosanya/mwanachama-go-shared/entitygraph"
+)
+
+// Relationship is the Work-domain projection of an entitygraph edge between
+// two Work vertices (Task / Project / Agent).
+type Relationship struct {
+	// ID is the storage-assigned edge identifier.
+	ID string
+
+	// AgencyID is the agency that owns both endpoints and the edge itself.
+	AgencyID string
+
+	// Label is the edge label — one of the RelLabel* constants (W4).
+	Label string
+
+	// FromID is the source vertex entity ID.
+	FromID string
+
+	// ToID is the target vertex entity ID.
+	ToID string
+
+	// Properties are caller-supplied edge metadata.
+	Properties map[string]any
+
+	// CreatedAt is the RFC 3339 timestamp the edge was created.
+	CreatedAt string
+}
+
+// Direction selects edge orientation for [TaskManager.TraverseRelationships].
+type Direction int
+
+const (
+	// DirectionInbound returns edges pointing AT the start vertex.
+	DirectionInbound Direction = iota
+
+	// DirectionOutbound returns edges pointing AWAY from the start vertex.
+	DirectionOutbound
+)
+
+// String returns the entitygraph traversal direction string for d.
+func (d Direction) String() string {
+	switch d {
+	case DirectionInbound:
+		return "inbound"
+	case DirectionOutbound:
+		return "outbound"
+	default:
+		return "outbound"
+	}
+}
+
+// Edge-label constants — the closed set of allowed Work relationship labels.
+// Referenced by both [DefaultWorkSchema] and the relationship engine below
+// (endpoint whitelist + CreateRelationship/DeleteRelationship/
+// TraverseRelationships).
+const (
+	// RelLabelAssignedTo connects a Task to the Agent currently responsible
+	// for it (functional — at most one per Task).
+	RelLabelAssignedTo = "assigned_to"
+
+	// RelLabelBlocks indicates the source Task must reach a terminal status
+	// before the target Task may transition to in_progress.
+	RelLabelBlocks = "blocks"
+
+	// RelLabelSubtaskOf marks the source Task as a child of the target Task
+	// (functional — a subtask has at most one parent).
+	RelLabelSubtaskOf = "subtask_of"
+
+	// RelLabelDependsOn is a soft dependency — informational only, no status gate.
+	RelLabelDependsOn = "depends_on"
+
+	// RelLabelMemberOf links a Task to a Project. Project membership is many-to-many.
+	RelLabelMemberOf = "member_of"
+
+	// RelLabelHasTag links a Task to a Tag. Tagging is many-to-many.
+	RelLabelHasTag = "has_tag"
+
+	// RelLabelHasTodo links a Task to a TaskTodo produced by a decomposition run.
+	// One-to-many: a Task may have multiple TodoItems decomposed from it.
+	RelLabelHasTodo = "has_todo"
+
+	// RelLabelTodoAssignedTo links a TaskTodo to the Agent responsible for executing it.
+	// Separate from RelLabelAssignedTo (Task → Agent) to keep endpoint validation clean.
+	RelLabelTodoAssignedTo = "todo_assigned_to"
+
+	// RelLabelStartedTask links a WorkflowRun to a Task it produced. One-to-many;
+	// a single run may anchor multiple tasks (e.g. parent + decomposition spawn).
+	RelLabelStartedTask = "started_task"
+
+	// RelLabelStartedTodo links a WorkflowRun to a TaskTodo it produced. Optional —
+	// usually the Todo is reachable from the Task via has_todo, but linking directly
+	// lets producers attribute orphan todos to the run.
+	RelLabelStartedTodo = "started_todo"
+
+	// RelLabelPartOfRun is the inverse of started_task / started_todo: lets callers
+	// look up "which run created this Task/Todo?" without scanning every run.
+	RelLabelPartOfRun = "part_of_run"
+
+	// RelLabelHasDeliverable links a Task or TaskTodo to a Deliverable it must produce.
+	RelLabelHasDeliverable = "has_deliverable"
+
+	// RelLabelHasAcceptanceCriteria links a Task or TaskTodo to a verifiable AcceptanceCriteria.
+	RelLabelHasAcceptanceCriteria = "has_acceptance_criteria"
+)
+
+// relationshipFromEntitygraph adapts a mwanachama-go-shared edge into the
+// Work-domain Relationship type.
+func relationshipFromEntitygraph(r entitygraph.Relationship) Relationship {
+	props := r.Properties
+	if props != nil {
+		dup := make(map[string]any, len(props))
+		for k, v := range props {
+			dup[k] = v
+		}
+		props = dup
+	}
+	return Relationship{
+		ID:         r.ID,
+		AgencyID:   r.AgencyID,
+		Label:      r.Name,
+		FromID:     r.FromID,
+		ToID:       r.ToID,
+		Properties: props,
+		CreatedAt:  r.CreatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+// relEndpoint describes the allowed (from, to) type pair for a Work edge label.
+// fromTypes contains one or more TypeDefinition names that are valid sources;
+// labels shared by Task and TaskTodo (has_deliverable, has_acceptance_criteria)
+// list both.
+type relEndpoint struct {
+	fromTypes []string
+	toType    string
+}
+
+// relationshipEndpointTypes maps each Work edge label to its endpoint constraints.
+var relationshipEndpointTypes = map[string]relEndpoint{
+	RelLabelAssignedTo:            {fromTypes: []string{taskTypeID}, toType: agentTypeID},
+	RelLabelBlocks:                {fromTypes: []string{taskTypeID}, toType: taskTypeID},
+	RelLabelSubtaskOf:             {fromTypes: []string{taskTypeID}, toType: taskTypeID},
+	RelLabelDependsOn:             {fromTypes: []string{taskTypeID}, toType: taskTypeID},
+	RelLabelMemberOf:              {fromTypes: []string{taskTypeID}, toType: projectTypeID},
+	RelLabelHasTag:                {fromTypes: []string{taskTypeID}, toType: tagTypeID},
+	RelLabelHasTodo:               {fromTypes: []string{taskTypeID}, toType: taskTodoTypeID},
+	RelLabelTodoAssignedTo:        {fromTypes: []string{taskTodoTypeID}, toType: agentTypeID},
+	RelLabelStartedTask:           {fromTypes: []string{workflowRunTypeID}, toType: taskTypeID},
+	RelLabelStartedTodo:           {fromTypes: []string{workflowRunTypeID}, toType: taskTodoTypeID},
+	RelLabelHasDeliverable:        {fromTypes: []string{taskTypeID, taskTodoTypeID}, toType: deliverableTypeID},
+	RelLabelHasAcceptanceCriteria: {fromTypes: []string{taskTypeID, taskTodoTypeID}, toType: acceptanceCriteriaTypeID},
+}
+
+// notFoundForType returns the typed sentinel error for a vertex TypeID.
+func notFoundForType(typeID string) error {
+	switch typeID {
+	case taskTypeID:
+		return ErrTaskNotFound
+	case agentTypeID:
+		return ErrAgentNotFound
+	case projectTypeID:
+		return ErrProjectNotFound
+	case tagTypeID:
+		return ErrTagNotFound
+	case taskTodoTypeID:
+		return ErrTaskTodoNotFound
+	case workflowRunTypeID:
+		return ErrWorkflowRunNotFound
+	case deliverableTypeID:
+		return ErrDeliverableNotFound
+	case acceptanceCriteriaTypeID:
+		return ErrAcceptanceCriteriaNotFound
+	default:
+		return entitygraph.ErrEntityNotFound
+	}
+}
+
+// labelHasCreatedAt reports whether the schema's RelationshipDefinition for
+// label declares a "created_at" property the manager should default-populate.
+// member_of uses "added_at", assigned_to uses "assigned_at" — those labels
+// return false (the caller supplies the timestamp on the Properties map).
+func labelHasCreatedAt(label string) bool {
+	switch label {
+	case RelLabelBlocks, RelLabelSubtaskOf, RelLabelDependsOn,
+		RelLabelStartedTask, RelLabelStartedTodo:
+		return true
+	default:
+		return false
+	}
+}
+
+// CreateRelationship validates the (label, FromID, ToID) triple and creates
+// the edge via the underlying DataManager. Re-creating an existing edge is
+// idempotent — the existing edge is returned with no error.
+func (m *taskManager) CreateRelationship(ctx context.Context, agencyID string, rel Relationship) (Relationship, error) {
+	allowed, ok := relationshipEndpointTypes[rel.Label]
+	if !ok {
+		return Relationship{}, fmt.Errorf("%w: unknown label %q", ErrInvalidRelationship, rel.Label)
+	}
+	if rel.FromID == "" || rel.ToID == "" {
+		return Relationship{}, fmt.Errorf("%w: FromID and ToID are required", ErrInvalidRelationship)
+	}
+
+	from, err := m.dm.GetEntity(ctx, agencyID, rel.FromID)
+	if err != nil {
+		if errors.Is(err, entitygraph.ErrEntityNotFound) {
+			return Relationship{}, notFoundForType(allowed.fromTypes[0])
+		}
+		return Relationship{}, fmt.Errorf("CreateRelationship: get from: %w", err)
+	}
+	fromTypeOK := false
+	for _, ft := range allowed.fromTypes {
+		if ft == from.TypeID {
+			fromTypeOK = true
+			break
+		}
+	}
+	if from.AgencyID != agencyID || !fromTypeOK {
+		return Relationship{}, fmt.Errorf("%w: from-vertex type %q does not match label %q", ErrInvalidRelationship, from.TypeID, rel.Label)
+	}
+
+	to, err := m.dm.GetEntity(ctx, agencyID, rel.ToID)
+	if err != nil {
+		if errors.Is(err, entitygraph.ErrEntityNotFound) {
+			return Relationship{}, notFoundForType(allowed.toType)
+		}
+		return Relationship{}, fmt.Errorf("CreateRelationship: get to: %w", err)
+	}
+	if to.AgencyID != agencyID || to.TypeID != allowed.toType {
+		return Relationship{}, fmt.Errorf("%w: to-vertex type %q does not match label %q", ErrInvalidRelationship, to.TypeID, rel.Label)
+	}
+
+	existing, err := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{
+		AgencyID: agencyID,
+		FromID:   rel.FromID,
+		ToID:     rel.ToID,
+		Name:     rel.Label,
+	})
+	if err != nil {
+		return Relationship{}, fmt.Errorf("CreateRelationship: list: %w", err)
+	}
+	if len(existing) > 0 {
+		return relationshipFromEntitygraph(existing[0]), nil
+	}
+
+	props := map[string]any{}
+	for k, v := range rel.Properties {
+		props[k] = v
+	}
+	if _, ok := props["created_at"]; !ok && labelHasCreatedAt(rel.Label) {
+		props["created_at"] = time.Now().UTC().Format(time.RFC3339)
+	}
+
+	created, err := m.dm.CreateRelationship(ctx, entitygraph.CreateRelationshipRequest{
+		AgencyID:   agencyID,
+		Name:       rel.Label,
+		FromID:     rel.FromID,
+		ToID:       rel.ToID,
+		Properties: props,
+	})
+	if err != nil {
+		if errors.Is(err, entitygraph.ErrInvalidRelationship) {
+			return Relationship{}, fmt.Errorf("%w: %v", ErrInvalidRelationship, err)
+		}
+		if errors.Is(err, entitygraph.ErrEntityNotFound) {
+			return Relationship{}, notFoundForType(allowed.toType)
+		}
+		return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
+	}
+
+	out := relationshipFromEntitygraph(created)
+	m.publish(ctx, TopicRelationshipCreated, agencyID, RelationshipCreatedPayload{
+		FromID: out.FromID,
+		ToID:   out.ToID,
+		Label:  out.Label,
+	})
+	return out, nil
+}
+
+// DeleteRelationship removes the single edge identified by (fromID, toID, label).
+func (m *taskManager) DeleteRelationship(ctx context.Context, agencyID, fromID, toID, label string) error {
+	edges, err := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{
+		AgencyID: agencyID,
+		FromID:   fromID,
+		ToID:     toID,
+		Name:     label,
+	})
+	if err != nil {
+		return fmt.Errorf("DeleteRelationship: list: %w", err)
+	}
+	if len(edges) == 0 {
+		return ErrRelationshipNotFound
+	}
+	if err := m.dm.DeleteRelationship(ctx, agencyID, edges[0].ID); err != nil {
+		if errors.Is(err, entitygraph.ErrRelationshipNotFound) {
+			return ErrRelationshipNotFound
+		}
+		return fmt.Errorf("DeleteRelationship: %w", err)
+	}
+	return nil
+}
+
+// TraverseRelationships returns the single-hop edges incident on vertexID
+// matching label and direction.
+func (m *taskManager) TraverseRelationships(ctx context.Context, agencyID, vertexID, label string, dir Direction) ([]Relationship, error) {
+	res, err := m.dm.TraverseGraph(ctx, entitygraph.TraverseGraphRequest{
+		AgencyID:  agencyID,
+		StartID:   vertexID,
+		Direction: dir.String(),
+		Depth:     1,
+		Names:     []string{label},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("TraverseRelationships: %w", err)
+	}
+	out := make([]Relationship, 0, len(res.Edges))
+	for _, e := range res.Edges {
+		out = append(out, relationshipFromEntitygraph(e))
+	}
+	return out, nil
+}

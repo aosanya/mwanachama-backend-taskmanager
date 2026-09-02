@@ -1,0 +1,284 @@
+package mwanachamataskmanager_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/aosanya/mwanachama-go-shared/entitygraph"
+	mwanachamataskmanager "github.com/aosanya/mwanachama-taskmanager"
+)
+
+// ── CreateProject ────────────────────────────────────────────────────────────
+
+func TestCreateProject_EmptyName_ReturnsErrInvalidTask(t *testing.T) {
+	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	_, err := mgr.CreateProject(context.Background(), "ag", mwanachamataskmanager.Project{})
+	if !errors.Is(err, mwanachamataskmanager.ErrInvalidTask) {
+		t.Fatalf("got %v, want ErrInvalidTask", err)
+	}
+}
+
+func TestCreateProject_RoundTrip(t *testing.T) {
+	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	p, err := mgr.CreateProject(context.Background(), "ag", mwanachamataskmanager.Project{
+		Name:        "Sprint 7",
+		Description: "Q2 push",
+		GithubRepo:  "aosanya/mwanachama-taskmanager",
+	})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	if p.ID == "" {
+		t.Error("project missing ID")
+	}
+	if p.Name != "Sprint 7" || p.Description != "Q2 push" || p.GithubRepo != "aosanya/mwanachama-taskmanager" {
+		t.Errorf("unexpected: %+v", p)
+	}
+}
+
+// ── GetProject ───────────────────────────────────────────────────────────────
+
+func TestGetProject_NotFound(t *testing.T) {
+	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	_, err := mgr.GetProject(context.Background(), "ag", "missing")
+	if !errors.Is(err, mwanachamataskmanager.ErrProjectNotFound) {
+		t.Fatalf("got %v, want ErrProjectNotFound", err)
+	}
+}
+
+// ── GetProjectByName ─────────────────────────────────────────────────────────
+
+// GetProjectByName must resolve display-name casing to the lowercase slug it
+// stored at CreateProject time. Without normalization, a path like
+// /projects/SharedFarms returns 404 even though the project exists.
+func TestGetProjectByName_CaseInsensitive(t *testing.T) {
+	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	ctx := context.Background()
+	if _, err := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "SharedFarms"}); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	for _, name := range []string{"SharedFarms", "sharedfarms", "SHAREDFARMS", "sharedFARMS"} {
+		got, err := mgr.GetProjectByName(ctx, "ag", name)
+		if err != nil {
+			t.Errorf("lookup %q: %v", name, err)
+			continue
+		}
+		if got.ProjectName != "sharedfarms" {
+			t.Errorf("lookup %q resolved to slug %q, want %q", name, got.ProjectName, "sharedfarms")
+		}
+	}
+}
+
+// Display names that contain spaces become underscore slugs at create time
+// (see toSlug). The lookup must normalize the same way so a caller passing
+// the display name with its original spaces still resolves the project.
+func TestGetProjectByName_NormalizesSpaces(t *testing.T) {
+	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	ctx := context.Background()
+	if _, err := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Shared Farms"}); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	got, err := mgr.GetProjectByName(ctx, "ag", "Shared Farms")
+	if err != nil {
+		t.Fatalf("GetProjectByName: %v", err)
+	}
+	if got.ProjectName != "shared_farms" {
+		t.Errorf("got slug %q, want %q", got.ProjectName, "shared_farms")
+	}
+}
+
+// ── UpdateProject ────────────────────────────────────────────────────────────
+
+func TestUpdateProject_PatchesFields(t *testing.T) {
+	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	ctx := context.Background()
+	p, _ := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Old"})
+
+	p.Name = "New"
+	p.Description = "patched"
+	p.GithubRepo = "aosanya/Foo"
+	updated, err := mgr.UpdateProject(ctx, "ag", p)
+	if err != nil {
+		t.Fatalf("UpdateProject: %v", err)
+	}
+	if updated.Name != "New" || updated.Description != "patched" || updated.GithubRepo != "aosanya/Foo" {
+		t.Errorf("unexpected: %+v", updated)
+	}
+	if updated.ID != p.ID {
+		t.Error("update created new vertex")
+	}
+}
+
+func TestUpdateProject_NotFound(t *testing.T) {
+	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	_, err := mgr.UpdateProject(context.Background(), "ag", mwanachamataskmanager.Project{
+		ID: "missing", Name: "x",
+	})
+	if !errors.Is(err, mwanachamataskmanager.ErrProjectNotFound) {
+		t.Fatalf("got %v, want ErrProjectNotFound", err)
+	}
+}
+
+// ── ListProjects ─────────────────────────────────────────────────────────────
+
+func TestListProjects_AgencyIsolation(t *testing.T) {
+	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	ctx := context.Background()
+	_, _ = mgr.CreateProject(ctx, "agency-A", mwanachamataskmanager.Project{Name: "A1"})
+	_, _ = mgr.CreateProject(ctx, "agency-A", mwanachamataskmanager.Project{Name: "A2"})
+	_, _ = mgr.CreateProject(ctx, "agency-B", mwanachamataskmanager.Project{Name: "B1"})
+
+	a, _ := mgr.ListProjects(ctx, "agency-A")
+	if len(a) != 2 {
+		t.Errorf("agency-A: want 2, got %d", len(a))
+	}
+	b, _ := mgr.ListProjects(ctx, "agency-B")
+	if len(b) != 1 {
+		t.Errorf("agency-B: want 1, got %d", len(b))
+	}
+}
+
+// ── AddTaskToProject / ListTasksInProject ────────────────────────────────────
+
+func TestAddTaskToProject_ListTasksInProject_RoundTrip(t *testing.T) {
+	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	ctx := context.Background()
+	p, _ := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Sprint"})
+	t1, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
+
+	if err := mgr.AddTaskToProject(ctx, "ag", t1.ID, p.ID); err != nil {
+		t.Fatalf("AddTaskToProject: %v", err)
+	}
+	tasks, err := mgr.ListTasksInProject(ctx, "ag", p.ID)
+	if err != nil {
+		t.Fatalf("ListTasksInProject: %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].ID != t1.ID {
+		t.Errorf("got %v, want [task-1=%s]", tasks, t1.ID)
+	}
+}
+
+func TestAddTaskToProject_Twice_IsIdempotent(t *testing.T) {
+	fake := newFakeDataManager()
+	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	ctx := context.Background()
+	p, _ := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Sprint"})
+	t1, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
+
+	if err := mgr.AddTaskToProject(ctx, "ag", t1.ID, p.ID); err != nil {
+		t.Fatalf("first add: %v", err)
+	}
+	if err := mgr.AddTaskToProject(ctx, "ag", t1.ID, p.ID); err != nil {
+		t.Fatalf("second add: %v", err)
+	}
+
+	all, _ := fake.ListRelationships(ctx, entitygraph.RelationshipFilter{
+		AgencyID: "ag", Name: mwanachamataskmanager.RelLabelMemberOf,
+	})
+	if len(all) != 1 {
+		t.Errorf("want 1 member_of edge after re-add, got %d", len(all))
+	}
+}
+
+// ── RemoveTaskFromProject ────────────────────────────────────────────────────
+
+func TestRemoveTaskFromProject_RemovesMembership(t *testing.T) {
+	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	ctx := context.Background()
+	p, _ := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Sprint"})
+	t1, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
+	_ = mgr.AddTaskToProject(ctx, "ag", t1.ID, p.ID)
+
+	if err := mgr.RemoveTaskFromProject(ctx, "ag", t1.ID, p.ID); err != nil {
+		t.Fatalf("RemoveTaskFromProject: %v", err)
+	}
+	tasks, _ := mgr.ListTasksInProject(ctx, "ag", p.ID)
+	if len(tasks) != 0 {
+		t.Errorf("want 0 members after remove, got %d", len(tasks))
+	}
+}
+
+// ── DeleteProject ────────────────────────────────────────────────────────────
+
+func TestDeleteProject_RemovesProjectAndAllMemberOfEdges_TasksRemain(t *testing.T) {
+	fake := newFakeDataManager()
+	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	ctx := context.Background()
+	p, _ := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Sprint"})
+	t1, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
+	t2, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
+	_ = mgr.AddTaskToProject(ctx, "ag", t1.ID, p.ID)
+	_ = mgr.AddTaskToProject(ctx, "ag", t2.ID, p.ID)
+
+	if err := mgr.DeleteProject(ctx, "ag", p.ID); err != nil {
+		t.Fatalf("DeleteProject: %v", err)
+	}
+
+	// Project is gone.
+	if _, err := mgr.GetProject(ctx, "ag", p.ID); !errors.Is(err, mwanachamataskmanager.ErrProjectNotFound) {
+		t.Errorf("project still resolvable: got %v, want ErrProjectNotFound", err)
+	}
+
+	// All member_of edges removed.
+	rels, _ := fake.ListRelationships(ctx, entitygraph.RelationshipFilter{
+		AgencyID: "ag", Name: mwanachamataskmanager.RelLabelMemberOf,
+	})
+	if len(rels) != 0 {
+		t.Errorf("want 0 member_of edges after project delete, got %d", len(rels))
+	}
+
+	// Member Tasks themselves still resolve.
+	for _, id := range []string{t1.ID, t2.ID} {
+		if _, err := mgr.GetTask(ctx, "ag", id); err != nil {
+			t.Errorf("task %s should survive project deletion: %v", id, err)
+		}
+	}
+}
+
+func TestDeleteProject_NotFound(t *testing.T) {
+	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	err := mgr.DeleteProject(context.Background(), "ag", "missing")
+	if !errors.Is(err, mwanachamataskmanager.ErrProjectNotFound) {
+		t.Fatalf("got %v, want ErrProjectNotFound", err)
+	}
+}
+
+// ── ListProjectsForTask ──────────────────────────────────────────────────────
+
+func TestListProjectsForTask_TaskInMultipleProjects(t *testing.T) {
+	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	ctx := context.Background()
+	p1, _ := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Sprint"})
+	p2, _ := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Epic"})
+	t1, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
+	_ = mgr.AddTaskToProject(ctx, "ag", t1.ID, p1.ID)
+	_ = mgr.AddTaskToProject(ctx, "ag", t1.ID, p2.ID)
+
+	projects, err := mgr.ListProjectsForTask(ctx, "ag", t1.ID)
+	if err != nil {
+		t.Fatalf("ListProjectsForTask: %v", err)
+	}
+	if len(projects) != 2 {
+		t.Fatalf("want 2 projects, got %d", len(projects))
+	}
+}
+
+// ── Whitelist regression guard ───────────────────────────────────────────────
+
+// A `member_of` edge from a Task to a Task (instead of Project) must be
+// rejected with ErrInvalidRelationship. This guards against accidental
+// edge-label whitelist drift.
+func TestMemberOf_NonProjectTarget_Rejected(t *testing.T) {
+	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	ctx := context.Background()
+	t1, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
+	t2, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
+
+	_, err := mgr.CreateRelationship(ctx, "ag", mwanachamataskmanager.Relationship{
+		Label: mwanachamataskmanager.RelLabelMemberOf, FromID: t1.ID, ToID: t2.ID,
+	})
+	if !errors.Is(err, mwanachamataskmanager.ErrInvalidRelationship) {
+		t.Fatalf("got %v, want ErrInvalidRelationship", err)
+	}
+}
