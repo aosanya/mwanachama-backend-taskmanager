@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	mwanachamataskmanager "github.com/aosanya/mwanachama-taskmanager"
+	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
 // ── CancelWorkflowRun ──────────────────────────────────────────────────────

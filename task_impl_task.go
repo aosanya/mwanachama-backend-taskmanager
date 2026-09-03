@@ -16,7 +16,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 )
 
 // CreateTask creates a Task entity in the agency graph.
@@ -244,7 +244,7 @@ func (m *taskManager) loadAssigneeID(ctx context.Context, agencyID, taskID strin
 //
 // agencyID is accepted (matching every call site, and useful for the log
 // line below) but not forwarded to [events.Publisher.Publish] — unlike the
-// original's eventbus.Event, the mwanachama-go-shared Publisher contract
+// original's eventbus.Event, the mwanachama-backend-shared Publisher contract
 // carries no separate agency envelope; payloads that need agency scoping
 // already carry an AgencyID/WorkflowRunID field of their own.
 func (m *taskManager) publish(ctx context.Context, topic, agencyID string, payload any) {

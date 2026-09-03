@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 )
 
 // effectiveTaskPrefix returns the prefix to use when auto-generating task names

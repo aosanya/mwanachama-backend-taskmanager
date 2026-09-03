@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 )
 
 // ListDeliverablesForTask returns all Deliverable entities linked to taskID

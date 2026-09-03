@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 )
 
 // Relationship is the Work-domain projection of an entitygraph edge between
@@ -111,7 +111,7 @@ const (
 	RelLabelHasAcceptanceCriteria = "has_acceptance_criteria"
 )
 
-// relationshipFromEntitygraph adapts a mwanachama-go-shared edge into the
+// relationshipFromEntitygraph adapts a mwanachama-backend-shared edge into the
 // Work-domain Relationship type.
 func relationshipFromEntitygraph(r entitygraph.Relationship) Relationship {
 	props := r.Properties

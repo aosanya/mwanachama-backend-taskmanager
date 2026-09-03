@@ -1,4 +1,4 @@
-# mwanachama-taskmanager (Go)
+# mwanachama-backend-taskmanager (Go)
 
 Open tasks only — 🚀 In Progress · 📋 Not Started · ⏸️ Blocked.
 Everything else (completed rows, board context) is in [todo_done.md](todo_done.md).

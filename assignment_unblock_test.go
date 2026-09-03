@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	mwanachamataskmanager "github.com/aosanya/mwanachama-taskmanager"
+	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
 // seedDependentScenario creates two tasks (a, b) where b depends_on a, an

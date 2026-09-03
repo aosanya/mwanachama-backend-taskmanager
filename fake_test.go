@@ -4,14 +4,14 @@ import (
 	"context"
 	"time"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 	"github.com/google/uuid"
 )
 
 // ── Fake DataManager ─────────────────────────────────────────────────────────
 
 // fakeDataManager is an in-memory entitygraph.DataManager used for unit tests.
-// mwanachama-go-shared ships a schema-aware memory.Backend (S8), but its
+// mwanachama-backend-shared ships a schema-aware memory.Backend (S8), but its
 // UpsertEntity requires an active published schema (GetActive) — this
 // lighter fake keeps unit tests that only care about TaskManager behavior
 // (not schema plumbing) free of that setup, mirroring the original
@@ -283,7 +283,7 @@ type publishedEvent struct {
 // It records every call for assertions and also derives a topic-only
 // projection (events) for the legacy assertion form. Unlike the original
 // CodeValdWork test suite's recordingPublisher, there is no AgencyID to
-// record — mwanachama-go-shared's simplified Publisher contract
+// record — mwanachama-backend-shared's simplified Publisher contract
 // (Publish(ctx, topic, payload)) carries no separate agency envelope.
 type recordingPublisher struct {
 	full   []publishedEvent

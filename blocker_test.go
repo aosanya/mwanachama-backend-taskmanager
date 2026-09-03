@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	mwanachamataskmanager "github.com/aosanya/mwanachama-taskmanager"
+	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
 // setBlocks wires source --[blocks]--> target inside the given agency.

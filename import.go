@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 )
 
 // ── Status constants ──────────────────────────────────────────────────────────

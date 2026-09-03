@@ -1,11 +1,11 @@
-module github.com/aosanya/mwanachama-taskmanager
+module github.com/aosanya/mwanachama-backend-taskmanager
 
 go 1.24.0
 
 toolchain go1.24.7
 
 require (
-	github.com/aosanya/mwanachama-go-shared v0.0.0
+	github.com/aosanya/mwanachama-backend-shared v0.0.0
 	github.com/google/uuid v1.6.0
 )
 
@@ -20,4 +20,4 @@ require (
 	golang.org/x/text v0.24.0 // indirect
 )
 
-replace github.com/aosanya/mwanachama-go-shared => ../mwanachama-go-shared
+replace github.com/aosanya/mwanachama-backend-shared => ../mwanachama-backend-shared

@@ -2,15 +2,15 @@
 
 Guidance for Claude Code working in this repository.
 
-## Project: mwanachama-taskmanager
+## Project: mwanachama-backend-taskmanager
 
 Postgres port of `CodeValdWork` for [mwanachama-frontend-kazi](../mwanachama-frontend-kazi).
-Module path `github.com/aosanya/mwanachama-taskmanager`.
+Module path `github.com/aosanya/mwanachama-backend-taskmanager`.
 
 Dropped from the original: `proto/`, `cmd/server`, `internal/server` (gRPC
 `TaskServiceServer` + the ~1150-line `TaskEventDispatcher` that drives
 AI-failure-recovery orchestration off inbound events), `internal/registrar`
-(CodeValdCortex Cross heartbeat). `mwanachama-api-gateway` runs as one
+(CodeValdCortex Cross heartbeat). `mwanachama-backend-api-gateway` runs as one
 service and imports this package directly — there is no separate process to
 dispatch events to. If the escalation/retry orchestration the dispatcher did
 is still needed, it has to be re-homed as in-process logic here or in the
@@ -24,7 +24,7 @@ gateway, not assumed to exist.
   state machines (Task: 7 states incl. `blocked`/`awaiting-direction`/
   `split`; WorkflowRun: 9 states incl. `paused`/`cancelling`/`rolling_back`/
   `rollback_failed`) — these are pure Go, no storage dependency.
-- `schema.go`'s `DefaultWorkSchema()` ports onto `mwanachama-go-shared`'s
+- `schema.go`'s `DefaultWorkSchema()` ports onto `mwanachama-backend-shared`'s
   type-definition shape; vertex uniqueness (e.g. Agent by `agent_id`, Tag by
   `name`) must become real Postgres unique indexes.
 - Straightforward CRUD/business-logic files (task, converters, project,
@@ -48,5 +48,5 @@ gateway, not assumed to exist.
   [documentation/3. implementation/todo.md](documentation/3.%20implementation/todo.md).
 - Four-phase `documentation/` layout — see
   [documentation/README.md](documentation/README.md).
-- Before wiring into `mwanachama-api-gateway`, check
+- Before wiring into `mwanachama-backend-api-gateway`, check
   `internal/domain/agentic` there for naming/scope overlap.

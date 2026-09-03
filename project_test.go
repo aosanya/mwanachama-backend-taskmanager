@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
-	mwanachamataskmanager "github.com/aosanya/mwanachama-taskmanager"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
+	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
 // ── CreateProject ────────────────────────────────────────────────────────────
@@ -24,7 +24,7 @@ func TestCreateProject_RoundTrip(t *testing.T) {
 	p, err := mgr.CreateProject(context.Background(), "ag", mwanachamataskmanager.Project{
 		Name:        "Sprint 7",
 		Description: "Q2 push",
-		GithubRepo:  "aosanya/mwanachama-taskmanager",
+		GithubRepo:  "aosanya/mwanachama-backend-taskmanager",
 	})
 	if err != nil {
 		t.Fatalf("CreateProject: %v", err)
@@ -32,7 +32,7 @@ func TestCreateProject_RoundTrip(t *testing.T) {
 	if p.ID == "" {
 		t.Error("project missing ID")
 	}
-	if p.Name != "Sprint 7" || p.Description != "Q2 push" || p.GithubRepo != "aosanya/mwanachama-taskmanager" {
+	if p.Name != "Sprint 7" || p.Description != "Q2 push" || p.GithubRepo != "aosanya/mwanachama-backend-taskmanager" {
 		t.Errorf("unexpected: %+v", p)
 	}
 }

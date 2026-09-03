@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	mwanachamataskmanager "github.com/aosanya/mwanachama-taskmanager"
+	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
 // findEvent is defined in fake_test.go (shared across test files) — it takes
@@ -318,5 +318,5 @@ func TestEventSequence_FullPhase2Flow_EmitsExactOrderedTopics(t *testing.T) {
 // TestAllTopics_StableSurface guarding AllTopics()'s schema-derived +
 // business-extra topic set. That function isn't ported (see events.go's
 // doc comment — it only ever fed the dropped Cross registrar, and its
-// schema-derived half has no replacement now that mwanachama-go-shared's
+// schema-derived half has no replacement now that mwanachama-backend-shared's
 // schema package dropped TopicsFromSchema). Nothing here to guard.

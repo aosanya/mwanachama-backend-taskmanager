@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
-	"github.com/aosanya/mwanachama-go-shared/schema"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
+	"github.com/aosanya/mwanachama-backend-shared/schema"
 )
 
 // ── DefaultWorkSchema ────────────────────────────────────────────────────────
@@ -279,7 +279,7 @@ func TestProjectToProperties_RoundTrip(t *testing.T) {
 		Name:        "Sprint 14",
 		ProjectName: "sprint_14",
 		Description: "Push X out the door",
-		GithubRepo:  "aosanya/mwanachama-taskmanager",
+		GithubRepo:  "aosanya/mwanachama-backend-taskmanager",
 		CreatedAt:   "2026-04-01T00:00:00Z",
 		UpdatedAt:   "2026-04-02T00:00:00Z",
 	}

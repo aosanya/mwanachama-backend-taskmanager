@@ -6,8 +6,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
-	mwanachamataskmanager "github.com/aosanya/mwanachama-taskmanager"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
+	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
 // seedTask creates a real Task via the manager so that the resulting entity

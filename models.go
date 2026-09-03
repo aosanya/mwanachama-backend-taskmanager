@@ -7,7 +7,7 @@
 //   - Tag     — free-form label attached to Tasks via `has_tag` edges
 //
 // All domain structs use string timestamps (ISO 8601 / RFC 3339) to match
-// the entitygraph property storage convention used across mwanachama-go-shared.
+// the entitygraph property storage convention used across mwanachama-backend-shared.
 //
 // Ported from github.com/aosanya/CodeValdWork's models.go, unchanged.
 package mwanachamataskmanager
@@ -439,7 +439,7 @@ type Project struct {
 	// Description provides additional context for the project. Optional.
 	Description string `json:"description,omitempty"`
 
-	// RepoName is the mwanachama-git repository name associated with this
+	// RepoName is the mwanachama-backend-git repository name associated with this
 	// project. Used to scope file hydration to the correct repo.
 	RepoName string `json:"repo_name,omitempty"`
 

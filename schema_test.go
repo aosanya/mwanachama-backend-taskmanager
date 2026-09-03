@@ -3,7 +3,7 @@ package mwanachamataskmanager
 import (
 	"testing"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 )
 
 // TestDefaultWorkSchemaValidates guards against schema-authoring mistakes

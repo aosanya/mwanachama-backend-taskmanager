@@ -20,7 +20,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 )
 
 // CancelWorkflowRun implements [TaskManager.CancelWorkflowRun]. See the

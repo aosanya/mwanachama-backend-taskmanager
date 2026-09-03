@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	mwanachamataskmanager "github.com/aosanya/mwanachama-taskmanager"
+	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
 // TestSetFailureBudget_RoundTrip locks the budget on a fresh top-level run

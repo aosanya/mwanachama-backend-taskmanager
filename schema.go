@@ -1,8 +1,8 @@
 // Package mwanachamataskmanager — pre-delivered schema definition.
 //
 // This file exposes [DefaultWorkSchema], which returns the fixed
-// [schema.Schema] for mwanachama-taskmanager. Wiring code in
-// mwanachama-api-gateway seeds this schema per agency at startup via
+// [schema.Schema] for mwanachama-backend-taskmanager. Wiring code in
+// mwanachama-backend-api-gateway seeds this schema per agency at startup via
 // SchemaManager.SetSchema (set s.AgencyID before calling; DefaultWorkSchema
 // itself returns an agency-agnostic template).
 //
@@ -30,16 +30,16 @@
 //	TaskTodo ──has_deliverable──────────► Deliverable
 //	TaskTodo ──has_acceptance_criteria──► AcceptanceCriteria
 //
-// Storage: every entity lives in mwanachama-go-shared's single Postgres
+// Storage: every entity lives in mwanachama-backend-shared's single Postgres
 // `entities` table, keyed by TypeID; TypeDefinition.StorageCollection below
 // is carried over from the ArangoDB original purely as a label (see
 // schema.TypeDefinition's doc) and has no functional effect here. All edges
 // live in the single `relationships` table.
 //
 // Ported from github.com/aosanya/CodeValdWork's schema.go, retargeted onto
-// mwanachama-go-shared's schema.* types. Dropped along the way:
+// mwanachama-backend-shared's schema.* types. Dropped along the way:
 // PathSegment/EntityIDParam/PublishEvents (route/topic-generation fields the
-// new schema type doesn't carry — mwanachama-api-gateway registers routes
+// new schema type doesn't carry — mwanachama-backend-api-gateway registers routes
 // and events by hand) and the eventreceiver.ReceivedEventTypeDefinition("work")
 // entry appended by the original (CodeValdCortex-specific event-tracking
 // plumbing with no equivalent here). Reset from the original's Version: 4 /
@@ -49,10 +49,10 @@
 // into this single definition.
 package mwanachamataskmanager
 
-import "github.com/aosanya/mwanachama-go-shared/schema"
+import "github.com/aosanya/mwanachama-backend-shared/schema"
 
 // DefaultWorkSchema returns the pre-delivered [schema.Schema] seeded by
-// mwanachama-api-gateway on startup via SchemaManager.SetSchema. The
+// mwanachama-backend-api-gateway on startup via SchemaManager.SetSchema. The
 // operation is idempotent — calling it multiple times with the same schema
 // ID is safe.
 func DefaultWorkSchema() schema.Schema {
@@ -324,7 +324,7 @@ func DefaultWorkSchema() schema.Schema {
 					{Name: "project_name", Type: schema.PropertyTypeString},
 					// description provides additional context for the project.
 					{Name: "description", Type: schema.PropertyTypeString},
-					// repo_name is the mwanachama-git repository name associated with this project.
+					// repo_name is the mwanachama-backend-git repository name associated with this project.
 					{Name: "repo_name", Type: schema.PropertyTypeString},
 					// github_repo is the canonical GitHub repository, e.g. "owner/name".
 					{Name: "github_repo", Type: schema.PropertyTypeString},

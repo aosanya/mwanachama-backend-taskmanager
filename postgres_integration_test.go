@@ -1,9 +1,9 @@
 // postgres_integration_test.go exercises TaskManager against a real
-// Postgres-backed entitygraph.DataManager (mwanachama-go-shared's
+// Postgres-backed entitygraph.DataManager (mwanachama-backend-shared's
 // postgres.Backend), rather than the in-memory fakeDataManager the rest of
 // this package's tests use.
 //
-// Skipped unless POSTGRES_URL is set — mirrors mwanachama-go-shared's own
+// Skipped unless POSTGRES_URL is set — mirrors mwanachama-backend-shared's own
 // postgres/backend_test.go split ("go test ./..." needs no database; set
 // POSTGRES_URL to also run this file, see the Makefile's test-pg target).
 // The unit tests elsewhere in this package already exhaustively cover
@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aosanya/mwanachama-go-shared/postgres"
-	mwanachamataskmanager "github.com/aosanya/mwanachama-taskmanager"
+	"github.com/aosanya/mwanachama-backend-shared/postgres"
+	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
 // applyDDL runs a multi-statement SQL script as one command, the way

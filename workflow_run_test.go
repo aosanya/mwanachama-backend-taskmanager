@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	mwanachamataskmanager "github.com/aosanya/mwanachama-taskmanager"
+	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
 func TestCreateWorkflowRun_DefaultsAndReadback(t *testing.T) {

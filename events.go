@@ -10,7 +10,7 @@
 // only to feed internal/registrar's Cross topic registration and the
 // TaskEventDispatcher's inbound subscriptions, neither of which is ported
 // here (see CLAUDE.md). The schema-derived half of AllTopics() also had no
-// replacement available: mwanachama-go-shared's schema package dropped
+// replacement available: mwanachama-backend-shared's schema package dropped
 // TopicsFromSchema/PathSegment/PublishEvents entirely (no schema-derived
 // route or topic generation — see its S2 notes).
 //

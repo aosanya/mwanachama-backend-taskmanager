@@ -8,7 +8,7 @@ import (
 	"errors"
 	"testing"
 
-	mwanachamataskmanager "github.com/aosanya/mwanachama-taskmanager"
+	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
 func TestCreateTask_WithWorkflowRunID_PersistsAndLinks(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	mwanachamataskmanager "github.com/aosanya/mwanachama-taskmanager"
+	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
 // ── NewTaskManager ───────────────────────────────────────────────────────────

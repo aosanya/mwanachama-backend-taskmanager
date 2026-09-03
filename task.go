@@ -3,7 +3,7 @@
 // creating, reading, updating, deleting, and listing tasks assigned to
 // agents.
 //
-// Storage is delegated to a [github.com/aosanya/mwanachama-go-shared/entitygraph.DataManager],
+// Storage is delegated to a [github.com/aosanya/mwanachama-backend-shared/entitygraph.DataManager],
 // so Tasks live in the agency-scoped graph alongside every other domain
 // entity type. Construct a Postgres-backed DataManager and pass it to
 // [NewTaskManager].
@@ -27,8 +27,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
-	"github.com/aosanya/mwanachama-go-shared/events"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
+	"github.com/aosanya/mwanachama-backend-shared/events"
 )
 
 // taskTypeID is the TypeDefinition.Name used for Task entities in the schema.
@@ -440,7 +440,7 @@ type TaskManager interface {
 // Used to seed [DefaultWorkSchema] on startup.
 type WorkSchemaManager = entitygraph.SchemaManager
 
-// Publisher is a type alias for [events.Publisher] — the mwanachama-go-shared
+// Publisher is a type alias for [events.Publisher] — the mwanachama-backend-shared
 // package that unifies the publish contract across this project's services.
 type Publisher = events.Publisher
 

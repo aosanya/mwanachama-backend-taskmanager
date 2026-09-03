@@ -1,10 +1,10 @@
 // task_impl_converters.go — entity↔domain converters.
 //
 // Property helpers (StringProp, Float64Prop, …) live in
-// [github.com/aosanya/mwanachama-go-shared/entitygraph] and are used directly.
+// [github.com/aosanya/mwanachama-backend-shared/entitygraph] and are used directly.
 package mwanachamataskmanager
 
-import "github.com/aosanya/mwanachama-go-shared/entitygraph"
+import "github.com/aosanya/mwanachama-backend-shared/entitygraph"
 
 // ── Task ──────────────────────────────────────────────────────────────────────
 

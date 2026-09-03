@@ -19,7 +19,7 @@
 // below is the same sequential, best-effort loop the Arango original had —
 // a crash mid-loop leaves partial state, same risk profile as before this
 // port. Closing that gap needs a new DataManager capability upstream in
-// mwanachama-go-shared (e.g. WithTx(ctx, func(DataManager) error) error);
+// mwanachama-backend-shared (e.g. WithTx(ctx, func(DataManager) error) error);
 // tracked as a follow-up, not solved here.
 package mwanachamataskmanager
 
@@ -30,7 +30,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 )
 
 // RollbackWorkflowRun implements [TaskManager.RollbackWorkflowRun].

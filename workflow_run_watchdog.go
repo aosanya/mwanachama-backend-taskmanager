@@ -2,7 +2,7 @@
 //
 // This file adds the query helpers a watchdog sweeper uses, plus the
 // handlers that process work.run.timeout and work.task.timeout events.
-// mwanachama-taskmanager has no scheduler of its own — the sweep loop and
+// mwanachama-backend-taskmanager has no scheduler of its own — the sweep loop and
 // event dispatch live in whatever wires this package in (the original's
 // CodeValdCross registrar is not ported here).
 package mwanachamataskmanager
@@ -12,7 +12,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 )
 
 // ListWorkflowRunsStaleSince returns all non-terminal, unpaused WorkflowRuns

@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 )
 
 // runNameSuffixBytes is the number of random bytes that feed the

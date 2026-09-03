@@ -17,7 +17,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/aosanya/mwanachama-go-shared/entitygraph"
+	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 )
 
 // SetFailureBudget locks the failure-pipeline budget on a root WorkflowRun.
