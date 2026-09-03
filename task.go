@@ -1,5 +1,5 @@
 // Package mwanachamataskmanager provides task lifecycle management for
-// mwanachama-kazi. It exposes [TaskManager] — the single interface for
+// mwanachama-frontend-kazi. It exposes [TaskManager] — the single interface for
 // creating, reading, updating, deleting, and listing tasks assigned to
 // agents.
 //

@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository.
 
 ## Project: mwanachama-taskmanager
 
-Postgres port of `CodeValdWork` for [mwanachama-kazi](../mwanachama-kazi).
+Postgres port of `CodeValdWork` for [mwanachama-frontend-kazi](../mwanachama-frontend-kazi).
 Module path `github.com/aosanya/mwanachama-taskmanager`.
 
 Dropped from the original: `proto/`, `cmd/server`, `internal/server` (gRPC

@@ -6,7 +6,7 @@ Four folders, in SDLC order, and everything lives under one of them.
 
 | Folder | What's inside |
 |--------|---------------|
-| [1. requirements/](1.%20requirements/) | Problem, vision and scope for task/workflow management in `mwanachama-kazi`. |
+| [1. requirements/](1.%20requirements/) | Problem, vision and scope for task/workflow management in `mwanachama-frontend-kazi`. |
 | [2. design/](2.%20design/) | The task/project/workflow-run graph schema and how it maps onto `mwanachama-go-shared`'s entity-graph store. |
 | [3. implementation/](3.%20implementation/) | The work: `todo.md` (open board), `todo_done.md` (completed rows + board context). |
 | [4. qa/](4.%20qa/) | Test coverage and results. |
