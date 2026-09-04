@@ -15,9 +15,6 @@ type Relationship struct {
 	// ID is the storage-assigned edge identifier.
 	ID string
 
-	// AgencyID is the agency that owns both endpoints and the edge itself.
-	AgencyID string
-
 	// Label is the edge label — one of the RelLabel* constants (W4).
 	Label string
 
@@ -124,7 +121,6 @@ func relationshipFromEntitygraph(r entitygraph.Relationship) Relationship {
 	}
 	return Relationship{
 		ID:         r.ID,
-		AgencyID:   r.AgencyID,
 		Label:      r.Name,
 		FromID:     r.FromID,
 		ToID:       r.ToID,
@@ -199,7 +195,7 @@ func labelHasCreatedAt(label string) bool {
 // CreateRelationship validates the (label, FromID, ToID) triple and creates
 // the edge via the underlying DataManager. Re-creating an existing edge is
 // idempotent — the existing edge is returned with no error.
-func (m *taskManager) CreateRelationship(ctx context.Context, agencyID string, rel Relationship) (Relationship, error) {
+func (m *taskManager) CreateRelationship(ctx context.Context, rel Relationship) (Relationship, error) {
 	allowed, ok := relationshipEndpointTypes[rel.Label]
 	if !ok {
 		return Relationship{}, fmt.Errorf("%w: unknown label %q", ErrInvalidRelationship, rel.Label)
@@ -208,7 +204,7 @@ func (m *taskManager) CreateRelationship(ctx context.Context, agencyID string, r
 		return Relationship{}, fmt.Errorf("%w: FromID and ToID are required", ErrInvalidRelationship)
 	}
 
-	from, err := m.dm.GetEntity(ctx, agencyID, rel.FromID)
+	from, err := m.dm.GetEntity(ctx, rel.FromID)
 	if err != nil {
 		if errors.Is(err, entitygraph.ErrEntityNotFound) {
 			return Relationship{}, notFoundForType(allowed.fromTypes[0])
@@ -222,26 +218,25 @@ func (m *taskManager) CreateRelationship(ctx context.Context, agencyID string, r
 			break
 		}
 	}
-	if from.AgencyID != agencyID || !fromTypeOK {
+	if !fromTypeOK {
 		return Relationship{}, fmt.Errorf("%w: from-vertex type %q does not match label %q", ErrInvalidRelationship, from.TypeID, rel.Label)
 	}
 
-	to, err := m.dm.GetEntity(ctx, agencyID, rel.ToID)
+	to, err := m.dm.GetEntity(ctx, rel.ToID)
 	if err != nil {
 		if errors.Is(err, entitygraph.ErrEntityNotFound) {
 			return Relationship{}, notFoundForType(allowed.toType)
 		}
 		return Relationship{}, fmt.Errorf("CreateRelationship: get to: %w", err)
 	}
-	if to.AgencyID != agencyID || to.TypeID != allowed.toType {
+	if to.TypeID != allowed.toType {
 		return Relationship{}, fmt.Errorf("%w: to-vertex type %q does not match label %q", ErrInvalidRelationship, to.TypeID, rel.Label)
 	}
 
 	existing, err := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{
-		AgencyID: agencyID,
-		FromID:   rel.FromID,
-		ToID:     rel.ToID,
-		Name:     rel.Label,
+		FromID: rel.FromID,
+		ToID:   rel.ToID,
+		Name:   rel.Label,
 	})
 	if err != nil {
 		return Relationship{}, fmt.Errorf("CreateRelationship: list: %w", err)
@@ -259,7 +254,6 @@ func (m *taskManager) CreateRelationship(ctx context.Context, agencyID string, r
 	}
 
 	created, err := m.dm.CreateRelationship(ctx, entitygraph.CreateRelationshipRequest{
-		AgencyID:   agencyID,
 		Name:       rel.Label,
 		FromID:     rel.FromID,
 		ToID:       rel.ToID,
@@ -276,7 +270,7 @@ func (m *taskManager) CreateRelationship(ctx context.Context, agencyID string, r
 	}
 
 	out := relationshipFromEntitygraph(created)
-	m.publish(ctx, TopicRelationshipCreated, agencyID, RelationshipCreatedPayload{
+	m.publish(ctx, TopicRelationshipCreated, RelationshipCreatedPayload{
 		FromID: out.FromID,
 		ToID:   out.ToID,
 		Label:  out.Label,
@@ -285,12 +279,11 @@ func (m *taskManager) CreateRelationship(ctx context.Context, agencyID string, r
 }
 
 // DeleteRelationship removes the single edge identified by (fromID, toID, label).
-func (m *taskManager) DeleteRelationship(ctx context.Context, agencyID, fromID, toID, label string) error {
+func (m *taskManager) DeleteRelationship(ctx context.Context, fromID, toID, label string) error {
 	edges, err := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{
-		AgencyID: agencyID,
-		FromID:   fromID,
-		ToID:     toID,
-		Name:     label,
+		FromID: fromID,
+		ToID:   toID,
+		Name:   label,
 	})
 	if err != nil {
 		return fmt.Errorf("DeleteRelationship: list: %w", err)
@@ -298,7 +291,7 @@ func (m *taskManager) DeleteRelationship(ctx context.Context, agencyID, fromID, 
 	if len(edges) == 0 {
 		return ErrRelationshipNotFound
 	}
-	if err := m.dm.DeleteRelationship(ctx, agencyID, edges[0].ID); err != nil {
+	if err := m.dm.DeleteRelationship(ctx, edges[0].ID); err != nil {
 		if errors.Is(err, entitygraph.ErrRelationshipNotFound) {
 			return ErrRelationshipNotFound
 		}
@@ -308,20 +301,22 @@ func (m *taskManager) DeleteRelationship(ctx context.Context, agencyID, fromID, 
 }
 
 // TraverseRelationships returns the single-hop edges incident on vertexID
-// matching label and direction.
-func (m *taskManager) TraverseRelationships(ctx context.Context, agencyID, vertexID, label string, dir Direction) ([]Relationship, error) {
-	res, err := m.dm.TraverseGraph(ctx, entitygraph.TraverseGraphRequest{
-		AgencyID:  agencyID,
-		StartID:   vertexID,
-		Direction: dir.String(),
-		Depth:     1,
-		Names:     []string{label},
-	})
+// matching label and direction. This is a thin wrapper over ListRelationships
+// filtered by FromID (outbound) or ToID (inbound) plus the edge label —
+// equivalent to the old TraverseGraph call with Depth: 1.
+func (m *taskManager) TraverseRelationships(ctx context.Context, vertexID, label string, dir Direction) ([]Relationship, error) {
+	filter := entitygraph.RelationshipFilter{Name: label}
+	if dir == DirectionOutbound {
+		filter.FromID = vertexID
+	} else {
+		filter.ToID = vertexID
+	}
+	edges, err := m.dm.ListRelationships(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("TraverseRelationships: %w", err)
 	}
-	out := make([]Relationship, 0, len(res.Edges))
-	for _, e := range res.Edges {
+	out := make([]Relationship, 0, len(edges))
+	for _, e := range edges {
 		out = append(out, relationshipFromEntitygraph(e))
 	}
 	return out, nil

@@ -35,8 +35,8 @@ import (
 
 // RollbackWorkflowRun implements [TaskManager.RollbackWorkflowRun].
 // Sequence: rolling_back → compensate cross-service artifacts → compensate own artifacts → rolled_back (or rollback_failed).
-func (m *taskManager) RollbackWorkflowRun(ctx context.Context, agencyID, runID, reason string) (WorkflowRun, error) {
-	run, err := m.GetWorkflowRun(ctx, agencyID, runID)
+func (m *taskManager) RollbackWorkflowRun(ctx context.Context, runID, reason string) (WorkflowRun, error) {
+	run, err := m.GetWorkflowRun(ctx, runID)
 	if err != nil {
 		return WorkflowRun{}, err
 	}
@@ -48,7 +48,7 @@ func (m *taskManager) RollbackWorkflowRun(ctx context.Context, agencyID, runID, 
 	}
 
 	// Step 1 — acquire the rolling_back lock.
-	rollingRun, err := m.UpdateWorkflowRunStatus(ctx, agencyID, runID, WorkflowRunStatusRollingBack, reason)
+	rollingRun, err := m.UpdateWorkflowRunStatus(ctx, runID, WorkflowRunStatusRollingBack, reason)
 	if err != nil {
 		return WorkflowRun{}, fmt.Errorf("RollbackWorkflowRun: acquire: %w", err)
 	}
@@ -56,14 +56,14 @@ func (m *taskManager) RollbackWorkflowRun(ctx context.Context, agencyID, runID, 
 	// Step 2 — cross-service compensation (event-driven; see file doc).
 
 	// Step 3 — this package's own artifact cleanup.
-	if err := m.DeleteWorkflowRunArtifacts(ctx, agencyID, runID); err != nil {
+	if err := m.DeleteWorkflowRunArtifacts(ctx, runID); err != nil {
 		var rollbackErr error
 		if errors.Is(err, ErrForeignRunDependency) {
 			rollbackErr = err
 		} else {
 			rollbackErr = fmt.Errorf("delete artifacts: %w", err)
 		}
-		failedRun, ferr := m.UpdateWorkflowRunStatus(ctx, agencyID, runID, WorkflowRunStatusRollbackFailed, rollbackErr.Error())
+		failedRun, ferr := m.UpdateWorkflowRunStatus(ctx, runID, WorkflowRunStatusRollbackFailed, rollbackErr.Error())
 		if ferr != nil {
 			slog.ErrorContext(ctx, "RollbackWorkflowRun: failed to set rollback_failed status", "run_id", runID, "err", ferr)
 			return rollingRun, rollbackErr
@@ -72,7 +72,7 @@ func (m *taskManager) RollbackWorkflowRun(ctx context.Context, agencyID, runID, 
 	}
 
 	// Step 4 — finalize.
-	finalRun, err := m.UpdateWorkflowRunStatus(ctx, agencyID, runID, WorkflowRunStatusRolledBack, reason)
+	finalRun, err := m.UpdateWorkflowRunStatus(ctx, runID, WorkflowRunStatusRolledBack, reason)
 	if err != nil {
 		return WorkflowRun{}, fmt.Errorf("RollbackWorkflowRun: finalize: %w", err)
 	}
@@ -81,12 +81,12 @@ func (m *taskManager) RollbackWorkflowRun(ctx context.Context, agencyID, runID, 
 
 // DeleteWorkflowRunArtifacts implements [TaskManager.DeleteWorkflowRunArtifacts].
 // Tasks are reset to pending (not deleted). TaskTodos are hard-deleted.
-func (m *taskManager) DeleteWorkflowRunArtifacts(ctx context.Context, agencyID, runID string) error {
-	if _, err := m.GetWorkflowRun(ctx, agencyID, runID); err != nil {
+func (m *taskManager) DeleteWorkflowRunArtifacts(ctx context.Context, runID string) error {
+	if _, err := m.GetWorkflowRun(ctx, runID); err != nil {
 		return err
 	}
 
-	tasks, err := m.ListTasks(ctx, agencyID, TaskFilter{WorkflowRunID: runID})
+	tasks, err := m.ListTasks(ctx, TaskFilter{WorkflowRunID: runID})
 	if err != nil {
 		return fmt.Errorf("DeleteWorkflowRunArtifacts: list tasks: %w", err)
 	}
@@ -94,15 +94,14 @@ func (m *taskManager) DeleteWorkflowRunArtifacts(ctx context.Context, agencyID, 
 	// Guard: check for Tasks in this run that are depended on by Tasks in OTHER runs.
 	for _, task := range tasks {
 		inbound, err := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{
-			AgencyID: agencyID,
-			ToID:     task.ID,
-			Name:     RelLabelDependsOn,
+			ToID: task.ID,
+			Name: RelLabelDependsOn,
 		})
 		if err != nil {
 			return fmt.Errorf("DeleteWorkflowRunArtifacts: list inbound deps for %s: %w", task.ID, err)
 		}
 		for _, rel := range inbound {
-			fromTask, err := m.GetTask(ctx, agencyID, rel.FromID)
+			fromTask, err := m.GetTask(ctx, rel.FromID)
 			if err != nil {
 				continue // missing task — not a blocker
 			}
@@ -123,8 +122,8 @@ func (m *taskManager) DeleteWorkflowRunArtifacts(ctx context.Context, agencyID, 
 	// silently keep the stale completed_at in storage.
 	now := time.Now().UTC().Format(time.RFC3339)
 	for _, task := range tasks {
-		m.removeStartedTaskEdge(ctx, agencyID, task.ID)
-		if _, err := m.dm.UpdateEntity(ctx, agencyID, task.ID, entitygraph.UpdateEntityRequest{
+		m.removeStartedTaskEdge(ctx, task.ID)
+		if _, err := m.dm.UpdateEntity(ctx, task.ID, entitygraph.UpdateEntityRequest{
 			Properties: map[string]any{
 				"status":          string(TaskStatusPending),
 				"workflow_run_id": "",
@@ -134,17 +133,17 @@ func (m *taskManager) DeleteWorkflowRunArtifacts(ctx context.Context, agencyID, 
 		}); err != nil {
 			slog.ErrorContext(ctx, "DeleteWorkflowRunArtifacts: reset task", "task_id", task.ID, "err", err)
 		}
-		m.publishTaskRolledBack(ctx, agencyID, task.ID, runID)
+		m.publishTaskRolledBack(ctx, task.ID, runID)
 	}
 
 	// Delete TaskTodos anchored to this run (ephemeral decomposition artifacts).
-	todos, err := m.ListTaskTodos(ctx, agencyID, runID)
+	todos, err := m.ListTaskTodos(ctx, runID)
 	if err != nil {
 		return fmt.Errorf("DeleteWorkflowRunArtifacts: list todos: %w", err)
 	}
 	for _, todo := range todos {
-		m.deleteEntityEdges(ctx, agencyID, todo.ID)
-		if err := m.dm.DeleteEntity(ctx, agencyID, todo.ID); err != nil {
+		m.deleteEntityEdges(ctx, todo.ID)
+		if err := m.dm.DeleteEntity(ctx, todo.ID); err != nil {
 			slog.ErrorContext(ctx, "DeleteWorkflowRunArtifacts: delete todo", "todo_id", todo.ID, "err", err)
 		}
 	}
@@ -154,18 +153,17 @@ func (m *taskManager) DeleteWorkflowRunArtifacts(ctx context.Context, agencyID, 
 
 // removeStartedTaskEdge removes all inbound started_task edges pointing to taskID.
 // There is normally exactly one (from the owning run), but we remove all to stay clean on re-invocation.
-func (m *taskManager) removeStartedTaskEdge(ctx context.Context, agencyID, taskID string) {
+func (m *taskManager) removeStartedTaskEdge(ctx context.Context, taskID string) {
 	rels, err := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{
-		AgencyID: agencyID,
-		ToID:     taskID,
-		Name:     RelLabelStartedTask,
+		ToID: taskID,
+		Name: RelLabelStartedTask,
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "removeStartedTaskEdge: list", "task_id", taskID, "err", err)
 		return
 	}
 	for _, rel := range rels {
-		if err := m.dm.DeleteRelationship(ctx, agencyID, rel.ID); err != nil {
+		if err := m.dm.DeleteRelationship(ctx, rel.ID); err != nil {
 			slog.ErrorContext(ctx, "removeStartedTaskEdge: delete", "rel_id", rel.ID, "err", err)
 		}
 	}
@@ -173,23 +171,21 @@ func (m *taskManager) removeStartedTaskEdge(ctx context.Context, agencyID, taskI
 
 // deleteEntityEdges removes all incident (from + to) relationships for an entity.
 // Errors are logged but do not abort — a missing edge on a to-be-deleted entity is harmless.
-func (m *taskManager) deleteEntityEdges(ctx context.Context, agencyID, entityID string) {
-	fromRels, _ := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{AgencyID: agencyID, FromID: entityID})
-	toRels, _ := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{AgencyID: agencyID, ToID: entityID})
+func (m *taskManager) deleteEntityEdges(ctx context.Context, entityID string) {
+	fromRels, _ := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{FromID: entityID})
+	toRels, _ := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{ToID: entityID})
 	for _, rel := range append(fromRels, toRels...) {
-		if err := m.dm.DeleteRelationship(ctx, agencyID, rel.ID); err != nil {
+		if err := m.dm.DeleteRelationship(ctx, rel.ID); err != nil {
 			slog.ErrorContext(ctx, "deleteEntityEdges: delete relationship", "rel_id", rel.ID, "err", err)
 		}
 	}
 }
 
-// ListTaskTodos returns TaskTodos for the agency, optionally filtered by
-// workflowRunID. When workflowRunID is empty all todos for the agency are
-// returned.
-func (m *taskManager) ListTaskTodos(ctx context.Context, agencyID, workflowRunID string) ([]TaskTodo, error) {
+// ListTaskTodos returns all TaskTodos, optionally filtered by
+// workflowRunID. When workflowRunID is empty all todos are returned.
+func (m *taskManager) ListTaskTodos(ctx context.Context, workflowRunID string) ([]TaskTodo, error) {
 	entities, err := m.dm.ListEntities(ctx, entitygraph.EntityFilter{
-		AgencyID: agencyID,
-		TypeID:   taskTodoTypeID,
+		TypeID: taskTodoTypeID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ListTaskTodos: %w", err)
@@ -205,6 +201,6 @@ func (m *taskManager) ListTaskTodos(ctx context.Context, agencyID, workflowRunID
 }
 
 // publishTaskRolledBack emits work.task.rolled_back for observability after a Task is rolled back.
-func (m *taskManager) publishTaskRolledBack(ctx context.Context, agencyID, taskID, runID string) {
-	m.publish(ctx, TopicTaskRolledBack, agencyID, TaskRolledBackPayload{TaskID: taskID, WorkflowRunID: runID})
+func (m *taskManager) publishTaskRolledBack(ctx context.Context, taskID, runID string) {
+	m.publish(ctx, TopicTaskRolledBack, TaskRolledBackPayload{TaskID: taskID, WorkflowRunID: runID})
 }

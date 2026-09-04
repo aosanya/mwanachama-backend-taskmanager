@@ -66,7 +66,6 @@ type DirectionForm struct {
 type TaskNeedsDirectionPayload struct {
 	TaskID            string        `json:"task_id"`
 	WorkflowRunID     string        `json:"workflow_run_id,omitempty"`
-	AgencyID          string        `json:"agency_id"`
 	FailureCount      int           `json:"failure_count"`
 	LastFailureReason string        `json:"last_failure_reason"`
 	Form              DirectionForm `json:"form"`

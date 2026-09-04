@@ -13,18 +13,18 @@ import (
 func seedDependentScenario(t *testing.T, mgr mwanachamataskmanager.TaskManager) (a, b mwanachamataskmanager.Task, agent mwanachamataskmanager.Agent) {
 	t.Helper()
 	ctx := context.Background()
-	a, _ = mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{Title: "A"})
-	b, _ = mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{Title: "B"})
-	if _, err := mgr.CreateRelationship(ctx, "ag", mwanachamataskmanager.Relationship{
+	a, _ = mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "A"})
+	b, _ = mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "B"})
+	if _, err := mgr.CreateRelationship(ctx, mwanachamataskmanager.Relationship{
 		Label: mwanachamataskmanager.RelLabelDependsOn, FromID: b.ID, ToID: a.ID,
 	}); err != nil {
 		t.Fatalf("CreateRelationship depends_on: %v", err)
 	}
-	agent, _ = mgr.UpsertAgent(ctx, "ag", mwanachamataskmanager.Agent{AgentID: "worker", RoleName: "engineer"})
-	if err := mgr.AssignTask(ctx, "ag", b.ID, agent.ID, ""); err != nil {
+	agent, _ = mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "worker", RoleName: "engineer"})
+	if err := mgr.AssignTask(ctx, b.ID, agent.ID, ""); err != nil {
 		t.Fatalf("AssignTask: %v", err)
 	}
-	b, _ = mgr.GetTask(ctx, "ag", b.ID)
+	b, _ = mgr.GetTask(ctx, b.ID)
 	if b.Status != mwanachamataskmanager.TaskStatusBlocked {
 		t.Fatalf("setup: expected B blocked, got %s", b.Status)
 	}
@@ -38,13 +38,13 @@ func TestUnblockDependents_FlipsBlockedToPending(t *testing.T) {
 	a, b, _ := seedDependentScenario(t, mgr)
 
 	// Drive A to completed so its outbound depends_on side is satisfied.
-	completeBlocker(t, mgr, "ag", a)
+	completeBlocker(t, mgr, a)
 
-	if err := mgr.UnblockDependents(ctx, "ag", a.ID); err != nil {
+	if err := mgr.UnblockDependents(ctx, a.ID); err != nil {
 		t.Fatalf("UnblockDependents: %v", err)
 	}
 
-	got, _ := mgr.GetTask(ctx, "ag", b.ID)
+	got, _ := mgr.GetTask(ctx, b.ID)
 	if got.Status != mwanachamataskmanager.TaskStatusPending {
 		t.Errorf("B.Status = %s, want %s", got.Status, mwanachamataskmanager.TaskStatusPending)
 	}
@@ -55,11 +55,11 @@ func TestUnblockDependents_RepublishesAssignedEvent(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
 	ctx := context.Background()
 	a, b, agent := seedDependentScenario(t, mgr)
-	completeBlocker(t, mgr, "ag", a)
+	completeBlocker(t, mgr, a)
 	pub.events = nil
 	pub.full = nil
 
-	if err := mgr.UnblockDependents(ctx, "ag", a.ID); err != nil {
+	if err := mgr.UnblockDependents(ctx, a.ID); err != nil {
 		t.Fatalf("UnblockDependents: %v", err)
 	}
 
@@ -89,27 +89,27 @@ func TestUnblockDependents_LeavesBlockedWhenOtherDepUnmet(t *testing.T) {
 	pub := &recordingPublisher{}
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
 	ctx := context.Background()
-	a1, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	a2, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	b, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
+	a1, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	a2, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	for _, dep := range []string{a1.ID, a2.ID} {
-		if _, err := mgr.CreateRelationship(ctx, "ag", mwanachamataskmanager.Relationship{
+		if _, err := mgr.CreateRelationship(ctx, mwanachamataskmanager.Relationship{
 			Label: mwanachamataskmanager.RelLabelDependsOn, FromID: b.ID, ToID: dep,
 		}); err != nil {
 			t.Fatalf("CreateRelationship depends_on: %v", err)
 		}
 	}
-	agent, _ := mgr.UpsertAgent(ctx, "ag", mwanachamataskmanager.Agent{AgentID: "w"})
-	if err := mgr.AssignTask(ctx, "ag", b.ID, agent.ID, ""); err != nil {
+	agent, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "w"})
+	if err := mgr.AssignTask(ctx, b.ID, agent.ID, ""); err != nil {
 		t.Fatalf("AssignTask: %v", err)
 	}
 
-	completeBlocker(t, mgr, "ag", a1) // a2 still pending
+	completeBlocker(t, mgr, a1) // a2 still pending
 
-	if err := mgr.UnblockDependents(ctx, "ag", a1.ID); err != nil {
+	if err := mgr.UnblockDependents(ctx, a1.ID); err != nil {
 		t.Fatalf("UnblockDependents: %v", err)
 	}
-	got, _ := mgr.GetTask(ctx, "ag", b.ID)
+	got, _ := mgr.GetTask(ctx, b.ID)
 	if got.Status != mwanachamataskmanager.TaskStatusBlocked {
 		t.Errorf("B.Status = %s, want still blocked (a2 unmet)", got.Status)
 	}
@@ -119,24 +119,24 @@ func TestUnblockDependents_NoAssigneeStaysBlocked(t *testing.T) {
 	pub := &recordingPublisher{}
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
 	ctx := context.Background()
-	a, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	b, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	if _, err := mgr.CreateRelationship(ctx, "ag", mwanachamataskmanager.Relationship{
+	a, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	if _, err := mgr.CreateRelationship(ctx, mwanachamataskmanager.Relationship{
 		Label: mwanachamataskmanager.RelLabelDependsOn, FromID: b.ID, ToID: a.ID,
 	}); err != nil {
 		t.Fatalf("CreateRelationship depends_on: %v", err)
 	}
 	// Manually park B in blocked without an assigned_to edge.
 	b.Status = mwanachamataskmanager.TaskStatusBlocked
-	if _, err := mgr.UpdateTask(ctx, "ag", b); err != nil {
+	if _, err := mgr.UpdateTask(ctx, b); err != nil {
 		t.Fatalf("UpdateTask blocked: %v", err)
 	}
-	completeBlocker(t, mgr, "ag", a)
+	completeBlocker(t, mgr, a)
 
-	if err := mgr.UnblockDependents(ctx, "ag", a.ID); err != nil {
+	if err := mgr.UnblockDependents(ctx, a.ID); err != nil {
 		t.Fatalf("UnblockDependents: %v", err)
 	}
-	got, _ := mgr.GetTask(ctx, "ag", b.ID)
+	got, _ := mgr.GetTask(ctx, b.ID)
 	if got.Status != mwanachamataskmanager.TaskStatusBlocked {
 		t.Errorf("B.Status = %s, want still blocked (no assignee)", got.Status)
 	}
@@ -147,17 +147,17 @@ func TestUnblockDependents_Idempotent(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
 	ctx := context.Background()
 	a, b, _ := seedDependentScenario(t, mgr)
-	completeBlocker(t, mgr, "ag", a)
+	completeBlocker(t, mgr, a)
 
-	if err := mgr.UnblockDependents(ctx, "ag", a.ID); err != nil {
+	if err := mgr.UnblockDependents(ctx, a.ID); err != nil {
 		t.Fatalf("first UnblockDependents: %v", err)
 	}
 	pub.events = nil
 	pub.full = nil
-	if err := mgr.UnblockDependents(ctx, "ag", a.ID); err != nil {
+	if err := mgr.UnblockDependents(ctx, a.ID); err != nil {
 		t.Fatalf("second UnblockDependents: %v", err)
 	}
-	got, _ := mgr.GetTask(ctx, "ag", b.ID)
+	got, _ := mgr.GetTask(ctx, b.ID)
 	if got.Status != mwanachamataskmanager.TaskStatusPending {
 		t.Errorf("B.Status = %s, want pending after redelivery", got.Status)
 	}
@@ -170,7 +170,7 @@ func TestUnblockDependents_Idempotent(t *testing.T) {
 
 func TestUnblockDependents_UnknownTaskReturnsError(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	if err := mgr.UnblockDependents(context.Background(), "ag", "no-such-task"); err == nil {
+	if err := mgr.UnblockDependents(context.Background(), "no-such-task"); err == nil {
 		t.Errorf("UnblockDependents on missing task: got nil, want error")
 	}
 }

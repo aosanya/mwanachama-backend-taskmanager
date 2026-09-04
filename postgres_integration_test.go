@@ -32,10 +32,10 @@ func applyDDL(ctx context.Context, db *sql.DB, script string) error {
 }
 
 // newPostgresTaskManager opens POSTGRES_URL, creates a scratch set of
-// work_-prefixed tables, seeds+activates DefaultWorkSchema for agencyID, and
+// work_-prefixed tables, seeds+activates DefaultWorkSchema, and
 // returns a ready-to-use TaskManager plus its recordingPublisher. Skips the
 // calling test if POSTGRES_URL is unset. Tables are dropped on cleanup.
-func newPostgresTaskManager(t *testing.T, agencyID string) (mwanachamataskmanager.TaskManager, *recordingPublisher) {
+func newPostgresTaskManager(t *testing.T) (mwanachamataskmanager.TaskManager, *recordingPublisher) {
 	t.Helper()
 	dsn := os.Getenv("POSTGRES_URL")
 	if dsn == "" {
@@ -62,14 +62,13 @@ func newPostgresTaskManager(t *testing.T, agencyID string) (mwanachamataskmanage
 	backend := postgres.NewBackend(db, tables)
 
 	s := mwanachamataskmanager.DefaultWorkSchema()
-	s.AgencyID = agencyID
 	if err := backend.SetSchema(ctx, s); err != nil {
 		t.Fatalf("SetSchema: %v", err)
 	}
-	if err := backend.Publish(ctx, agencyID); err != nil {
+	if err := backend.Publish(ctx); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
-	if err := backend.Activate(ctx, agencyID, 1); err != nil {
+	if err := backend.Activate(ctx, 1); err != nil {
 		t.Fatalf("Activate: %v", err)
 	}
 
@@ -82,11 +81,10 @@ func newPostgresTaskManager(t *testing.T, agencyID string) (mwanachamataskmanage
 }
 
 func TestPostgres_TaskCRUD_RoundTrip(t *testing.T) {
-	const agencyID = "pg-agency-task"
-	mgr, pub := newPostgresTaskManager(t, agencyID)
+	mgr, pub := newPostgresTaskManager(t)
 	ctx := context.Background()
 
-	created, err := mgr.CreateTask(ctx, agencyID, mwanachamataskmanager.Task{
+	created, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{
 		Title:    "Postgres round-trip",
 		Priority: mwanachamataskmanager.TaskPriorityHigh,
 		Tags:     []string{"pg", "smoke"},
@@ -98,7 +96,7 @@ func TestPostgres_TaskCRUD_RoundTrip(t *testing.T) {
 		t.Errorf("Status = %s, want pending", created.Status)
 	}
 
-	got, err := mgr.GetTask(ctx, agencyID, created.ID)
+	got, err := mgr.GetTask(ctx, created.ID)
 	if err != nil {
 		t.Fatalf("GetTask: %v", err)
 	}
@@ -110,13 +108,13 @@ func TestPostgres_TaskCRUD_RoundTrip(t *testing.T) {
 	}
 
 	got.Status = mwanachamataskmanager.TaskStatusInProgress
-	if _, err := mgr.UpdateTask(ctx, agencyID, got); err != nil {
+	if _, err := mgr.UpdateTask(ctx, got); err != nil {
 		t.Fatalf("UpdateTask: %v", err)
 	}
-	if err := mgr.DeleteTask(ctx, agencyID, created.ID); err != nil {
+	if err := mgr.DeleteTask(ctx, created.ID); err != nil {
 		t.Fatalf("DeleteTask: %v", err)
 	}
-	if _, err := mgr.GetTask(ctx, agencyID, created.ID); err == nil {
+	if _, err := mgr.GetTask(ctx, created.ID); err == nil {
 		t.Error("expected error reading soft-deleted task")
 	}
 
@@ -126,17 +124,16 @@ func TestPostgres_TaskCRUD_RoundTrip(t *testing.T) {
 }
 
 func TestPostgres_AgentUpsert_UsesSchemaUniqueKey(t *testing.T) {
-	const agencyID = "pg-agency-agent"
-	mgr, _ := newPostgresTaskManager(t, agencyID)
+	mgr, _ := newPostgresTaskManager(t)
 	ctx := context.Background()
 
-	first, err := mgr.UpsertAgent(ctx, agencyID, mwanachamataskmanager.Agent{
+	first, err := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{
 		AgentID: "dev-01", DisplayName: "First",
 	})
 	if err != nil {
 		t.Fatalf("first UpsertAgent: %v", err)
 	}
-	second, err := mgr.UpsertAgent(ctx, agencyID, mwanachamataskmanager.Agent{
+	second, err := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{
 		AgentID: "dev-01", DisplayName: "Second",
 	})
 	if err != nil {
@@ -151,23 +148,22 @@ func TestPostgres_AgentUpsert_UsesSchemaUniqueKey(t *testing.T) {
 }
 
 func TestPostgres_AssignTask_And_Relationship_Traversal(t *testing.T) {
-	const agencyID = "pg-agency-assign"
-	mgr, _ := newPostgresTaskManager(t, agencyID)
+	mgr, _ := newPostgresTaskManager(t)
 	ctx := context.Background()
 
-	task, err := mgr.CreateTask(ctx, agencyID, mwanachamataskmanager.Task{Title: "assign-me"})
+	task, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "assign-me"})
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
-	agent, err := mgr.UpsertAgent(ctx, agencyID, mwanachamataskmanager.Agent{AgentID: "worker-1"})
+	agent, err := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "worker-1"})
 	if err != nil {
 		t.Fatalf("UpsertAgent: %v", err)
 	}
-	if err := mgr.AssignTask(ctx, agencyID, task.ID, agent.ID, ""); err != nil {
+	if err := mgr.AssignTask(ctx, task.ID, agent.ID, ""); err != nil {
 		t.Fatalf("AssignTask: %v", err)
 	}
 
-	edges, err := mgr.TraverseRelationships(ctx, agencyID, task.ID, mwanachamataskmanager.RelLabelAssignedTo, mwanachamataskmanager.DirectionOutbound)
+	edges, err := mgr.TraverseRelationships(ctx, task.ID, mwanachamataskmanager.RelLabelAssignedTo, mwanachamataskmanager.DirectionOutbound)
 	if err != nil {
 		t.Fatalf("TraverseRelationships (recursive CTE): %v", err)
 	}
@@ -177,22 +173,21 @@ func TestPostgres_AssignTask_And_Relationship_Traversal(t *testing.T) {
 }
 
 func TestPostgres_WorkflowRun_CreateAndRollback(t *testing.T) {
-	const agencyID = "pg-agency-run"
-	mgr, pub := newPostgresTaskManager(t, agencyID)
+	mgr, pub := newPostgresTaskManager(t)
 	ctx := context.Background()
 
-	run, err := mgr.CreateWorkflowRun(ctx, agencyID, "pg-run", "next.requested", "tester")
+	run, err := mgr.CreateWorkflowRun(ctx, "pg-run", "next.requested", "tester")
 	if err != nil {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
-	task, err := mgr.CreateTask(ctx, agencyID, mwanachamataskmanager.Task{
+	task, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{
 		Title: "run-task", WorkflowRunID: run.ID,
 	})
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
 
-	closure, err := mgr.GetWorkflowRunClosure(ctx, agencyID, run.ID)
+	closure, err := mgr.GetWorkflowRunClosure(ctx, run.ID)
 	if err != nil {
 		t.Fatalf("GetWorkflowRunClosure: %v", err)
 	}
@@ -200,14 +195,14 @@ func TestPostgres_WorkflowRun_CreateAndRollback(t *testing.T) {
 		t.Errorf("closure.Tasks = %+v, want [%s]", closure.Tasks, task.ID)
 	}
 
-	if _, err := mgr.UpdateWorkflowRunStatus(ctx, agencyID, run.ID, mwanachamataskmanager.WorkflowRunStatusInProgress, ""); err != nil {
+	if _, err := mgr.UpdateWorkflowRunStatus(ctx, run.ID, mwanachamataskmanager.WorkflowRunStatusInProgress, ""); err != nil {
 		t.Fatalf("→ in_progress: %v", err)
 	}
-	if _, err := mgr.UpdateWorkflowRunStatus(ctx, agencyID, run.ID, mwanachamataskmanager.WorkflowRunStatusFailed, "pg smoke test"); err != nil {
+	if _, err := mgr.UpdateWorkflowRunStatus(ctx, run.ID, mwanachamataskmanager.WorkflowRunStatusFailed, "pg smoke test"); err != nil {
 		t.Fatalf("→ failed: %v", err)
 	}
 
-	rolledBack, err := mgr.RollbackWorkflowRun(ctx, agencyID, run.ID, "cleanup")
+	rolledBack, err := mgr.RollbackWorkflowRun(ctx, run.ID, "cleanup")
 	if err != nil {
 		t.Fatalf("RollbackWorkflowRun: %v", err)
 	}
@@ -215,7 +210,7 @@ func TestPostgres_WorkflowRun_CreateAndRollback(t *testing.T) {
 		t.Errorf("status = %s, want rolled_back", rolledBack.Status)
 	}
 
-	after, err := mgr.GetTask(ctx, agencyID, task.ID)
+	after, err := mgr.GetTask(ctx, task.ID)
 	if err != nil {
 		t.Fatalf("GetTask after rollback: %v", err)
 	}
@@ -228,8 +223,7 @@ func TestPostgres_WorkflowRun_CreateAndRollback(t *testing.T) {
 }
 
 func TestPostgres_ImportProject_EndToEnd(t *testing.T) {
-	const agencyID = "pg-agency-import"
-	mgr, _ := newPostgresTaskManager(t, agencyID)
+	mgr, _ := newPostgresTaskManager(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -242,7 +236,7 @@ func TestPostgres_ImportProject_EndToEnd(t *testing.T) {
 		]
 	}`
 
-	result, err := mgr.ImportProject(ctx, agencyID, doc)
+	result, err := mgr.ImportProject(ctx, doc)
 	if err != nil {
 		t.Fatalf("ImportProject: %v", err)
 	}
@@ -253,7 +247,7 @@ func TestPostgres_ImportProject_EndToEnd(t *testing.T) {
 		t.Errorf("DepsCreated = %d, want 1", result.DepsCreated)
 	}
 
-	tasks, err := mgr.ListTasksInProject(ctx, agencyID, result.Project.ID)
+	tasks, err := mgr.ListTasksInProject(ctx, result.Project.ID)
 	if err != nil {
 		t.Fatalf("ListTasksInProject: %v", err)
 	}

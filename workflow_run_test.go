@@ -13,7 +13,7 @@ func TestCreateWorkflowRun_DefaultsAndReadback(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	run, err := mgr.CreateWorkflowRun(ctx, "ag", "qa-scenario-09", "next.requested", "operator-1")
+	run, err := mgr.CreateWorkflowRun(ctx, "qa-scenario-09", "next.requested", "operator-1")
 	if err != nil {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
@@ -33,7 +33,7 @@ func TestCreateWorkflowRun_DefaultsAndReadback(t *testing.T) {
 		t.Errorf("timestamps not set: %+v", run)
 	}
 
-	got, err := mgr.GetWorkflowRun(ctx, "ag", run.ID)
+	got, err := mgr.GetWorkflowRun(ctx, run.ID)
 	if err != nil {
 		t.Fatalf("GetWorkflowRun: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestCreateWorkflowRun_GeneratesName(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	run, err := mgr.CreateWorkflowRun(ctx, "ag", "", "next.requested", "")
+	run, err := mgr.CreateWorkflowRun(ctx, "", "next.requested", "")
 	if err != nil {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
@@ -63,30 +63,18 @@ func TestCreateWorkflowRun_DuplicateName_ReturnsExistsError(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	if _, err := mgr.CreateWorkflowRun(ctx, "ag", "qa-1", "trig", ""); err != nil {
+	if _, err := mgr.CreateWorkflowRun(ctx, "qa-1", "trig", ""); err != nil {
 		t.Fatalf("first CreateWorkflowRun: %v", err)
 	}
-	_, err := mgr.CreateWorkflowRun(ctx, "ag", "qa-1", "trig", "")
+	_, err := mgr.CreateWorkflowRun(ctx, "qa-1", "trig", "")
 	if !errors.Is(err, mwanachamataskmanager.ErrWorkflowRunNameExists) {
 		t.Fatalf("second CreateWorkflowRun err = %v want ErrWorkflowRunNameExists", err)
 	}
 }
 
-func TestCreateWorkflowRun_DuplicateNameDifferentAgency_Allowed(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	ctx := context.Background()
-
-	if _, err := mgr.CreateWorkflowRun(ctx, "agency-A", "shared-name", "trig", ""); err != nil {
-		t.Fatalf("agency-A CreateWorkflowRun: %v", err)
-	}
-	if _, err := mgr.CreateWorkflowRun(ctx, "agency-B", "shared-name", "trig", ""); err != nil {
-		t.Errorf("agency-B CreateWorkflowRun (same name, different agency) should succeed: %v", err)
-	}
-}
-
 func TestCreateWorkflowRun_LeadingWhitespace_Rejected(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	_, err := mgr.CreateWorkflowRun(context.Background(), "ag", " padded", "trig", "")
+	_, err := mgr.CreateWorkflowRun(context.Background(), " padded", "trig", "")
 	if !errors.Is(err, mwanachamataskmanager.ErrInvalidTask) {
 		t.Errorf("err = %v want ErrInvalidTask", err)
 	}
@@ -94,7 +82,7 @@ func TestCreateWorkflowRun_LeadingWhitespace_Rejected(t *testing.T) {
 
 func TestGetWorkflowRun_NotFound(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	_, err := mgr.GetWorkflowRun(context.Background(), "ag", "missing-id")
+	_, err := mgr.GetWorkflowRun(context.Background(), "missing-id")
 	if !errors.Is(err, mwanachamataskmanager.ErrWorkflowRunNotFound) {
 		t.Errorf("err = %v want ErrWorkflowRunNotFound", err)
 	}
@@ -104,11 +92,11 @@ func TestGetWorkflowRunByName_RoundTrip(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	created, err := mgr.CreateWorkflowRun(ctx, "ag", "lookup-me", "trig", "")
+	created, err := mgr.CreateWorkflowRun(ctx, "lookup-me", "trig", "")
 	if err != nil {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
-	got, err := mgr.GetWorkflowRunByName(ctx, "ag", "lookup-me")
+	got, err := mgr.GetWorkflowRunByName(ctx, "lookup-me")
 	if err != nil {
 		t.Fatalf("GetWorkflowRunByName: %v", err)
 	}
@@ -119,7 +107,7 @@ func TestGetWorkflowRunByName_RoundTrip(t *testing.T) {
 
 func TestGetWorkflowRunByName_NotFound(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	_, err := mgr.GetWorkflowRunByName(context.Background(), "ag", "no-such-run")
+	_, err := mgr.GetWorkflowRunByName(context.Background(), "no-such-run")
 	if !errors.Is(err, mwanachamataskmanager.ErrWorkflowRunNotFound) {
 		t.Errorf("err = %v want ErrWorkflowRunNotFound", err)
 	}
@@ -130,11 +118,11 @@ func TestListWorkflowRuns_NewestFirst(t *testing.T) {
 	ctx := context.Background()
 
 	for i, trig := range []string{"a", "b", "c"} {
-		if _, err := mgr.CreateWorkflowRun(ctx, "ag", "", trig, ""); err != nil {
+		if _, err := mgr.CreateWorkflowRun(ctx, "", trig, ""); err != nil {
 			t.Fatalf("CreateWorkflowRun %d: %v", i, err)
 		}
 	}
-	runs, err := mgr.ListWorkflowRuns(ctx, "ag", "")
+	runs, err := mgr.ListWorkflowRuns(ctx, "")
 	if err != nil {
 		t.Fatalf("ListWorkflowRuns: %v", err)
 	}
@@ -153,13 +141,13 @@ func TestListWorkflowRuns_NameFilter(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	if _, err := mgr.CreateWorkflowRun(ctx, "ag", "match-me", "trig", ""); err != nil {
+	if _, err := mgr.CreateWorkflowRun(ctx, "match-me", "trig", ""); err != nil {
 		t.Fatalf("CreateWorkflowRun match-me: %v", err)
 	}
-	if _, err := mgr.CreateWorkflowRun(ctx, "ag", "other", "trig", ""); err != nil {
+	if _, err := mgr.CreateWorkflowRun(ctx, "other", "trig", ""); err != nil {
 		t.Fatalf("CreateWorkflowRun other: %v", err)
 	}
-	runs, err := mgr.ListWorkflowRuns(ctx, "ag", "match-me")
+	runs, err := mgr.ListWorkflowRuns(ctx, "match-me")
 	if err != nil {
 		t.Fatalf("ListWorkflowRuns filter: %v", err)
 	}
@@ -173,20 +161,20 @@ func TestGetWorkflowRunClosure_TaskAndTodo(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
 	ctx := context.Background()
 
-	run, err := mgr.CreateWorkflowRun(ctx, "ag", "", "next.requested", "")
+	run, err := mgr.CreateWorkflowRun(ctx, "", "next.requested", "")
 	if err != nil {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
 
-	task, err := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{Title: "T1"})
+	task, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "T1"})
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
-	if err := mgr.LinkTaskToRun(ctx, "ag", run.ID, task.ID); err != nil {
+	if err := mgr.LinkTaskToRun(ctx, run.ID, task.ID); err != nil {
 		t.Fatalf("LinkTaskToRun: %v", err)
 	}
 
-	todo, err := mgr.CreateTaskTodo(ctx, "ag", mwanachamataskmanager.TaskTodo{
+	todo, err := mgr.CreateTaskTodo(ctx, mwanachamataskmanager.TaskTodo{
 		Title:        "todo-1",
 		Instructions: "do the thing",
 		ParentTaskID: task.ID,
@@ -195,11 +183,11 @@ func TestGetWorkflowRunClosure_TaskAndTodo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTaskTodo: %v", err)
 	}
-	if err := mgr.LinkTodoToRun(ctx, "ag", run.ID, todo.ID); err != nil {
+	if err := mgr.LinkTodoToRun(ctx, run.ID, todo.ID); err != nil {
 		t.Fatalf("LinkTodoToRun: %v", err)
 	}
 
-	closure, err := mgr.GetWorkflowRunClosure(ctx, "ag", run.ID)
+	closure, err := mgr.GetWorkflowRunClosure(ctx, run.ID)
 	if err != nil {
 		t.Fatalf("GetWorkflowRunClosure: %v", err)
 	}
@@ -222,17 +210,17 @@ func TestLinkTaskToRun_Idempotent(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	run, _ := mgr.CreateWorkflowRun(ctx, "ag", "", "trig", "")
-	task, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{Title: "T"})
+	run, _ := mgr.CreateWorkflowRun(ctx, "", "trig", "")
+	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "T"})
 
-	if err := mgr.LinkTaskToRun(ctx, "ag", run.ID, task.ID); err != nil {
+	if err := mgr.LinkTaskToRun(ctx, run.ID, task.ID); err != nil {
 		t.Fatalf("first link: %v", err)
 	}
-	if err := mgr.LinkTaskToRun(ctx, "ag", run.ID, task.ID); err != nil {
+	if err := mgr.LinkTaskToRun(ctx, run.ID, task.ID); err != nil {
 		t.Fatalf("second link (should be no-op): %v", err)
 	}
 
-	closure, err := mgr.GetWorkflowRunClosure(ctx, "ag", run.ID)
+	closure, err := mgr.GetWorkflowRunClosure(ctx, run.ID)
 	if err != nil {
 		t.Fatalf("GetWorkflowRunClosure: %v", err)
 	}
@@ -253,8 +241,8 @@ func TestUpdateWorkflowRunStatus_PendingToInProgress(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	run, _ := mgr.CreateWorkflowRun(ctx, "ag", "run-1", "", "")
-	updated, err := mgr.UpdateWorkflowRunStatus(ctx, "ag", run.ID, mwanachamataskmanager.WorkflowRunStatusInProgress, "")
+	run, _ := mgr.CreateWorkflowRun(ctx, "run-1", "", "")
+	updated, err := mgr.UpdateWorkflowRunStatus(ctx, run.ID, mwanachamataskmanager.WorkflowRunStatusInProgress, "")
 	if err != nil {
 		t.Fatalf("UpdateWorkflowRunStatus: %v", err)
 	}
@@ -267,10 +255,10 @@ func TestUpdateWorkflowRunStatus_InProgressToCompleted(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	run, _ := mgr.CreateWorkflowRun(ctx, "ag", "run-2", "", "")
-	_, _ = mgr.UpdateWorkflowRunStatus(ctx, "ag", run.ID, mwanachamataskmanager.WorkflowRunStatusInProgress, "")
+	run, _ := mgr.CreateWorkflowRun(ctx, "run-2", "", "")
+	_, _ = mgr.UpdateWorkflowRunStatus(ctx, run.ID, mwanachamataskmanager.WorkflowRunStatusInProgress, "")
 
-	updated, err := mgr.UpdateWorkflowRunStatus(ctx, "ag", run.ID, mwanachamataskmanager.WorkflowRunStatusCompleted, "")
+	updated, err := mgr.UpdateWorkflowRunStatus(ctx, run.ID, mwanachamataskmanager.WorkflowRunStatusCompleted, "")
 	if err != nil {
 		t.Fatalf("UpdateWorkflowRunStatus: %v", err)
 	}
@@ -286,10 +274,10 @@ func TestUpdateWorkflowRunStatus_InProgressToFailed(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	run, _ := mgr.CreateWorkflowRun(ctx, "ag", "run-3", "", "")
-	_, _ = mgr.UpdateWorkflowRunStatus(ctx, "ag", run.ID, mwanachamataskmanager.WorkflowRunStatusInProgress, "")
+	run, _ := mgr.CreateWorkflowRun(ctx, "run-3", "", "")
+	_, _ = mgr.UpdateWorkflowRunStatus(ctx, run.ID, mwanachamataskmanager.WorkflowRunStatusInProgress, "")
 
-	updated, err := mgr.UpdateWorkflowRunStatus(ctx, "ag", run.ID, mwanachamataskmanager.WorkflowRunStatusFailed, "compile error")
+	updated, err := mgr.UpdateWorkflowRunStatus(ctx, run.ID, mwanachamataskmanager.WorkflowRunStatusFailed, "compile error")
 	if err != nil {
 		t.Fatalf("UpdateWorkflowRunStatus: %v", err)
 	}
@@ -302,11 +290,11 @@ func TestUpdateWorkflowRunStatus_InvalidTransitionFailedToCompleted(t *testing.T
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	run, _ := mgr.CreateWorkflowRun(ctx, "ag", "run-4", "", "")
-	_, _ = mgr.UpdateWorkflowRunStatus(ctx, "ag", run.ID, mwanachamataskmanager.WorkflowRunStatusInProgress, "")
-	_, _ = mgr.UpdateWorkflowRunStatus(ctx, "ag", run.ID, mwanachamataskmanager.WorkflowRunStatusFailed, "")
+	run, _ := mgr.CreateWorkflowRun(ctx, "run-4", "", "")
+	_, _ = mgr.UpdateWorkflowRunStatus(ctx, run.ID, mwanachamataskmanager.WorkflowRunStatusInProgress, "")
+	_, _ = mgr.UpdateWorkflowRunStatus(ctx, run.ID, mwanachamataskmanager.WorkflowRunStatusFailed, "")
 
-	_, err := mgr.UpdateWorkflowRunStatus(ctx, "ag", run.ID, mwanachamataskmanager.WorkflowRunStatusCompleted, "")
+	_, err := mgr.UpdateWorkflowRunStatus(ctx, run.ID, mwanachamataskmanager.WorkflowRunStatusCompleted, "")
 	if err == nil {
 		t.Fatal("expected ErrInvalidRunStatusTransition, got nil")
 	}
@@ -319,11 +307,11 @@ func TestUpdateWorkflowRunStatus_InvalidTransitionCompletedIsTerminal(t *testing
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	run, _ := mgr.CreateWorkflowRun(ctx, "ag", "run-5", "", "")
-	_, _ = mgr.UpdateWorkflowRunStatus(ctx, "ag", run.ID, mwanachamataskmanager.WorkflowRunStatusInProgress, "")
-	_, _ = mgr.UpdateWorkflowRunStatus(ctx, "ag", run.ID, mwanachamataskmanager.WorkflowRunStatusCompleted, "")
+	run, _ := mgr.CreateWorkflowRun(ctx, "run-5", "", "")
+	_, _ = mgr.UpdateWorkflowRunStatus(ctx, run.ID, mwanachamataskmanager.WorkflowRunStatusInProgress, "")
+	_, _ = mgr.UpdateWorkflowRunStatus(ctx, run.ID, mwanachamataskmanager.WorkflowRunStatusCompleted, "")
 
-	_, err := mgr.UpdateWorkflowRunStatus(ctx, "ag", run.ID, mwanachamataskmanager.WorkflowRunStatusFailed, "")
+	_, err := mgr.UpdateWorkflowRunStatus(ctx, run.ID, mwanachamataskmanager.WorkflowRunStatusFailed, "")
 	if err == nil {
 		t.Fatal("expected ErrInvalidRunStatusTransition, got nil")
 	}
@@ -336,11 +324,11 @@ func TestUpdateWorkflowRunStatus_TerminalEventRoundTrip(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	run, _ := mgr.CreateWorkflowRun(ctx, "ag", "run-te", "", "")
+	run, _ := mgr.CreateWorkflowRun(ctx, "run-te", "", "")
 	// Manually set TerminalEvent via the schema property (in-memory fake allows direct update).
 	// We verify that the field round-trips through the converters.
 	_ = run // TerminalEvent is tested via workflowRunFromEntity in converter tests
-	got, err := mgr.GetWorkflowRun(ctx, "ag", run.ID)
+	got, err := mgr.GetWorkflowRun(ctx, run.ID)
 	if err != nil {
 		t.Fatalf("GetWorkflowRun: %v", err)
 	}

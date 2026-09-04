@@ -19,15 +19,14 @@ import (
 	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 )
 
-// CreateTask creates a Task entity in the agency graph.
+// CreateTask creates a Task entity in the graph.
 //
 // When task.WorkflowRunID is non-empty, the task is also linked to the named
 // run via the started_task edge (denormalised + graph edge — see the
 // chain-through behaviour on [TaskManager.AssignTask]). The edge write is
 // best-effort: a failure is logged but does not roll back the task creation.
-func (m *taskManager) CreateTask(ctx context.Context, agencyID string, task Task) (Task, error) {
+func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
-	task.AgencyID = agencyID
 	task.Status = TaskStatusPending
 	task.CreatedAt = now
 	task.UpdatedAt = now
@@ -37,7 +36,6 @@ func (m *taskManager) CreateTask(ctx context.Context, agencyID string, task Task
 	task.CompletedAt = ""
 
 	created, err := m.dm.CreateEntity(ctx, entitygraph.CreateEntityRequest{
-		AgencyID:   agencyID,
 		TypeID:     taskTypeID,
 		Properties: taskToProperties(task),
 	})
@@ -50,12 +48,12 @@ func (m *taskManager) CreateTask(ctx context.Context, agencyID string, task Task
 
 	out := taskFromEntity(created)
 	if task.WorkflowRunID != "" {
-		if err := m.LinkTaskToRun(ctx, agencyID, task.WorkflowRunID, out.ID); err != nil {
+		if err := m.LinkTaskToRun(ctx, task.WorkflowRunID, out.ID); err != nil {
 			log.Printf("mwanachamataskmanager: CreateTask: LinkTaskToRun run=%s task=%s: %v",
 				task.WorkflowRunID, out.ID, err)
 		}
 	}
-	m.publish(ctx, TopicTaskCreated, agencyID, TaskCreatedPayload{
+	m.publish(ctx, TopicTaskCreated, TaskCreatedPayload{
 		TaskID:        out.ID,
 		Priority:      out.Priority,
 		WorkflowRunID: out.WorkflowRunID,
@@ -63,21 +61,21 @@ func (m *taskManager) CreateTask(ctx context.Context, agencyID string, task Task
 	return out, nil
 }
 
-// GetTask reads a single Task entity from the agency graph.
-func (m *taskManager) GetTask(ctx context.Context, agencyID, taskID string) (Task, error) {
-	e, err := m.dm.GetEntity(ctx, agencyID, taskID)
+// GetTask reads a single Task entity from the graph.
+func (m *taskManager) GetTask(ctx context.Context, taskID string) (Task, error) {
+	e, err := m.dm.GetEntity(ctx, taskID)
 	if err != nil {
 		if errors.Is(err, entitygraph.ErrEntityNotFound) {
 			return Task{}, ErrTaskNotFound
 		}
 		return Task{}, fmt.Errorf("GetTask: %w", err)
 	}
-	if e.AgencyID != agencyID || e.TypeID != taskTypeID {
+	if e.TypeID != taskTypeID {
 		return Task{}, ErrTaskNotFound
 	}
 	t := taskFromEntity(e)
-	t.Tags = m.loadTagNames(ctx, agencyID, t.ID)
-	t.AssignedTo = m.loadAssigneeID(ctx, agencyID, t.ID)
+	t.Tags = m.loadTagNames(ctx, t.ID)
+	t.AssignedTo = m.loadAssigneeID(ctx, t.ID)
 	return t, nil
 }
 
@@ -87,8 +85,8 @@ func (m *taskManager) GetTask(ctx context.Context, agencyID, taskID string) (Tas
 // The pending → in_progress transition is additionally gated by the blocker
 // rule: any inbound `blocks` edge whose source task has not reached a
 // terminal status returns a *BlockedError listing the offending blocker task IDs.
-func (m *taskManager) UpdateTask(ctx context.Context, agencyID string, task Task) (Task, error) {
-	current, err := m.GetTask(ctx, agencyID, task.ID)
+func (m *taskManager) UpdateTask(ctx context.Context, task Task) (Task, error) {
+	current, err := m.GetTask(ctx, task.ID)
 	if err != nil {
 		return Task{}, err
 	}
@@ -96,7 +94,7 @@ func (m *taskManager) UpdateTask(ctx context.Context, agencyID string, task Task
 		return Task{}, ErrInvalidStatusTransition
 	}
 	if current.Status == TaskStatusPending && task.Status == TaskStatusInProgress {
-		if blockers, err := m.findActiveBlockers(ctx, agencyID, task.ID); err != nil {
+		if blockers, err := m.findActiveBlockers(ctx, task.ID); err != nil {
 			return Task{}, err
 		} else if len(blockers) > 0 {
 			return Task{}, &BlockedError{BlockerTaskIDs: blockers}
@@ -104,14 +102,13 @@ func (m *taskManager) UpdateTask(ctx context.Context, agencyID string, task Task
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	task.AgencyID = agencyID
 	task.UpdatedAt = now
 	task.CreatedAt = current.CreatedAt
 	if isTerminalStatus(task.Status) && task.CompletedAt == "" {
 		task.CompletedAt = now
 	}
 
-	updated, err := m.dm.UpdateEntity(ctx, agencyID, task.ID, entitygraph.UpdateEntityRequest{
+	updated, err := m.dm.UpdateEntity(ctx, task.ID, entitygraph.UpdateEntityRequest{
 		Properties: taskToProperties(task),
 	})
 	if err != nil {
@@ -125,20 +122,20 @@ func (m *taskManager) UpdateTask(ctx context.Context, agencyID string, task Task
 
 	// If workflow_run_id was just stamped for the first time, create the started_task edge.
 	if out.WorkflowRunID != "" && current.WorkflowRunID == "" {
-		if err := m.LinkTaskToRun(ctx, agencyID, out.WorkflowRunID, out.ID); err != nil {
+		if err := m.LinkTaskToRun(ctx, out.WorkflowRunID, out.ID); err != nil {
 			slog.WarnContext(ctx, "UpdateTask: LinkTaskToRun", "run_id", out.WorkflowRunID, "task_id", out.ID, "err", err)
 		}
 	}
 
 	if changed := nonStatusChangedFields(current, out); len(changed) > 0 {
-		m.publish(ctx, TopicTaskUpdated, agencyID, TaskUpdatedPayload{
+		m.publish(ctx, TopicTaskUpdated, TaskUpdatedPayload{
 			TaskID:        out.ID,
 			ChangedFields: changed,
 			WorkflowRunID: out.WorkflowRunID,
 		})
 	}
 	if current.Status != out.Status {
-		m.publish(ctx, TopicTaskStatusChanged, agencyID, TaskStatusChangedPayload{
+		m.publish(ctx, TopicTaskStatusChanged, TaskStatusChangedPayload{
 			TaskID:        out.ID,
 			From:          current.Status,
 			To:            out.Status,
@@ -149,7 +146,7 @@ func (m *taskManager) UpdateTask(ctx context.Context, agencyID string, task Task
 			if completedAt == "" {
 				completedAt = now
 			}
-			m.publish(ctx, TopicTaskCompleted, agencyID, TaskCompletedPayload{
+			m.publish(ctx, TopicTaskCompleted, TaskCompletedPayload{
 				TaskID:         out.ID,
 				TerminalStatus: out.Status,
 				CompletedAt:    completedAt,
@@ -161,11 +158,11 @@ func (m *taskManager) UpdateTask(ctx context.Context, agencyID string, task Task
 }
 
 // DeleteTask soft-deletes the Task entity.
-func (m *taskManager) DeleteTask(ctx context.Context, agencyID, taskID string) error {
-	if _, err := m.GetTask(ctx, agencyID, taskID); err != nil {
+func (m *taskManager) DeleteTask(ctx context.Context, taskID string) error {
+	if _, err := m.GetTask(ctx, taskID); err != nil {
 		return err
 	}
-	if err := m.dm.DeleteEntity(ctx, agencyID, taskID); err != nil {
+	if err := m.dm.DeleteEntity(ctx, taskID); err != nil {
 		if errors.Is(err, entitygraph.ErrEntityNotFound) {
 			return ErrTaskNotFound
 		}
@@ -174,9 +171,8 @@ func (m *taskManager) DeleteTask(ctx context.Context, agencyID, taskID string) e
 	return nil
 }
 
-// ListTasks returns all non-deleted Task entities for the agency that match
-// the filter.
-func (m *taskManager) ListTasks(ctx context.Context, agencyID string, filter TaskFilter) ([]Task, error) {
+// ListTasks returns all non-deleted Task entities that match the filter.
+func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task, error) {
 	props := map[string]any{}
 	if filter.Status != "" {
 		props["status"] = string(filter.Status)
@@ -189,7 +185,6 @@ func (m *taskManager) ListTasks(ctx context.Context, agencyID string, filter Tas
 	}
 
 	entities, err := m.dm.ListEntities(ctx, entitygraph.EntityFilter{
-		AgencyID:   agencyID,
 		TypeID:     taskTypeID,
 		Properties: props,
 	})
@@ -200,8 +195,8 @@ func (m *taskManager) ListTasks(ctx context.Context, agencyID string, filter Tas
 	tasks := make([]Task, 0, len(entities))
 	for _, e := range entities {
 		t := taskFromEntity(e)
-		t.Tags = m.loadTagNames(ctx, agencyID, t.ID)
-		t.AssignedTo = m.loadAssigneeID(ctx, agencyID, t.ID)
+		t.Tags = m.loadTagNames(ctx, t.ID)
+		t.AssignedTo = m.loadAssigneeID(ctx, t.ID)
 		tasks = append(tasks, t)
 	}
 	return tasks, nil
@@ -210,14 +205,14 @@ func (m *taskManager) ListTasks(ctx context.Context, agencyID string, filter Tas
 // loadTagNames traverses outbound has_tag edges from taskID and returns the
 // name of each linked Tag entity. Errors are silently swallowed — a missing
 // or unreadable tag is omitted rather than failing the parent call.
-func (m *taskManager) loadTagNames(ctx context.Context, agencyID, taskID string) []string {
-	edges, err := m.TraverseRelationships(ctx, agencyID, taskID, RelLabelHasTag, DirectionOutbound)
+func (m *taskManager) loadTagNames(ctx context.Context, taskID string) []string {
+	edges, err := m.TraverseRelationships(ctx, taskID, RelLabelHasTag, DirectionOutbound)
 	if err != nil || len(edges) == 0 {
 		return nil
 	}
 	names := make([]string, 0, len(edges))
 	for _, edge := range edges {
-		tagEntity, err := m.dm.GetEntity(ctx, agencyID, edge.ToID)
+		tagEntity, err := m.dm.GetEntity(ctx, edge.ToID)
 		if err != nil {
 			continue
 		}
@@ -230,8 +225,8 @@ func (m *taskManager) loadTagNames(ctx context.Context, agencyID, taskID string)
 
 // loadAssigneeID traverses the outbound assigned_to edge from taskID and
 // returns the agent entity ID. Returns empty string when unassigned or on error.
-func (m *taskManager) loadAssigneeID(ctx context.Context, agencyID, taskID string) string {
-	edges, err := m.TraverseRelationships(ctx, agencyID, taskID, RelLabelAssignedTo, DirectionOutbound)
+func (m *taskManager) loadAssigneeID(ctx context.Context, taskID string) string {
+	edges, err := m.TraverseRelationships(ctx, taskID, RelLabelAssignedTo, DirectionOutbound)
 	if err != nil || len(edges) == 0 {
 		return ""
 	}
@@ -241,15 +236,9 @@ func (m *taskManager) loadAssigneeID(ctx context.Context, agencyID, taskID strin
 // publish emits an event via the optional Publisher.
 // A nil publisher is silently skipped; errors are swallowed — events are
 // best-effort and must not fail the originating operation.
-//
-// agencyID is accepted (matching every call site, and useful for the log
-// line below) but not forwarded to [events.Publisher.Publish] — unlike the
-// original's eventbus.Event, the mwanachama-backend-shared Publisher contract
-// carries no separate agency envelope; payloads that need agency scoping
-// already carry an AgencyID/WorkflowRunID field of their own.
-func (m *taskManager) publish(ctx context.Context, topic, agencyID string, payload any) {
-	log.Printf("mwanachamataskmanager: publish: topic=%q agencyID=%q payloadType=%T publisherNil=%v payload=%+v",
-		topic, agencyID, payload, m.publisher == nil, payload)
+func (m *taskManager) publish(ctx context.Context, topic string, payload any) {
+	log.Printf("mwanachamataskmanager: publish: topic=%q payloadType=%T publisherNil=%v payload=%+v",
+		topic, payload, m.publisher == nil, payload)
 	if m.publisher == nil {
 		return
 	}
@@ -309,14 +298,14 @@ func stringSlicesEqual(a, b []string) bool {
 
 // findActiveBlockers returns the IDs of tasks that block taskID via inbound
 // `blocks` edges and are themselves still non-terminal.
-func (m *taskManager) findActiveBlockers(ctx context.Context, agencyID, taskID string) ([]string, error) {
-	edges, err := m.TraverseRelationships(ctx, agencyID, taskID, RelLabelBlocks, DirectionInbound)
+func (m *taskManager) findActiveBlockers(ctx context.Context, taskID string) ([]string, error) {
+	edges, err := m.TraverseRelationships(ctx, taskID, RelLabelBlocks, DirectionInbound)
 	if err != nil {
 		return nil, fmt.Errorf("findActiveBlockers: %w", err)
 	}
 	var nonTerminal []string
 	for _, e := range edges {
-		blocker, err := m.GetTask(ctx, agencyID, e.FromID)
+		blocker, err := m.GetTask(ctx, e.FromID)
 		if err != nil {
 			if errors.Is(err, ErrTaskNotFound) {
 				continue

@@ -223,7 +223,6 @@ func TestTaskToProperties_IncludesTimestamps(t *testing.T) {
 func TestTaskToProperties_RoundTrip_RichFields(t *testing.T) {
 	in := Task{
 		ID:             "task-1",
-		AgencyID:       "agency-1",
 		Description:    "World",
 		Status:         TaskStatusInProgress,
 		Priority:       TaskPriorityHigh,
@@ -237,7 +236,6 @@ func TestTaskToProperties_RoundTrip_RichFields(t *testing.T) {
 	}
 	e := entitygraph.Entity{
 		ID:         in.ID,
-		AgencyID:   in.AgencyID,
 		TypeID:     taskTypeID,
 		Properties: taskToProperties(in),
 	}
@@ -249,9 +247,8 @@ func TestTaskToProperties_RoundTrip_RichFields(t *testing.T) {
 
 func TestTaskFromEntity_AcceptsJSONDecodedTagsAndNumber(t *testing.T) {
 	e := entitygraph.Entity{
-		ID:       "task-1",
-		AgencyID: "agency-1",
-		TypeID:   taskTypeID,
+		ID:     "task-1",
+		TypeID: taskTypeID,
 		Properties: map[string]any{
 			"description":     "",
 			"status":          "pending",
@@ -275,7 +272,6 @@ func TestTaskFromEntity_AcceptsJSONDecodedTagsAndNumber(t *testing.T) {
 func TestProjectToProperties_RoundTrip(t *testing.T) {
 	in := Project{
 		ID:          "proj-1",
-		AgencyID:    "agency-1",
 		Name:        "Sprint 14",
 		ProjectName: "sprint_14",
 		Description: "Push X out the door",
@@ -285,7 +281,6 @@ func TestProjectToProperties_RoundTrip(t *testing.T) {
 	}
 	e := entitygraph.Entity{
 		ID:         in.ID,
-		AgencyID:   in.AgencyID,
 		TypeID:     "Project",
 		Properties: projectToProperties(in),
 	}
@@ -298,7 +293,6 @@ func TestProjectToProperties_RoundTrip(t *testing.T) {
 func TestAgentToProperties_RoundTrip(t *testing.T) {
 	in := Agent{
 		ID:          "agent-1",
-		AgencyID:    "agency-1",
 		AgentID:     "ai-bot-7",
 		DisplayName: "Bot 7",
 		Capability:  "code",
@@ -307,7 +301,6 @@ func TestAgentToProperties_RoundTrip(t *testing.T) {
 	}
 	e := entitygraph.Entity{
 		ID:         in.ID,
-		AgencyID:   in.AgencyID,
 		TypeID:     "Agent",
 		Properties: agentToProperties(in),
 	}

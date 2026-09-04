@@ -3,11 +3,11 @@ package mwanachamataskmanager
 import "errors"
 
 // ErrTaskNotFound is returned when a task does not exist for the given
-// agencyID and taskID combination.
+// taskID.
 var ErrTaskNotFound = errors.New("task not found")
 
 // ErrTaskAlreadyExists is returned by [TaskManager.CreateTask] when a task
-// with the same ID already exists for the given agency.
+// with the same ID already exists.
 var ErrTaskAlreadyExists = errors.New("task already exists")
 
 // ErrInvalidStatusTransition is returned by [TaskManager.UpdateTask] when
@@ -16,11 +16,11 @@ var ErrTaskAlreadyExists = errors.New("task already exists")
 var ErrInvalidStatusTransition = errors.New("invalid task status transition")
 
 // ErrInvalidTask is returned when a task is missing required fields (e.g.
-// empty Title or missing AgencyID on creation).
+// empty Title on creation).
 var ErrInvalidTask = errors.New("invalid task: missing required fields")
 
 // ErrAgentNotFound is returned when an Agent vertex does not exist for the
-// given agencyID and entity ID.
+// given entity ID.
 var ErrAgentNotFound = errors.New("agent not found")
 
 // ErrAgentAlreadyExists is reserved for callers that want to distinguish the
@@ -29,19 +29,19 @@ var ErrAgentNotFound = errors.New("agent not found")
 var ErrAgentAlreadyExists = errors.New("agent already exists")
 
 // ErrProjectNotFound is returned when a Project vertex does not exist
-// for the given agencyID and entity ID.
+// for the given entity ID.
 var ErrProjectNotFound = errors.New("project not found")
 
 // ErrTagNotFound is returned when a Tag vertex does not exist for the
-// given agencyID and entity ID.
+// given entity ID.
 var ErrTagNotFound = errors.New("tag not found")
 
 // ErrTaskTodoNotFound is returned when a TaskTodo vertex does not exist
-// for the given agencyID and entity ID.
+// for the given entity ID.
 var ErrTaskTodoNotFound = errors.New("task todo not found")
 
 // ErrWorkflowRunNotFound is returned when a WorkflowRun vertex does not
-// exist for the given agencyID and entity ID.
+// exist for the given entity ID.
 var ErrWorkflowRunNotFound = errors.New("workflow run not found")
 
 // ErrInvalidRunStatusTransition is returned by [TaskManager.UpdateWorkflowRunStatus]
@@ -51,7 +51,7 @@ var ErrWorkflowRunNotFound = errors.New("workflow run not found")
 var ErrInvalidRunStatusTransition = errors.New("invalid workflow run status transition")
 
 // ErrWorkflowRunNameExists is returned by [TaskManager.CreateWorkflowRun]
-// when a run with the same (agencyID, name) pair already exists. The caller
+// when a run with the same (name) pair already exists. The caller
 // should append a discriminator and retry, or treat the existing run as
 // idempotent — names are immutable once created.
 var ErrWorkflowRunNameExists = errors.New("workflow run name already exists")
@@ -64,18 +64,17 @@ var ErrWorkflowRunNameExists = errors.New("workflow run name already exists")
 var ErrWorkflowRunMismatch = errors.New("task already belongs to a different workflow run")
 
 // ErrProjectAlreadyExists is returned by [TaskManager.CreateProject]
-// when a Project with the same ID already exists in the agency.
+// when a Project with the same ID already exists.
 var ErrProjectAlreadyExists = errors.New("project already exists")
 
 // ErrInvalidRelationship is returned by [TaskManager.CreateRelationship]
 // when the (label, fromType, toType) triple is not in the Work edge-label
-// whitelist, when the endpoints are in different agencies, or when an
-// endpoint's type does not match the label's declared From/To types.
+// whitelist, or when an endpoint's type does not match the label's declared
+// From/To types.
 var ErrInvalidRelationship = errors.New("invalid relationship")
 
 // ErrRelationshipNotFound is returned by [TaskManager.DeleteRelationship]
-// when no edge matches the given (fromID, toID, label) triple in the
-// agency.
+// when no edge matches the given (fromID, toID, label) triple.
 var ErrRelationshipNotFound = errors.New("relationship not found")
 
 // ErrInvalidImport is returned by [TaskManager.ImportProject] when the
@@ -126,11 +125,11 @@ var ErrNotRootWorkflowRun = errors.New("workflow run is not a root run; budget o
 var ErrCannotCancelTerminalRun = errors.New("workflow run is not in_progress; cancel rejected")
 
 // ErrDeliverableNotFound is returned when a Deliverable vertex does not exist
-// for the given agencyID and entity ID.
+// for the given entity ID.
 var ErrDeliverableNotFound = errors.New("deliverable not found")
 
 // ErrAcceptanceCriteriaNotFound is returned when an AcceptanceCriteria vertex does
-// not exist for the given agencyID and entity ID.
+// not exist for the given entity ID.
 var ErrAcceptanceCriteriaNotFound = errors.New("acceptance criteria not found")
 
 // ErrBlocked is the sentinel returned by [TaskManager.UpdateTask] when a

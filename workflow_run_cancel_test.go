@@ -14,12 +14,11 @@ import (
 func TestCancelWorkflowRun_InProgress_ReachesCancelling(t *testing.T) {
 	ctx := context.Background()
 	mgr, pub := newManagerWithPublisher(t)
-	const agencyID = "ag"
 
-	run := createRunAtStatus(t, mgr, agencyID, mwanachamataskmanager.WorkflowRunStatusInProgress)
+	run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusInProgress)
 	deadline := time.Now().UTC().Add(30 * time.Second)
 
-	result, err := mgr.CancelWorkflowRun(ctx, agencyID, run.ID, "compile loop runaway", "alice", deadline)
+	result, err := mgr.CancelWorkflowRun(ctx, run.ID, "compile loop runaway", "alice", deadline)
 	if err != nil {
 		t.Fatalf("CancelWorkflowRun: %v", err)
 	}
@@ -43,12 +42,11 @@ func TestCancelWorkflowRun_InProgress_ReachesCancelling(t *testing.T) {
 func TestCancelWorkflowRun_CascadesTaskCancelledForNonTerminalTasks(t *testing.T) {
 	ctx := context.Background()
 	mgr, pub := newManagerWithPublisher(t)
-	const agencyID = "ag"
 
-	run := createRunAtStatus(t, mgr, agencyID, mwanachamataskmanager.WorkflowRunStatusInProgress)
+	run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusInProgress)
 
 	// Active task — should be cancelled.
-	active, err := mgr.CreateTask(ctx, agencyID, mwanachamataskmanager.Task{
+	active, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{
 		Title:         "active",
 		WorkflowRunID: run.ID,
 	})
@@ -56,7 +54,7 @@ func TestCancelWorkflowRun_CascadesTaskCancelledForNonTerminalTasks(t *testing.T
 		t.Fatalf("CreateTask active: %v", err)
 	}
 	// Already-terminal task — should be skipped.
-	done, err := mgr.CreateTask(ctx, agencyID, mwanachamataskmanager.Task{
+	done, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{
 		Title:         "done",
 		WorkflowRunID: run.ID,
 	})
@@ -64,23 +62,23 @@ func TestCancelWorkflowRun_CascadesTaskCancelledForNonTerminalTasks(t *testing.T
 		t.Fatalf("CreateTask done: %v", err)
 	}
 	done.Status = mwanachamataskmanager.TaskStatusInProgress
-	if _, err := mgr.UpdateTask(ctx, agencyID, done); err != nil {
+	if _, err := mgr.UpdateTask(ctx, done); err != nil {
 		t.Fatalf("UpdateTask done → in_progress: %v", err)
 	}
-	doneInProgress, err := mgr.GetTask(ctx, agencyID, done.ID)
+	doneInProgress, err := mgr.GetTask(ctx, done.ID)
 	if err != nil {
 		t.Fatalf("GetTask done: %v", err)
 	}
 	doneInProgress.Status = mwanachamataskmanager.TaskStatusCompleted
-	if _, err := mgr.UpdateTask(ctx, agencyID, doneInProgress); err != nil {
+	if _, err := mgr.UpdateTask(ctx, doneInProgress); err != nil {
 		t.Fatalf("UpdateTask done → completed: %v", err)
 	}
 
-	if _, err := mgr.CancelWorkflowRun(ctx, agencyID, run.ID, "test", "alice", time.Now().Add(30*time.Second)); err != nil {
+	if _, err := mgr.CancelWorkflowRun(ctx, run.ID, "test", "alice", time.Now().Add(30*time.Second)); err != nil {
 		t.Fatalf("CancelWorkflowRun: %v", err)
 	}
 
-	got, err := mgr.GetTask(ctx, agencyID, active.ID)
+	got, err := mgr.GetTask(ctx, active.ID)
 	if err != nil {
 		t.Fatalf("GetTask active: %v", err)
 	}
@@ -88,7 +86,7 @@ func TestCancelWorkflowRun_CascadesTaskCancelledForNonTerminalTasks(t *testing.T
 		t.Errorf("active task status = %s, want cancelled", got.Status)
 	}
 
-	gotDone, err := mgr.GetTask(ctx, agencyID, done.ID)
+	gotDone, err := mgr.GetTask(ctx, done.ID)
 	if err != nil {
 		t.Fatalf("GetTask done: %v", err)
 	}
@@ -121,19 +119,18 @@ func TestCancelWorkflowRun_CascadesTaskCancelledForNonTerminalTasks(t *testing.T
 func TestCancelWorkflowRun_AlreadyCancelling_IsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	mgr, pub := newManagerWithPublisher(t)
-	const agencyID = "ag"
 
-	run := createRunAtStatus(t, mgr, agencyID, mwanachamataskmanager.WorkflowRunStatusInProgress)
+	run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusInProgress)
 	deadline := time.Now().UTC().Add(30 * time.Second)
 
-	first, err := mgr.CancelWorkflowRun(ctx, agencyID, run.ID, "first", "alice", deadline)
+	first, err := mgr.CancelWorkflowRun(ctx, run.ID, "first", "alice", deadline)
 	if err != nil {
 		t.Fatalf("first cancel: %v", err)
 	}
 
 	priorEventCount := len(pub.full)
 
-	second, err := mgr.CancelWorkflowRun(ctx, agencyID, run.ID, "second", "bob", deadline.Add(10*time.Second))
+	second, err := mgr.CancelWorkflowRun(ctx, run.ID, "second", "bob", deadline.Add(10*time.Second))
 	if err != nil {
 		t.Fatalf("second cancel: %v", err)
 	}
@@ -159,12 +156,12 @@ func TestCancelWorkflowRun_AlreadyCancelling_IsIdempotent(t *testing.T) {
 func TestCancelWorkflowRun_PendingRun_ReturnsCannotCancelTerminal(t *testing.T) {
 	ctx := context.Background()
 	mgr, _ := newManagerWithPublisher(t)
-	run, err := mgr.CreateWorkflowRun(ctx, "ag", "", "", "")
+	run, err := mgr.CreateWorkflowRun(ctx, "", "", "")
 	if err != nil {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
 
-	_, err = mgr.CancelWorkflowRun(ctx, "ag", run.ID, "", "", time.Now().Add(time.Second))
+	_, err = mgr.CancelWorkflowRun(ctx, run.ID, "", "", time.Now().Add(time.Second))
 	if !errors.Is(err, mwanachamataskmanager.ErrCannotCancelTerminalRun) {
 		t.Errorf("err = %v, want ErrCannotCancelTerminalRun", err)
 	}
@@ -173,9 +170,9 @@ func TestCancelWorkflowRun_PendingRun_ReturnsCannotCancelTerminal(t *testing.T) 
 func TestCancelWorkflowRun_CompletedRun_ReturnsCannotCancelTerminal(t *testing.T) {
 	ctx := context.Background()
 	mgr, _ := newManagerWithPublisher(t)
-	run := createRunAtStatus(t, mgr, "ag", mwanachamataskmanager.WorkflowRunStatusCompleted)
+	run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusCompleted)
 
-	_, err := mgr.CancelWorkflowRun(ctx, "ag", run.ID, "", "", time.Now().Add(time.Second))
+	_, err := mgr.CancelWorkflowRun(ctx, run.ID, "", "", time.Now().Add(time.Second))
 	if !errors.Is(err, mwanachamataskmanager.ErrCannotCancelTerminalRun) {
 		t.Errorf("err = %v, want ErrCannotCancelTerminalRun", err)
 	}
@@ -184,9 +181,9 @@ func TestCancelWorkflowRun_CompletedRun_ReturnsCannotCancelTerminal(t *testing.T
 func TestCancelWorkflowRun_FailedRun_ReturnsCannotCancelTerminal(t *testing.T) {
 	ctx := context.Background()
 	mgr, _ := newManagerWithPublisher(t)
-	run := createRunAtStatus(t, mgr, "ag", mwanachamataskmanager.WorkflowRunStatusFailed)
+	run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusFailed)
 
-	_, err := mgr.CancelWorkflowRun(ctx, "ag", run.ID, "", "", time.Now().Add(time.Second))
+	_, err := mgr.CancelWorkflowRun(ctx, run.ID, "", "", time.Now().Add(time.Second))
 	if !errors.Is(err, mwanachamataskmanager.ErrCannotCancelTerminalRun) {
 		t.Errorf("err = %v, want ErrCannotCancelTerminalRun", err)
 	}
@@ -195,7 +192,7 @@ func TestCancelWorkflowRun_FailedRun_ReturnsCannotCancelTerminal(t *testing.T) {
 func TestCancelWorkflowRun_MissingRun_ReturnsNotFound(t *testing.T) {
 	ctx := context.Background()
 	mgr, _ := newManagerWithPublisher(t)
-	_, err := mgr.CancelWorkflowRun(ctx, "ag", "nope", "", "", time.Now().Add(time.Second))
+	_, err := mgr.CancelWorkflowRun(ctx, "nope", "", "", time.Now().Add(time.Second))
 	if !errors.Is(err, mwanachamataskmanager.ErrWorkflowRunNotFound) {
 		t.Errorf("err = %v, want ErrWorkflowRunNotFound", err)
 	}
@@ -206,14 +203,13 @@ func TestCancelWorkflowRun_MissingRun_ReturnsNotFound(t *testing.T) {
 func TestFinalizeWorkflowRunCancellation_CancellingRun_ReachesCancelled(t *testing.T) {
 	ctx := context.Background()
 	mgr, pub := newManagerWithPublisher(t)
-	const agencyID = "ag"
 
-	run := createRunAtStatus(t, mgr, agencyID, mwanachamataskmanager.WorkflowRunStatusInProgress)
-	if _, err := mgr.CancelWorkflowRun(ctx, agencyID, run.ID, "quiesce", "alice", time.Now().Add(time.Second)); err != nil {
+	run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusInProgress)
+	if _, err := mgr.CancelWorkflowRun(ctx, run.ID, "quiesce", "alice", time.Now().Add(time.Second)); err != nil {
 		t.Fatalf("CancelWorkflowRun: %v", err)
 	}
 
-	result, err := mgr.FinalizeWorkflowRunCancellation(ctx, agencyID, run.ID)
+	result, err := mgr.FinalizeWorkflowRunCancellation(ctx, run.ID)
 	if err != nil {
 		t.Fatalf("FinalizeWorkflowRunCancellation: %v", err)
 	}
@@ -231,13 +227,12 @@ func TestFinalizeWorkflowRunCancellation_CancellingRun_ReachesCancelled(t *testi
 func TestFinalizeWorkflowRunCancellation_NotCancelling_NoOp(t *testing.T) {
 	ctx := context.Background()
 	mgr, pub := newManagerWithPublisher(t)
-	const agencyID = "ag"
 
 	// Run is in_progress, never cancelled.
-	run := createRunAtStatus(t, mgr, agencyID, mwanachamataskmanager.WorkflowRunStatusInProgress)
+	run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusInProgress)
 	priorEventCount := len(pub.full)
 
-	result, err := mgr.FinalizeWorkflowRunCancellation(ctx, agencyID, run.ID)
+	result, err := mgr.FinalizeWorkflowRunCancellation(ctx, run.ID)
 	if err != nil {
 		t.Fatalf("FinalizeWorkflowRunCancellation: %v", err)
 	}
@@ -252,18 +247,17 @@ func TestFinalizeWorkflowRunCancellation_NotCancelling_NoOp(t *testing.T) {
 func TestFinalizeWorkflowRunCancellation_DoubleFinalize_IsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	mgr, pub := newManagerWithPublisher(t)
-	const agencyID = "ag"
 
-	run := createRunAtStatus(t, mgr, agencyID, mwanachamataskmanager.WorkflowRunStatusInProgress)
-	if _, err := mgr.CancelWorkflowRun(ctx, agencyID, run.ID, "", "", time.Now().Add(time.Second)); err != nil {
+	run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusInProgress)
+	if _, err := mgr.CancelWorkflowRun(ctx, run.ID, "", "", time.Now().Add(time.Second)); err != nil {
 		t.Fatalf("CancelWorkflowRun: %v", err)
 	}
-	if _, err := mgr.FinalizeWorkflowRunCancellation(ctx, agencyID, run.ID); err != nil {
+	if _, err := mgr.FinalizeWorkflowRunCancellation(ctx, run.ID); err != nil {
 		t.Fatalf("first finalize: %v", err)
 	}
 	priorEventCount := len(pub.full)
 
-	result, err := mgr.FinalizeWorkflowRunCancellation(ctx, agencyID, run.ID)
+	result, err := mgr.FinalizeWorkflowRunCancellation(ctx, run.ID)
 	if err != nil {
 		t.Fatalf("second finalize: %v", err)
 	}

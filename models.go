@@ -126,13 +126,10 @@ const (
 // Task is the core domain entity managed by [TaskManager].
 // All timestamps are ISO 8601 strings (RFC 3339). Empty string means "not set".
 type Task struct {
-	// ID is the unique identifier for this task within the agency.
+	// ID is the unique identifier for this task.
 	// Set by the backend on creation; callers should leave it empty in
 	// CreateTask requests.
 	ID string `json:"id"`
-
-	// AgencyID is the agency that owns this task.
-	AgencyID string `json:"agency_id"`
 
 	// Description provides additional context for the agent assigned
 	// to this task. Optional.
@@ -245,9 +242,6 @@ type ImportProjectJob struct {
 	// ID is the entity-graph storage key for this job.
 	ID string `json:"id"`
 
-	// AgencyID is the agency that owns this import job.
-	AgencyID string `json:"agency_id"`
-
 	// Status is the current lifecycle state ("pending", "running",
 	// "completed", "failed", "cancelled").
 	Status string `json:"status"`
@@ -319,9 +313,6 @@ type TaskTodo struct {
 	// ID is the entity-graph storage key — opaque to callers.
 	ID string `json:"id"`
 
-	// AgencyID is the agency that owns this todo.
-	AgencyID string `json:"agency_id"`
-
 	// Title is the short label for this sub-task.
 	Title string `json:"title"`
 
@@ -386,18 +377,15 @@ type TaskFilter struct {
 // graph vertex so that `assigned_to` edges are first-class graph relationships
 // rather than string fields on the Task document.
 //
-// Uniqueness — at most one Agent per (AgencyID, AgentID) — is enforced at the
+// Uniqueness — at most one Agent per AgentID — is enforced at the
 // schema level via UniqueKey: ["agent_id"]. UpsertAgent relies on this for
 // find-or-create semantics.
 type Agent struct {
 	// ID is the entity-graph storage key — opaque to callers.
 	ID string `json:"id"`
 
-	// AgencyID is the agency this agent serves.
-	AgencyID string `json:"agency_id"`
-
 	// AgentID is the external agent identifier.
-	// Required and unique within an agency.
+	// Required and unique.
 	AgentID string `json:"agent_id"`
 
 	// DisplayName is a human-readable label for the agent. Optional.
@@ -407,7 +395,7 @@ type Agent struct {
 	// "review"). Optional.
 	Capability string `json:"capability,omitempty"`
 
-	// RoleName is the role this agent fulfils within the agency
+	// RoleName is the role this agent fulfils
 	// (e.g. "domain-expert", "human-code-reviewer"). Used as a stable
 	// filter key in event payload_condition rules. Optional.
 	RoleName string `json:"role_name,omitempty"`
@@ -423,11 +411,8 @@ type Agent struct {
 // a milestone, or an epic). Tasks become members via the `member_of`
 // graph edge — many-to-many; a Task may belong to multiple Projects.
 type Project struct {
-	// ID is the unique identifier for this project within the agency.
+	// ID is the unique identifier for this project.
 	ID string `json:"id"`
-
-	// AgencyID is the agency that owns this project.
-	AgencyID string `json:"agency_id"`
 
 	// Name is the short human-readable label. Required.
 	Name string `json:"name"`
@@ -575,11 +560,8 @@ type WorkflowRun struct {
 	// ID is the entity-graph storage key — opaque to callers.
 	ID string `json:"id"`
 
-	// AgencyID is the agency that owns this run.
-	AgencyID string `json:"agency_id"`
-
 	// Name is a caller-supplied or server-generated human-readable label,
-	// unique per agency. Acts as the correlation handle for test scripts
+	// globally unique. Acts as the correlation handle for test scripts
 	// that publish a trigger event and then need to find the run that
 	// resulted from it; surfaces as the headline column in the
 	// `/workflow-runs` UI list.
@@ -638,8 +620,8 @@ type WorkflowRun struct {
 
 	// FailurePipelineBudget is the maximum number of recovery-pipeline
 	// activations allowed under this run's lineage. Lives only on the root
-	// run. Resolved by start-pipeline (payload > agency > env default) and
-	// frozen for the run's lifetime.
+	// run. Resolved by start-pipeline (payload override > global default)
+	// and frozen for the run's lifetime.
 	FailurePipelineBudget int `json:"failure_pipeline_budget,omitempty"`
 
 	// FailurePipelinesUsed counts recovery activations charged to this root
@@ -715,9 +697,6 @@ type Deliverable struct {
 	// ID is the entity-graph storage key — opaque to callers.
 	ID string `json:"id"`
 
-	// AgencyID is the agency that owns this deliverable.
-	AgencyID string `json:"agency_id"`
-
 	// Title is the short human-readable label.
 	Title string `json:"title"`
 
@@ -750,9 +729,6 @@ type AcceptanceCriteria struct {
 	// ID is the entity-graph storage key — opaque to callers.
 	ID string `json:"id"`
 
-	// AgencyID is the agency that owns this criterion.
-	AgencyID string `json:"agency_id"`
-
 	// Title is the short label (e.g. "All unit tests pass with race detector").
 	Title string `json:"title"`
 
@@ -783,13 +759,10 @@ type AcceptanceCriteria struct {
 }
 
 // Tag is a free-form label that can be attached to Tasks via `has_tag` graph
-// edges. Tags are unique by name within an agency (UniqueKey: ["name"]).
+// edges. Tags are unique by name (UniqueKey: ["name"]).
 type Tag struct {
 	// ID is the entity-graph storage key — opaque to callers.
 	ID string `json:"id"`
-
-	// AgencyID is the agency that owns this tag.
-	AgencyID string `json:"agency_id"`
 
 	// Name is the unique label text (e.g. "setup", "auth"). Required.
 	Name string `json:"name"`

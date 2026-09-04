@@ -94,8 +94,8 @@ type importTask struct {
 
 // ImportProject is a synchronous wrapper: it calls StartImportProject, then
 // blocks until the background goroutine finishes, and returns the result.
-func (m *taskManager) ImportProject(ctx context.Context, agencyID, document string) (ImportResult, error) {
-	job, err := m.StartImportProject(ctx, agencyID, document)
+func (m *taskManager) ImportProject(ctx context.Context, document string) (ImportResult, error) {
+	job, err := m.StartImportProject(ctx, document)
 	if err != nil {
 		return ImportResult{}, err
 	}
@@ -103,22 +103,22 @@ func (m *taskManager) ImportProject(ctx context.Context, agencyID, document stri
 	for {
 		select {
 		case <-ctx.Done():
-			_ = m.CancelImportProject(ctx, agencyID, job.ID)
+			_ = m.CancelImportProject(ctx, job.ID)
 			return ImportResult{}, ctx.Err()
 		case <-time.After(50 * time.Millisecond):
 		}
 
-		current, err := m.GetImportProjectStatus(ctx, agencyID, job.ID)
+		current, err := m.GetImportProjectStatus(ctx, job.ID)
 		if err != nil {
 			return ImportResult{}, fmt.Errorf("ImportProject: poll: %w", err)
 		}
 		switch current.Status {
 		case importJobStatusCompleted:
-			proj, projErr := m.GetProjectByName(ctx, agencyID, current.ProjectName)
+			proj, projErr := m.GetProjectByName(ctx, current.ProjectName)
 			if projErr != nil {
 				return ImportResult{TasksCreated: current.TasksCreated, DepsCreated: current.DepsCreated}, nil
 			}
-			tasks, _ := m.ListTasksInProject(ctx, agencyID, proj.ID)
+			tasks, _ := m.ListTasksInProject(ctx, proj.ID)
 			return ImportResult{
 				Project:      proj,
 				Tasks:        tasks,
@@ -135,7 +135,7 @@ func (m *taskManager) ImportProject(ctx context.Context, agencyID, document stri
 
 // StartImportProject validates the document, creates an ImportProjectJob entity,
 // starts the background goroutine, and returns immediately.
-func (m *taskManager) StartImportProject(ctx context.Context, agencyID, document string) (ImportProjectJob, error) {
+func (m *taskManager) StartImportProject(ctx context.Context, document string) (ImportProjectJob, error) {
 	// Validate the document before creating any entities.
 	if err := validateImportDoc(document); err != nil {
 		return ImportProjectJob{}, err
@@ -143,8 +143,7 @@ func (m *taskManager) StartImportProject(ctx context.Context, agencyID, document
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	jobEntity, err := m.dm.CreateEntity(ctx, entitygraph.CreateEntityRequest{
-		AgencyID: agencyID,
-		TypeID:   importJobTypeID,
+		TypeID: importJobTypeID,
 		Properties: map[string]any{
 			"status":        importJobStatusPending,
 			"error_message": "",
@@ -165,14 +164,14 @@ func (m *taskManager) StartImportProject(ctx context.Context, agencyID, document
 	importJobs[job.ID] = entry
 	importJobsMu.Unlock()
 
-	go m.runImport(jobCtx, agencyID, job.ID, document, entry)
+	go m.runImport(jobCtx, job.ID, document, entry)
 
 	return job, nil
 }
 
 // GetImportProjectStatus returns the current state of an async import job.
-func (m *taskManager) GetImportProjectStatus(ctx context.Context, agencyID, jobID string) (ImportProjectJob, error) {
-	entity, err := m.dm.GetEntity(ctx, agencyID, jobID)
+func (m *taskManager) GetImportProjectStatus(ctx context.Context, jobID string) (ImportProjectJob, error) {
+	entity, err := m.dm.GetEntity(ctx, jobID)
 	if err != nil {
 		if errors.Is(err, entitygraph.ErrEntityNotFound) {
 			return ImportProjectJob{}, ErrImportJobNotFound
@@ -194,8 +193,8 @@ func (m *taskManager) GetImportProjectStatus(ctx context.Context, agencyID, jobI
 }
 
 // CancelImportProject signals the background goroutine to stop.
-func (m *taskManager) CancelImportProject(ctx context.Context, agencyID, jobID string) error {
-	job, err := m.GetImportProjectStatus(ctx, agencyID, jobID)
+func (m *taskManager) CancelImportProject(ctx context.Context, jobID string) error {
+	job, err := m.GetImportProjectStatus(ctx, jobID)
 	if err != nil {
 		return err
 	}
@@ -210,33 +209,33 @@ func (m *taskManager) CancelImportProject(ctx context.Context, agencyID, jobID s
 	if ok {
 		entry.cancel()
 	}
-	return m.updateImportJobStatus(context.Background(), agencyID, jobID, importJobStatusCancelled, "")
+	return m.updateImportJobStatus(context.Background(), jobID, importJobStatusCancelled, "")
 }
 
 // ── Background goroutine ──────────────────────────────────────────────────────
 
-func (m *taskManager) runImport(ctx context.Context, agencyID, jobID, document string, entry *importJobEntry) {
+func (m *taskManager) runImport(ctx context.Context, jobID, document string, entry *importJobEntry) {
 	defer func() {
 		importJobsMu.Lock()
 		delete(importJobs, jobID)
 		importJobsMu.Unlock()
 	}()
 
-	if err := m.updateImportJobStatus(ctx, agencyID, jobID, importJobStatusRunning, ""); err != nil {
+	if err := m.updateImportJobStatus(ctx, jobID, importJobStatusRunning, ""); err != nil {
 		return
 	}
 	entry.appendStep("Parsing import document…")
 
 	var doc importDoc
 	if err := json.Unmarshal([]byte(document), &doc); err != nil {
-		m.failImportJob(ctx, agencyID, jobID, err.Error())
+		m.failImportJob(ctx, jobID, err.Error())
 		return
 	}
 
 	entry.appendStep(fmt.Sprintf("Creating project %q…", doc.Project))
-	proj, err := m.CreateProject(ctx, agencyID, Project{Name: doc.Project, TaskPrefix: doc.TaskPrefix})
+	proj, err := m.CreateProject(ctx, Project{Name: doc.Project, TaskPrefix: doc.TaskPrefix})
 	if err != nil {
-		m.failImportJob(ctx, agencyID, jobID, fmt.Sprintf("create project: %v", err))
+		m.failImportJob(ctx, jobID, fmt.Sprintf("create project: %v", err))
 		return
 	}
 
@@ -246,12 +245,12 @@ func (m *taskManager) runImport(ctx context.Context, agencyID, jobID, document s
 	for _, it := range doc.Tasks {
 		select {
 		case <-ctx.Done():
-			_ = m.updateImportJobStatus(context.Background(), agencyID, jobID, importJobStatusCancelled, "")
+			_ = m.updateImportJobStatus(context.Background(), jobID, importJobStatusCancelled, "")
 			return
 		default:
 		}
 		entry.appendStep(fmt.Sprintf("Creating task %q…", it.Name))
-		t, err := m.CreateTask(ctx, agencyID, Task{
+		t, err := m.CreateTask(ctx, Task{
 			Title:          it.Title,
 			Priority:       parsePriority(it.Priority),
 			Description:    it.Description,
@@ -262,15 +261,15 @@ func (m *taskManager) runImport(ctx context.Context, agencyID, jobID, document s
 			BranchName:     it.BranchName,
 		})
 		if err != nil {
-			m.failImportJob(ctx, agencyID, jobID, fmt.Sprintf("create task %s: %v", it.Name, err))
+			m.failImportJob(ctx, jobID, fmt.Sprintf("create task %s: %v", it.Name, err))
 			return
 		}
 		shortKey := strings.TrimPrefix(it.Name, doc.TaskPrefix)
 		idMap[shortKey] = t.ID
 		tasksCreated++
 
-		if err := m.AddTaskToProject(ctx, agencyID, t.ID, proj.ID); err != nil {
-			m.failImportJob(ctx, agencyID, jobID, fmt.Sprintf("add task %s to project: %v", it.Name, err))
+		if err := m.AddTaskToProject(ctx, t.ID, proj.ID); err != nil {
+			m.failImportJob(ctx, jobID, fmt.Sprintf("add task %s to project: %v", it.Name, err))
 			return
 		}
 	}
@@ -285,7 +284,7 @@ func (m *taskManager) runImport(ctx context.Context, agencyID, jobID, document s
 			if !ok {
 				continue
 			}
-			_, err := m.CreateRelationship(ctx, agencyID, Relationship{
+			_, err := m.CreateRelationship(ctx, Relationship{
 				Label:  RelLabelDependsOn,
 				FromID: fromID,
 				ToID:   toID,
@@ -294,7 +293,7 @@ func (m *taskManager) runImport(ctx context.Context, agencyID, jobID, document s
 				},
 			})
 			if err != nil {
-				m.failImportJob(ctx, agencyID, jobID, fmt.Sprintf("depends_on %s→%s: %v", it.Name, depShortID, err))
+				m.failImportJob(ctx, jobID, fmt.Sprintf("depends_on %s→%s: %v", it.Name, depShortID, err))
 				return
 			}
 			depsCreated++
@@ -311,8 +310,7 @@ func (m *taskManager) runImport(ctx context.Context, agencyID, jobID, document s
 			}
 			now := time.Now().UTC().Format(time.RFC3339)
 			tagEntity, err := m.dm.UpsertEntity(ctx, entitygraph.CreateEntityRequest{
-				AgencyID: agencyID,
-				TypeID:   tagTypeID,
+				TypeID: tagTypeID,
 				Properties: map[string]any{
 					"name":       tagName,
 					"created_at": now,
@@ -320,7 +318,7 @@ func (m *taskManager) runImport(ctx context.Context, agencyID, jobID, document s
 				},
 			})
 			if err != nil {
-				m.failImportJob(ctx, agencyID, jobID, fmt.Sprintf("upsert tag %q: %v", tagName, err))
+				m.failImportJob(ctx, jobID, fmt.Sprintf("upsert tag %q: %v", tagName, err))
 				return
 			}
 			tagIDMap[tagName] = tagEntity.ID
@@ -331,7 +329,7 @@ func (m *taskManager) runImport(ctx context.Context, agencyID, jobID, document s
 		taskID := idMap[shortKey]
 		for _, tagName := range it.Tags {
 			tagID := tagIDMap[tagName]
-			_, err := m.CreateRelationship(ctx, agencyID, Relationship{
+			_, err := m.CreateRelationship(ctx, Relationship{
 				Label:  RelLabelHasTag,
 				FromID: taskID,
 				ToID:   tagID,
@@ -340,7 +338,7 @@ func (m *taskManager) runImport(ctx context.Context, agencyID, jobID, document s
 				},
 			})
 			if err != nil {
-				m.failImportJob(ctx, agencyID, jobID, fmt.Sprintf("has_tag %s→%q: %v", it.Name, tagName, err))
+				m.failImportJob(ctx, jobID, fmt.Sprintf("has_tag %s→%q: %v", it.Name, tagName, err))
 				return
 			}
 		}
@@ -348,7 +346,7 @@ func (m *taskManager) runImport(ctx context.Context, agencyID, jobID, document s
 
 	entry.appendStep(fmt.Sprintf("Done: %d tasks, %d deps.", tasksCreated, depsCreated))
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, _ = m.dm.UpdateEntity(context.Background(), agencyID, jobID, entitygraph.UpdateEntityRequest{
+	_, _ = m.dm.UpdateEntity(context.Background(), jobID, entitygraph.UpdateEntityRequest{
 		Properties: map[string]any{
 			"status":        importJobStatusCompleted,
 			"tasks_created": tasksCreated,
@@ -361,8 +359,8 @@ func (m *taskManager) runImport(ctx context.Context, agencyID, jobID, document s
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-func (m *taskManager) updateImportJobStatus(ctx context.Context, agencyID, jobID, status, errMsg string) error {
-	_, err := m.dm.UpdateEntity(ctx, agencyID, jobID, entitygraph.UpdateEntityRequest{
+func (m *taskManager) updateImportJobStatus(ctx context.Context, jobID, status, errMsg string) error {
+	_, err := m.dm.UpdateEntity(ctx, jobID, entitygraph.UpdateEntityRequest{
 		Properties: map[string]any{
 			"status":        status,
 			"error_message": errMsg,
@@ -372,15 +370,14 @@ func (m *taskManager) updateImportJobStatus(ctx context.Context, agencyID, jobID
 	return err
 }
 
-func (m *taskManager) failImportJob(ctx context.Context, agencyID, jobID, errMsg string) {
-	_ = m.updateImportJobStatus(context.Background(), agencyID, jobID, importJobStatusFailed, errMsg)
+func (m *taskManager) failImportJob(ctx context.Context, jobID, errMsg string) {
+	_ = m.updateImportJobStatus(context.Background(), jobID, importJobStatusFailed, errMsg)
 }
 
 // importProjectJobFromEntity converts an entity to an ImportProjectJob.
 func importProjectJobFromEntity(e entitygraph.Entity) ImportProjectJob {
 	return ImportProjectJob{
 		ID:           e.ID,
-		AgencyID:     e.AgencyID,
 		Status:       entitygraph.StringProp(e.Properties, "status"),
 		ErrorMessage: entitygraph.StringProp(e.Properties, "error_message"),
 		TasksCreated: int(entitygraph.Int64Prop(e.Properties, "tasks_created")),

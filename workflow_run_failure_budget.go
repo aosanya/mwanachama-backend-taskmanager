@@ -6,7 +6,7 @@
 // root_workflow_run_id.
 //
 // A start-pipeline caller calls [SetFailureBudget] once at run-create time
-// to lock in the resolved budget (payload > agency > env default). The
+// to lock in the resolved budget (payload override > global default). The
 // failure-dispatch caller calls [IncrementFailureBudget] before creating
 // each child run; the response's `exhausted` flag tells it to skip the
 // dispatch and fail the run instead.
@@ -26,8 +26,8 @@ import (
 //
 // Returns [ErrWorkflowRunNotFound], [ErrNotRootWorkflowRun], or
 // [ErrFailureBudgetAlreadySet].
-func (m *taskManager) SetFailureBudget(ctx context.Context, agencyID, runID string, budget int) (WorkflowRun, error) {
-	run, err := m.GetWorkflowRun(ctx, agencyID, runID)
+func (m *taskManager) SetFailureBudget(ctx context.Context, runID string, budget int) (WorkflowRun, error) {
+	run, err := m.GetWorkflowRun(ctx, runID)
 	if err != nil {
 		return WorkflowRun{}, err
 	}
@@ -37,7 +37,7 @@ func (m *taskManager) SetFailureBudget(ctx context.Context, agencyID, runID stri
 	if run.FailurePipelineBudget != 0 {
 		return WorkflowRun{}, fmt.Errorf("%w: run %s has budget %d", ErrFailureBudgetAlreadySet, runID, run.FailurePipelineBudget)
 	}
-	updated, err := m.dm.UpdateEntity(ctx, agencyID, runID, entitygraph.UpdateEntityRequest{
+	updated, err := m.dm.UpdateEntity(ctx, runID, entitygraph.UpdateEntityRequest{
 		Properties: map[string]any{
 			"failure_pipeline_budget": budget,
 			// Root runs default their root pointer to their own id so
@@ -62,8 +62,8 @@ func (m *taskManager) SetFailureBudget(ctx context.Context, agencyID, runID stri
 // for the root run.
 //
 // Returns [ErrWorkflowRunNotFound] or [ErrNotRootWorkflowRun].
-func (m *taskManager) IncrementFailureBudget(ctx context.Context, agencyID, rootRunID, childRunID string) (used, budget int, exhausted bool, err error) {
-	run, getErr := m.GetWorkflowRun(ctx, agencyID, rootRunID)
+func (m *taskManager) IncrementFailureBudget(ctx context.Context, rootRunID, childRunID string) (used, budget int, exhausted bool, err error) {
+	run, getErr := m.GetWorkflowRun(ctx, rootRunID)
 	if getErr != nil {
 		return 0, 0, false, getErr
 	}
@@ -82,7 +82,7 @@ func (m *taskManager) IncrementFailureBudget(ctx context.Context, agencyID, root
 	newUsed := run.FailurePipelinesUsed + 1
 	newCounted := append(append([]string(nil), run.CountedChildRunIDs...), childRunID)
 
-	updated, updateErr := m.dm.UpdateEntity(ctx, agencyID, rootRunID, entitygraph.UpdateEntityRequest{
+	updated, updateErr := m.dm.UpdateEntity(ctx, rootRunID, entitygraph.UpdateEntityRequest{
 		Properties: map[string]any{
 			"failure_pipelines_used": newUsed,
 			"counted_child_run_ids":  newCounted,
@@ -114,14 +114,14 @@ func exhaustedAt(used, budget int) bool {
 // increment the root's counter via [IncrementFailureBudget].
 //
 // Returns [ErrWorkflowRunNotFound] if parentRunID does not exist, or
-// [ErrWorkflowRunNameExists] on (agencyID, name) collision.
-func (m *taskManager) CreateRecoveryWorkflowRun(ctx context.Context, agencyID, name, triggerEvent, initiator, parentRunID, rootRunID string) (WorkflowRun, error) {
+// [ErrWorkflowRunNameExists] on (name) collision.
+func (m *taskManager) CreateRecoveryWorkflowRun(ctx context.Context, name, triggerEvent, initiator, parentRunID, rootRunID string) (WorkflowRun, error) {
 	if parentRunID == "" {
 		return WorkflowRun{}, fmt.Errorf("%w: parent_workflow_run_id is required for a recovery run", ErrInvalidTask)
 	}
 	if rootRunID == "" {
 		// Inherit from parent when caller didn't pre-resolve it.
-		parent, err := m.GetWorkflowRun(ctx, agencyID, parentRunID)
+		parent, err := m.GetWorkflowRun(ctx, parentRunID)
 		if err != nil {
 			return WorkflowRun{}, err
 		}
@@ -130,11 +130,11 @@ func (m *taskManager) CreateRecoveryWorkflowRun(ctx context.Context, agencyID, n
 			rootRunID = parent.ID
 		}
 	}
-	run, err := m.CreateWorkflowRun(ctx, agencyID, name, triggerEvent, initiator)
+	run, err := m.CreateWorkflowRun(ctx, name, triggerEvent, initiator)
 	if err != nil {
 		return WorkflowRun{}, err
 	}
-	updated, err := m.dm.UpdateEntity(ctx, agencyID, run.ID, entitygraph.UpdateEntityRequest{
+	updated, err := m.dm.UpdateEntity(ctx, run.ID, entitygraph.UpdateEntityRequest{
 		Properties: map[string]any{
 			"parent_workflow_run_id": parentRunID,
 			"root_workflow_run_id":   rootRunID,

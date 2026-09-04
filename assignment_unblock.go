@@ -17,16 +17,16 @@ import (
 // Called by the work.task.completed handler. Idempotent: a dependent already
 // in a non-blocked state is skipped, so redelivery and self-loop receipts are
 // safely no-op.
-func (m *taskManager) UnblockDependents(ctx context.Context, agencyID, completedTaskID string) error {
-	if _, err := m.GetTask(ctx, agencyID, completedTaskID); err != nil {
+func (m *taskManager) UnblockDependents(ctx context.Context, completedTaskID string) error {
+	if _, err := m.GetTask(ctx, completedTaskID); err != nil {
 		return err
 	}
-	edges, err := m.TraverseRelationships(ctx, agencyID, completedTaskID, RelLabelDependsOn, DirectionInbound)
+	edges, err := m.TraverseRelationships(ctx, completedTaskID, RelLabelDependsOn, DirectionInbound)
 	if err != nil {
 		return fmt.Errorf("UnblockDependents: traverse depends_on: %w", err)
 	}
 	for _, e := range edges {
-		m.maybeUnblockDependent(ctx, agencyID, completedTaskID, e.FromID)
+		m.maybeUnblockDependent(ctx, completedTaskID, e.FromID)
 	}
 	return nil
 }
@@ -35,8 +35,8 @@ func (m *taskManager) UnblockDependents(ctx context.Context, agencyID, completed
 // gating condition is satisfied, transitions it pending and republishes
 // work.task.assigned. Failures are logged; the loop in UnblockDependents
 // continues so one bad dependent does not stall the rest.
-func (m *taskManager) maybeUnblockDependent(ctx context.Context, agencyID, completedTaskID, dependentID string) {
-	dependent, err := m.GetTask(ctx, agencyID, dependentID)
+func (m *taskManager) maybeUnblockDependent(ctx context.Context, completedTaskID, dependentID string) {
+	dependent, err := m.GetTask(ctx, dependentID)
 	if err != nil {
 		log.Printf("mwanachamataskmanager: UnblockDependents: GetTask %s: %v", dependentID, err)
 		return
@@ -44,7 +44,7 @@ func (m *taskManager) maybeUnblockDependent(ctx context.Context, agencyID, compl
 	if dependent.Status != TaskStatusBlocked {
 		return
 	}
-	unmet, err := m.findUnmetDependencies(ctx, agencyID, dependentID)
+	unmet, err := m.findUnmetDependencies(ctx, dependentID)
 	if err != nil {
 		log.Printf("mwanachamataskmanager: UnblockDependents: findUnmetDependencies %s: %v", dependentID, err)
 		return
@@ -52,7 +52,7 @@ func (m *taskManager) maybeUnblockDependent(ctx context.Context, agencyID, compl
 	if len(unmet) > 0 {
 		return
 	}
-	assignedEdges, err := m.TraverseRelationships(ctx, agencyID, dependentID, RelLabelAssignedTo, DirectionOutbound)
+	assignedEdges, err := m.TraverseRelationships(ctx, dependentID, RelLabelAssignedTo, DirectionOutbound)
 	if err != nil {
 		log.Printf("mwanachamataskmanager: UnblockDependents: traverse assigned_to %s: %v", dependentID, err)
 		return
@@ -62,21 +62,21 @@ func (m *taskManager) maybeUnblockDependent(ctx context.Context, agencyID, compl
 		return
 	}
 	agentEntityID := assignedEdges[0].ToID
-	agent, err := m.GetAgent(ctx, agencyID, agentEntityID)
+	agent, err := m.GetAgent(ctx, agentEntityID)
 	if err != nil {
 		log.Printf("mwanachamataskmanager: UnblockDependents: GetAgent %s: %v", agentEntityID, err)
 		return
 	}
-	if err := m.setTaskStatus(ctx, agencyID, dependentID, TaskStatusPending); err != nil {
+	if err := m.setTaskStatus(ctx, dependentID, TaskStatusPending); err != nil {
 		log.Printf("mwanachamataskmanager: UnblockDependents: setTaskStatus %s pending: %v", dependentID, err)
 		return
 	}
-	m.publish(ctx, TopicTaskStatusChanged, agencyID, TaskStatusChangedPayload{
+	m.publish(ctx, TopicTaskStatusChanged, TaskStatusChangedPayload{
 		TaskID: dependentID,
 		From:   TaskStatusBlocked,
 		To:     TaskStatusPending,
 	})
-	m.publish(ctx, TopicTaskAssigned, agencyID, TaskAssignedPayload{
+	m.publish(ctx, TopicTaskAssigned, TaskAssignedPayload{
 		TaskID:      dependentID,
 		AgentID:     agentEntityID,
 		RoleName:    agent.RoleName,
@@ -94,8 +94,8 @@ func (m *taskManager) maybeUnblockDependent(ctx context.Context, agencyID, compl
 // resolution cycle. Appends note to the task description when non-empty.
 //
 // Returns [ErrInvalidStatusTransition] if the task is not currently blocked.
-func (m *taskManager) UnblockTask(ctx context.Context, agencyID, taskID, note string) (Task, error) {
-	task, err := m.GetTask(ctx, agencyID, taskID)
+func (m *taskManager) UnblockTask(ctx context.Context, taskID, note string) (Task, error) {
+	task, err := m.GetTask(ctx, taskID)
 	if err != nil {
 		return Task{}, err
 	}
@@ -107,7 +107,7 @@ func (m *taskManager) UnblockTask(ctx context.Context, agencyID, taskID, note st
 	}
 	task.Status = TaskStatusAwaitingDirection
 	task.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-	updated, err := m.UpdateTask(ctx, agencyID, task)
+	updated, err := m.UpdateTask(ctx, task)
 	if err != nil {
 		return Task{}, fmt.Errorf("UnblockTask: %w", err)
 	}

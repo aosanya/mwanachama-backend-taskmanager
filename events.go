@@ -407,7 +407,6 @@ type TaskCancelledPayload struct {
 // Published by the watchdog when a WorkflowRun exceeds its inactivity timeout.
 type WorkflowRunTimeoutPayload struct {
 	WorkflowRunID    string `json:"workflow_run_id"`
-	AgencyID         string `json:"agency_id"`
 	LastEventAt      string `json:"last_event_at,omitempty"`
 	InactivityWindow string `json:"inactivity_window,omitempty"`
 	DetectedAt       string `json:"detected_at"`
@@ -417,7 +416,6 @@ type WorkflowRunTimeoutPayload struct {
 // Published by the watchdog when a per-step stall is detected.
 type WorkflowRunTaskTimeoutPayload struct {
 	WorkflowRunID        string `json:"workflow_run_id"`
-	AgencyID             string `json:"agency_id"`
 	StepID               string `json:"step_id"`
 	CurrentStepStartedAt string `json:"current_step_started_at,omitempty"`
 	StepTimeout          string `json:"step_timeout,omitempty"`
@@ -461,7 +459,6 @@ type FailedCriterionSummary struct {
 type ReviewOutcomePayload struct {
 	TaskID        string `json:"task_id"`
 	WorkflowRunID string `json:"workflow_run_id,omitempty"`
-	AgencyID      string `json:"agency_id"`
 	// FailedCriteria lists each criterion that did not pass; empty for review.passed.
 	FailedCriteria []FailedCriterionSummary `json:"failed_criteria,omitempty"`
 }

@@ -20,10 +20,10 @@ func newManagerWithPublisher(t *testing.T) (mwanachamataskmanager.TaskManager, *
 	return mgr, pub
 }
 
-func createRunAtStatus(t *testing.T, mgr mwanachamataskmanager.TaskManager, agencyID string, target mwanachamataskmanager.WorkflowRunStatus) mwanachamataskmanager.WorkflowRun {
+func createRunAtStatus(t *testing.T, mgr mwanachamataskmanager.TaskManager, target mwanachamataskmanager.WorkflowRunStatus) mwanachamataskmanager.WorkflowRun {
 	t.Helper()
 	ctx := context.Background()
-	run, err := mgr.CreateWorkflowRun(ctx, agencyID, "", "", "")
+	run, err := mgr.CreateWorkflowRun(ctx, "", "", "")
 	if err != nil {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
@@ -33,7 +33,7 @@ func createRunAtStatus(t *testing.T, mgr mwanachamataskmanager.TaskManager, agen
 		mwanachamataskmanager.WorkflowRunStatusFailed:     {mwanachamataskmanager.WorkflowRunStatusInProgress, mwanachamataskmanager.WorkflowRunStatusFailed},
 	}
 	for _, s := range transitions[target] {
-		run, err = mgr.UpdateWorkflowRunStatus(ctx, agencyID, run.ID, s, "")
+		run, err = mgr.UpdateWorkflowRunStatus(ctx, run.ID, s, "")
 		if err != nil {
 			t.Fatalf("UpdateWorkflowRunStatus → %s: %v", s, err)
 		}
@@ -46,9 +46,9 @@ func createRunAtStatus(t *testing.T, mgr mwanachamataskmanager.TaskManager, agen
 func TestRollbackWorkflowRun_FailedRun_ReachesRolledBack(t *testing.T) {
 	ctx := context.Background()
 	mgr, pub := newManagerWithPublisher(t)
-	run := createRunAtStatus(t, mgr, "ag", mwanachamataskmanager.WorkflowRunStatusFailed)
+	run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusFailed)
 
-	result, err := mgr.RollbackWorkflowRun(ctx, "ag", run.ID, "test rollback")
+	result, err := mgr.RollbackWorkflowRun(ctx, run.ID, "test rollback")
 	if err != nil {
 		t.Fatalf("RollbackWorkflowRun: %v", err)
 	}
@@ -68,9 +68,9 @@ func TestRollbackWorkflowRun_FailedRun_ReachesRolledBack(t *testing.T) {
 func TestRollbackWorkflowRun_CompletedRun_ReachesRolledBack(t *testing.T) {
 	ctx := context.Background()
 	mgr, _ := newManagerWithPublisher(t)
-	run := createRunAtStatus(t, mgr, "ag", mwanachamataskmanager.WorkflowRunStatusCompleted)
+	run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusCompleted)
 
-	result, err := mgr.RollbackWorkflowRun(ctx, "ag", run.ID, "undo completed run")
+	result, err := mgr.RollbackWorkflowRun(ctx, run.ID, "undo completed run")
 	if err != nil {
 		t.Fatalf("RollbackWorkflowRun: %v", err)
 	}
@@ -82,12 +82,12 @@ func TestRollbackWorkflowRun_CompletedRun_ReachesRolledBack(t *testing.T) {
 func TestRollbackWorkflowRun_PendingRun_ReturnsInvalidTransition(t *testing.T) {
 	ctx := context.Background()
 	mgr, _ := newManagerWithPublisher(t)
-	run, err := mgr.CreateWorkflowRun(ctx, "ag", "", "", "")
+	run, err := mgr.CreateWorkflowRun(ctx, "", "", "")
 	if err != nil {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
 
-	_, err = mgr.RollbackWorkflowRun(ctx, "ag", run.ID, "")
+	_, err = mgr.RollbackWorkflowRun(ctx, run.ID, "")
 	if !errors.Is(err, mwanachamataskmanager.ErrInvalidRunStatusTransition) {
 		t.Errorf("err = %v, want ErrInvalidRunStatusTransition", err)
 	}
@@ -96,14 +96,14 @@ func TestRollbackWorkflowRun_PendingRun_ReturnsInvalidTransition(t *testing.T) {
 func TestRollbackWorkflowRun_AlreadyRollingBack_ReturnsConflict(t *testing.T) {
 	ctx := context.Background()
 	mgr, _ := newManagerWithPublisher(t)
-	run := createRunAtStatus(t, mgr, "ag", mwanachamataskmanager.WorkflowRunStatusFailed)
+	run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusFailed)
 
 	// Manually put the run into rolling_back.
-	if _, err := mgr.UpdateWorkflowRunStatus(ctx, "ag", run.ID, mwanachamataskmanager.WorkflowRunStatusRollingBack, ""); err != nil {
+	if _, err := mgr.UpdateWorkflowRunStatus(ctx, run.ID, mwanachamataskmanager.WorkflowRunStatusRollingBack, ""); err != nil {
 		t.Fatalf("UpdateWorkflowRunStatus: %v", err)
 	}
 
-	_, err := mgr.RollbackWorkflowRun(ctx, "ag", run.ID, "")
+	_, err := mgr.RollbackWorkflowRun(ctx, run.ID, "")
 	if !errors.Is(err, mwanachamataskmanager.ErrRollbackConflict) {
 		t.Errorf("err = %v, want ErrRollbackConflict", err)
 	}
@@ -113,7 +113,7 @@ func TestRollbackWorkflowRun_NotFound_ReturnsNotFound(t *testing.T) {
 	ctx := context.Background()
 	mgr, _ := newManagerWithPublisher(t)
 
-	_, err := mgr.RollbackWorkflowRun(ctx, "ag", "no-such-id", "")
+	_, err := mgr.RollbackWorkflowRun(ctx, "no-such-id", "")
 	if !errors.Is(err, mwanachamataskmanager.ErrWorkflowRunNotFound) {
 		t.Errorf("err = %v, want ErrWorkflowRunNotFound", err)
 	}
@@ -124,29 +124,28 @@ func TestRollbackWorkflowRun_NotFound_ReturnsNotFound(t *testing.T) {
 func TestDeleteWorkflowRunArtifacts_ResetsTasksToPendingAndEmitsEvents(t *testing.T) {
 	ctx := context.Background()
 	mgr, pub := newManagerWithPublisher(t)
-	const agencyID = "ag"
 
-	run, err := mgr.CreateWorkflowRun(ctx, agencyID, "", "", "")
+	run, err := mgr.CreateWorkflowRun(ctx, "", "", "")
 	if err != nil {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
-	task, err := mgr.CreateTask(ctx, agencyID, mwanachamataskmanager.Task{
+	task, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{
 		Title:         "t1",
 		WorkflowRunID: run.ID,
 	})
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
-	if err := mgr.LinkTaskToRun(ctx, agencyID, run.ID, task.ID); err != nil {
+	if err := mgr.LinkTaskToRun(ctx, run.ID, task.ID); err != nil {
 		t.Fatalf("LinkTaskToRun: %v", err)
 	}
 
-	if err := mgr.DeleteWorkflowRunArtifacts(ctx, agencyID, run.ID); err != nil {
+	if err := mgr.DeleteWorkflowRunArtifacts(ctx, run.ID); err != nil {
 		t.Fatalf("DeleteWorkflowRunArtifacts: %v", err)
 	}
 
 	// Task must still exist, reset to pending with workflow_run_id cleared.
-	after, err := mgr.GetTask(ctx, agencyID, task.ID)
+	after, err := mgr.GetTask(ctx, task.ID)
 	if err != nil {
 		t.Fatalf("GetTask after rollback: %v", err)
 	}
@@ -169,31 +168,30 @@ func TestDeleteWorkflowRunArtifacts_ResetsTasksToPendingAndEmitsEvents(t *testin
 func TestDeleteWorkflowRunArtifacts_ClearsStaleCompletedAt(t *testing.T) {
 	ctx := context.Background()
 	mgr, _ := newManagerWithPublisher(t)
-	const agencyID = "ag"
 
-	run, err := mgr.CreateWorkflowRun(ctx, agencyID, "", "", "")
+	run, err := mgr.CreateWorkflowRun(ctx, "", "", "")
 	if err != nil {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
-	task, err := mgr.CreateTask(ctx, agencyID, mwanachamataskmanager.Task{
+	task, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{
 		Title:         "Task that completed once and is now being rolled back",
 		WorkflowRunID: run.ID,
 	})
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
-	if err := mgr.LinkTaskToRun(ctx, agencyID, run.ID, task.ID); err != nil {
+	if err := mgr.LinkTaskToRun(ctx, run.ID, task.ID); err != nil {
 		t.Fatalf("LinkTaskToRun: %v", err)
 	}
 
 	// Drive the task to COMPLETED so completed_at gets populated by the
 	// state-machine path (UpdateTask sets it on terminal transitions).
 	task.Status = mwanachamataskmanager.TaskStatusInProgress
-	if task, err = mgr.UpdateTask(ctx, agencyID, task); err != nil {
+	if task, err = mgr.UpdateTask(ctx, task); err != nil {
 		t.Fatalf("UpdateTask → in_progress: %v", err)
 	}
 	task.Status = mwanachamataskmanager.TaskStatusCompleted
-	if task, err = mgr.UpdateTask(ctx, agencyID, task); err != nil {
+	if task, err = mgr.UpdateTask(ctx, task); err != nil {
 		t.Fatalf("UpdateTask → completed: %v", err)
 	}
 	if task.CompletedAt == "" {
@@ -202,11 +200,11 @@ func TestDeleteWorkflowRunArtifacts_ClearsStaleCompletedAt(t *testing.T) {
 	staleCompletedAt := task.CompletedAt
 
 	// Now roll back. The task should reset to pending AND completed_at MUST be cleared.
-	if err := mgr.DeleteWorkflowRunArtifacts(ctx, agencyID, run.ID); err != nil {
+	if err := mgr.DeleteWorkflowRunArtifacts(ctx, run.ID); err != nil {
 		t.Fatalf("DeleteWorkflowRunArtifacts: %v", err)
 	}
 
-	after, err := mgr.GetTask(ctx, agencyID, task.ID)
+	after, err := mgr.GetTask(ctx, task.ID)
 	if err != nil {
 		t.Fatalf("GetTask after rollback: %v", err)
 	}
@@ -226,33 +224,32 @@ func TestDeleteWorkflowRunArtifacts_ClearsStaleCompletedAt(t *testing.T) {
 func TestDeleteWorkflowRunArtifacts_DeletesTaskTodosForRun(t *testing.T) {
 	ctx := context.Background()
 	mgr, _ := newManagerWithPublisher(t)
-	const agencyID = "ag"
 
-	run, err := mgr.CreateWorkflowRun(ctx, agencyID, "", "", "")
+	run, err := mgr.CreateWorkflowRun(ctx, "", "", "")
 	if err != nil {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
-	task, err := mgr.CreateTask(ctx, agencyID, mwanachamataskmanager.Task{Title: "parent", WorkflowRunID: run.ID})
+	task, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "parent", WorkflowRunID: run.ID})
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
 
 	// Seed: two todos for THIS run, one for a different run.
-	mineA, err := mgr.CreateTaskTodo(ctx, agencyID, mwanachamataskmanager.TaskTodo{
+	mineA, err := mgr.CreateTaskTodo(ctx, mwanachamataskmanager.TaskTodo{
 		Title: "mine-a", Instructions: "do a", ParentTaskID: task.ID,
 		Ordinality: 1, WorkflowRunID: run.ID,
 	})
 	if err != nil {
 		t.Fatalf("CreateTaskTodo mine-a: %v", err)
 	}
-	mineB, err := mgr.CreateTaskTodo(ctx, agencyID, mwanachamataskmanager.TaskTodo{
+	mineB, err := mgr.CreateTaskTodo(ctx, mwanachamataskmanager.TaskTodo{
 		Title: "mine-b", Instructions: "do b", ParentTaskID: task.ID,
 		Ordinality: 2, WorkflowRunID: run.ID,
 	})
 	if err != nil {
 		t.Fatalf("CreateTaskTodo mine-b: %v", err)
 	}
-	other, err := mgr.CreateTaskTodo(ctx, agencyID, mwanachamataskmanager.TaskTodo{
+	other, err := mgr.CreateTaskTodo(ctx, mwanachamataskmanager.TaskTodo{
 		Title: "other-run", Instructions: "do z", ParentTaskID: task.ID,
 		Ordinality: 1, WorkflowRunID: "different-run-id",
 	})
@@ -260,19 +257,19 @@ func TestDeleteWorkflowRunArtifacts_DeletesTaskTodosForRun(t *testing.T) {
 		t.Fatalf("CreateTaskTodo other: %v", err)
 	}
 
-	if err := mgr.DeleteWorkflowRunArtifacts(ctx, agencyID, run.ID); err != nil {
+	if err := mgr.DeleteWorkflowRunArtifacts(ctx, run.ID); err != nil {
 		t.Fatalf("DeleteWorkflowRunArtifacts: %v", err)
 	}
 
 	// mineA / mineB must be gone.
-	if _, err := mgr.GetTaskTodo(ctx, agencyID, mineA.ID); !errors.Is(err, mwanachamataskmanager.ErrTaskTodoNotFound) {
+	if _, err := mgr.GetTaskTodo(ctx, mineA.ID); !errors.Is(err, mwanachamataskmanager.ErrTaskTodoNotFound) {
 		t.Errorf("expected mineA deleted (ErrTaskTodoNotFound); got err=%v", err)
 	}
-	if _, err := mgr.GetTaskTodo(ctx, agencyID, mineB.ID); !errors.Is(err, mwanachamataskmanager.ErrTaskTodoNotFound) {
+	if _, err := mgr.GetTaskTodo(ctx, mineB.ID); !errors.Is(err, mwanachamataskmanager.ErrTaskTodoNotFound) {
 		t.Errorf("expected mineB deleted (ErrTaskTodoNotFound); got err=%v", err)
 	}
 	// The other-run todo must still exist.
-	if _, err := mgr.GetTaskTodo(ctx, agencyID, other.ID); err != nil {
+	if _, err := mgr.GetTaskTodo(ctx, other.ID); err != nil {
 		t.Errorf("expected other-run todo to remain; got err=%v", err)
 	}
 }
@@ -280,12 +277,12 @@ func TestDeleteWorkflowRunArtifacts_DeletesTaskTodosForRun(t *testing.T) {
 func TestDeleteWorkflowRunArtifacts_NoArtifacts_IsNoOp(t *testing.T) {
 	ctx := context.Background()
 	mgr, _ := newManagerWithPublisher(t)
-	run, err := mgr.CreateWorkflowRun(ctx, "ag", "", "", "")
+	run, err := mgr.CreateWorkflowRun(ctx, "", "", "")
 	if err != nil {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
 
-	if err := mgr.DeleteWorkflowRunArtifacts(ctx, "ag", run.ID); err != nil {
+	if err := mgr.DeleteWorkflowRunArtifacts(ctx, run.ID); err != nil {
 		t.Errorf("DeleteWorkflowRunArtifacts on empty run: %v", err)
 	}
 }
@@ -293,17 +290,16 @@ func TestDeleteWorkflowRunArtifacts_NoArtifacts_IsNoOp(t *testing.T) {
 func TestDeleteWorkflowRunArtifacts_ForeignRunDependency_ReturnsError(t *testing.T) {
 	ctx := context.Background()
 	mgr, _ := newManagerWithPublisher(t)
-	const agencyID = "ag"
 
-	runA, _ := mgr.CreateWorkflowRun(ctx, agencyID, "run-a", "", "")
-	runB, _ := mgr.CreateWorkflowRun(ctx, agencyID, "run-b", "", "")
+	runA, _ := mgr.CreateWorkflowRun(ctx, "run-a", "", "")
+	runB, _ := mgr.CreateWorkflowRun(ctx, "run-b", "", "")
 
-	taskA, _ := mgr.CreateTask(ctx, agencyID, mwanachamataskmanager.Task{Title: "a", WorkflowRunID: runA.ID})
-	taskB, _ := mgr.CreateTask(ctx, agencyID, mwanachamataskmanager.Task{Title: "b", WorkflowRunID: runB.ID})
+	taskA, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "a", WorkflowRunID: runA.ID})
+	taskB, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "b", WorkflowRunID: runB.ID})
 
 	// taskB (run B) depends on taskA (run A).
 	// Deleting run A's artifacts would break run B's dependency.
-	if _, err := mgr.CreateRelationship(ctx, agencyID, mwanachamataskmanager.Relationship{
+	if _, err := mgr.CreateRelationship(ctx, mwanachamataskmanager.Relationship{
 		Label:  mwanachamataskmanager.RelLabelDependsOn,
 		FromID: taskB.ID,
 		ToID:   taskA.ID,
@@ -311,7 +307,7 @@ func TestDeleteWorkflowRunArtifacts_ForeignRunDependency_ReturnsError(t *testing
 		t.Fatalf("CreateRelationship: %v", err)
 	}
 
-	err := mgr.DeleteWorkflowRunArtifacts(ctx, agencyID, runA.ID)
+	err := mgr.DeleteWorkflowRunArtifacts(ctx, runA.ID)
 	if !errors.Is(err, mwanachamataskmanager.ErrForeignRunDependency) {
 		t.Errorf("err = %v, want ErrForeignRunDependency", err)
 	}
@@ -322,9 +318,9 @@ func TestDeleteWorkflowRunArtifacts_ForeignRunDependency_ReturnsError(t *testing
 func TestRollbackWorkflowRun_PublishesRollingBackBeforeRolledBack(t *testing.T) {
 	ctx := context.Background()
 	mgr, pub := newManagerWithPublisher(t)
-	run := createRunAtStatus(t, mgr, "ag", mwanachamataskmanager.WorkflowRunStatusFailed)
+	run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusFailed)
 
-	if _, err := mgr.RollbackWorkflowRun(ctx, "ag", run.ID, "ordered events test"); err != nil {
+	if _, err := mgr.RollbackWorkflowRun(ctx, run.ID, "ordered events test"); err != nil {
 		t.Fatalf("RollbackWorkflowRun: %v", err)
 	}
 

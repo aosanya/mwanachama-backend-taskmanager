@@ -13,7 +13,7 @@ import (
 
 func TestCreateProject_EmptyName_ReturnsErrInvalidTask(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	_, err := mgr.CreateProject(context.Background(), "ag", mwanachamataskmanager.Project{})
+	_, err := mgr.CreateProject(context.Background(), mwanachamataskmanager.Project{})
 	if !errors.Is(err, mwanachamataskmanager.ErrInvalidTask) {
 		t.Fatalf("got %v, want ErrInvalidTask", err)
 	}
@@ -21,7 +21,7 @@ func TestCreateProject_EmptyName_ReturnsErrInvalidTask(t *testing.T) {
 
 func TestCreateProject_RoundTrip(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	p, err := mgr.CreateProject(context.Background(), "ag", mwanachamataskmanager.Project{
+	p, err := mgr.CreateProject(context.Background(), mwanachamataskmanager.Project{
 		Name:        "Sprint 7",
 		Description: "Q2 push",
 		GithubRepo:  "aosanya/mwanachama-backend-taskmanager",
@@ -41,7 +41,7 @@ func TestCreateProject_RoundTrip(t *testing.T) {
 
 func TestGetProject_NotFound(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	_, err := mgr.GetProject(context.Background(), "ag", "missing")
+	_, err := mgr.GetProject(context.Background(), "missing")
 	if !errors.Is(err, mwanachamataskmanager.ErrProjectNotFound) {
 		t.Fatalf("got %v, want ErrProjectNotFound", err)
 	}
@@ -55,11 +55,11 @@ func TestGetProject_NotFound(t *testing.T) {
 func TestGetProjectByName_CaseInsensitive(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
-	if _, err := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "SharedFarms"}); err != nil {
+	if _, err := mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "SharedFarms"}); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
 	for _, name := range []string{"SharedFarms", "sharedfarms", "SHAREDFARMS", "sharedFARMS"} {
-		got, err := mgr.GetProjectByName(ctx, "ag", name)
+		got, err := mgr.GetProjectByName(ctx, name)
 		if err != nil {
 			t.Errorf("lookup %q: %v", name, err)
 			continue
@@ -76,10 +76,10 @@ func TestGetProjectByName_CaseInsensitive(t *testing.T) {
 func TestGetProjectByName_NormalizesSpaces(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
-	if _, err := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Shared Farms"}); err != nil {
+	if _, err := mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Shared Farms"}); err != nil {
 		t.Fatalf("CreateProject: %v", err)
 	}
-	got, err := mgr.GetProjectByName(ctx, "ag", "Shared Farms")
+	got, err := mgr.GetProjectByName(ctx, "Shared Farms")
 	if err != nil {
 		t.Fatalf("GetProjectByName: %v", err)
 	}
@@ -93,12 +93,12 @@ func TestGetProjectByName_NormalizesSpaces(t *testing.T) {
 func TestUpdateProject_PatchesFields(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
-	p, _ := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Old"})
+	p, _ := mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Old"})
 
 	p.Name = "New"
 	p.Description = "patched"
 	p.GithubRepo = "aosanya/Foo"
-	updated, err := mgr.UpdateProject(ctx, "ag", p)
+	updated, err := mgr.UpdateProject(ctx, p)
 	if err != nil {
 		t.Fatalf("UpdateProject: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestUpdateProject_PatchesFields(t *testing.T) {
 
 func TestUpdateProject_NotFound(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	_, err := mgr.UpdateProject(context.Background(), "ag", mwanachamataskmanager.Project{
+	_, err := mgr.UpdateProject(context.Background(), mwanachamataskmanager.Project{
 		ID: "missing", Name: "x",
 	})
 	if !errors.Is(err, mwanachamataskmanager.ErrProjectNotFound) {
@@ -122,20 +122,16 @@ func TestUpdateProject_NotFound(t *testing.T) {
 
 // ── ListProjects ─────────────────────────────────────────────────────────────
 
-func TestListProjects_AgencyIsolation(t *testing.T) {
+func TestListProjects_ReturnsAllProjects(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
-	_, _ = mgr.CreateProject(ctx, "agency-A", mwanachamataskmanager.Project{Name: "A1"})
-	_, _ = mgr.CreateProject(ctx, "agency-A", mwanachamataskmanager.Project{Name: "A2"})
-	_, _ = mgr.CreateProject(ctx, "agency-B", mwanachamataskmanager.Project{Name: "B1"})
+	_, _ = mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "A1"})
+	_, _ = mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "A2"})
+	_, _ = mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "B1"})
 
-	a, _ := mgr.ListProjects(ctx, "agency-A")
-	if len(a) != 2 {
-		t.Errorf("agency-A: want 2, got %d", len(a))
-	}
-	b, _ := mgr.ListProjects(ctx, "agency-B")
-	if len(b) != 1 {
-		t.Errorf("agency-B: want 1, got %d", len(b))
+	all, _ := mgr.ListProjects(ctx)
+	if len(all) != 3 {
+		t.Errorf("want 3 projects, got %d", len(all))
 	}
 }
 
@@ -144,13 +140,13 @@ func TestListProjects_AgencyIsolation(t *testing.T) {
 func TestAddTaskToProject_ListTasksInProject_RoundTrip(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
-	p, _ := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Sprint"})
-	t1, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
+	p, _ := mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Sprint"})
+	t1, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 
-	if err := mgr.AddTaskToProject(ctx, "ag", t1.ID, p.ID); err != nil {
+	if err := mgr.AddTaskToProject(ctx, t1.ID, p.ID); err != nil {
 		t.Fatalf("AddTaskToProject: %v", err)
 	}
-	tasks, err := mgr.ListTasksInProject(ctx, "ag", p.ID)
+	tasks, err := mgr.ListTasksInProject(ctx, p.ID)
 	if err != nil {
 		t.Fatalf("ListTasksInProject: %v", err)
 	}
@@ -163,18 +159,18 @@ func TestAddTaskToProject_Twice_IsIdempotent(t *testing.T) {
 	fake := newFakeDataManager()
 	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
 	ctx := context.Background()
-	p, _ := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Sprint"})
-	t1, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
+	p, _ := mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Sprint"})
+	t1, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 
-	if err := mgr.AddTaskToProject(ctx, "ag", t1.ID, p.ID); err != nil {
+	if err := mgr.AddTaskToProject(ctx, t1.ID, p.ID); err != nil {
 		t.Fatalf("first add: %v", err)
 	}
-	if err := mgr.AddTaskToProject(ctx, "ag", t1.ID, p.ID); err != nil {
+	if err := mgr.AddTaskToProject(ctx, t1.ID, p.ID); err != nil {
 		t.Fatalf("second add: %v", err)
 	}
 
 	all, _ := fake.ListRelationships(ctx, entitygraph.RelationshipFilter{
-		AgencyID: "ag", Name: mwanachamataskmanager.RelLabelMemberOf,
+		Name: mwanachamataskmanager.RelLabelMemberOf,
 	})
 	if len(all) != 1 {
 		t.Errorf("want 1 member_of edge after re-add, got %d", len(all))
@@ -186,14 +182,14 @@ func TestAddTaskToProject_Twice_IsIdempotent(t *testing.T) {
 func TestRemoveTaskFromProject_RemovesMembership(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
-	p, _ := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Sprint"})
-	t1, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	_ = mgr.AddTaskToProject(ctx, "ag", t1.ID, p.ID)
+	p, _ := mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Sprint"})
+	t1, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	_ = mgr.AddTaskToProject(ctx, t1.ID, p.ID)
 
-	if err := mgr.RemoveTaskFromProject(ctx, "ag", t1.ID, p.ID); err != nil {
+	if err := mgr.RemoveTaskFromProject(ctx, t1.ID, p.ID); err != nil {
 		t.Fatalf("RemoveTaskFromProject: %v", err)
 	}
-	tasks, _ := mgr.ListTasksInProject(ctx, "ag", p.ID)
+	tasks, _ := mgr.ListTasksInProject(ctx, p.ID)
 	if len(tasks) != 0 {
 		t.Errorf("want 0 members after remove, got %d", len(tasks))
 	}
@@ -205,24 +201,24 @@ func TestDeleteProject_RemovesProjectAndAllMemberOfEdges_TasksRemain(t *testing.
 	fake := newFakeDataManager()
 	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
 	ctx := context.Background()
-	p, _ := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Sprint"})
-	t1, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	t2, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	_ = mgr.AddTaskToProject(ctx, "ag", t1.ID, p.ID)
-	_ = mgr.AddTaskToProject(ctx, "ag", t2.ID, p.ID)
+	p, _ := mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Sprint"})
+	t1, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	t2, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	_ = mgr.AddTaskToProject(ctx, t1.ID, p.ID)
+	_ = mgr.AddTaskToProject(ctx, t2.ID, p.ID)
 
-	if err := mgr.DeleteProject(ctx, "ag", p.ID); err != nil {
+	if err := mgr.DeleteProject(ctx, p.ID); err != nil {
 		t.Fatalf("DeleteProject: %v", err)
 	}
 
 	// Project is gone.
-	if _, err := mgr.GetProject(ctx, "ag", p.ID); !errors.Is(err, mwanachamataskmanager.ErrProjectNotFound) {
+	if _, err := mgr.GetProject(ctx, p.ID); !errors.Is(err, mwanachamataskmanager.ErrProjectNotFound) {
 		t.Errorf("project still resolvable: got %v, want ErrProjectNotFound", err)
 	}
 
 	// All member_of edges removed.
 	rels, _ := fake.ListRelationships(ctx, entitygraph.RelationshipFilter{
-		AgencyID: "ag", Name: mwanachamataskmanager.RelLabelMemberOf,
+		Name: mwanachamataskmanager.RelLabelMemberOf,
 	})
 	if len(rels) != 0 {
 		t.Errorf("want 0 member_of edges after project delete, got %d", len(rels))
@@ -230,7 +226,7 @@ func TestDeleteProject_RemovesProjectAndAllMemberOfEdges_TasksRemain(t *testing.
 
 	// Member Tasks themselves still resolve.
 	for _, id := range []string{t1.ID, t2.ID} {
-		if _, err := mgr.GetTask(ctx, "ag", id); err != nil {
+		if _, err := mgr.GetTask(ctx, id); err != nil {
 			t.Errorf("task %s should survive project deletion: %v", id, err)
 		}
 	}
@@ -238,7 +234,7 @@ func TestDeleteProject_RemovesProjectAndAllMemberOfEdges_TasksRemain(t *testing.
 
 func TestDeleteProject_NotFound(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	err := mgr.DeleteProject(context.Background(), "ag", "missing")
+	err := mgr.DeleteProject(context.Background(), "missing")
 	if !errors.Is(err, mwanachamataskmanager.ErrProjectNotFound) {
 		t.Fatalf("got %v, want ErrProjectNotFound", err)
 	}
@@ -249,13 +245,13 @@ func TestDeleteProject_NotFound(t *testing.T) {
 func TestListProjectsForTask_TaskInMultipleProjects(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
-	p1, _ := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Sprint"})
-	p2, _ := mgr.CreateProject(ctx, "ag", mwanachamataskmanager.Project{Name: "Epic"})
-	t1, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	_ = mgr.AddTaskToProject(ctx, "ag", t1.ID, p1.ID)
-	_ = mgr.AddTaskToProject(ctx, "ag", t1.ID, p2.ID)
+	p1, _ := mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Sprint"})
+	p2, _ := mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Epic"})
+	t1, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	_ = mgr.AddTaskToProject(ctx, t1.ID, p1.ID)
+	_ = mgr.AddTaskToProject(ctx, t1.ID, p2.ID)
 
-	projects, err := mgr.ListProjectsForTask(ctx, "ag", t1.ID)
+	projects, err := mgr.ListProjectsForTask(ctx, t1.ID)
 	if err != nil {
 		t.Fatalf("ListProjectsForTask: %v", err)
 	}
@@ -272,10 +268,10 @@ func TestListProjectsForTask_TaskInMultipleProjects(t *testing.T) {
 func TestMemberOf_NonProjectTarget_Rejected(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
-	t1, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	t2, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
+	t1, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	t2, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 
-	_, err := mgr.CreateRelationship(ctx, "ag", mwanachamataskmanager.Relationship{
+	_, err := mgr.CreateRelationship(ctx, mwanachamataskmanager.Relationship{
 		Label: mwanachamataskmanager.RelLabelMemberOf, FromID: t1.ID, ToID: t2.ID,
 	})
 	if !errors.Is(err, mwanachamataskmanager.ErrInvalidRelationship) {

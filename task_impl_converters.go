@@ -55,7 +55,6 @@ func taskToProperties(t Task) map[string]any {
 func taskFromEntity(e entitygraph.Entity) Task {
 	t := Task{
 		ID:               e.ID,
-		AgencyID:         e.AgencyID,
 		Title:            entitygraph.StringProp(e.Properties, "title"),
 		Description:      entitygraph.StringProp(e.Properties, "description"),
 		Status:           TaskStatus(entitygraph.StringProp(e.Properties, "status")),
@@ -122,7 +121,6 @@ func taskTodoToProperties(t TaskTodo) map[string]any {
 func taskTodoFromEntity(e entitygraph.Entity) TaskTodo {
 	t := TaskTodo{
 		ID:             e.ID,
-		AgencyID:       e.AgencyID,
 		Title:          entitygraph.StringProp(e.Properties, "title"),
 		Description:    entitygraph.StringProp(e.Properties, "description"),
 		Instructions:   entitygraph.StringProp(e.Properties, "instructions"),
@@ -175,7 +173,6 @@ func tagToProperties(t Tag) map[string]any {
 func tagFromEntity(e entitygraph.Entity) Tag {
 	return Tag{
 		ID:          e.ID,
-		AgencyID:    e.AgencyID,
 		Name:        entitygraph.StringProp(e.Properties, "name"),
 		Color:       entitygraph.StringProp(e.Properties, "color"),
 		Description: entitygraph.StringProp(e.Properties, "description"),
@@ -203,7 +200,6 @@ func agentToProperties(a Agent) map[string]any {
 func agentFromEntity(e entitygraph.Entity) Agent {
 	return Agent{
 		ID:          e.ID,
-		AgencyID:    e.AgencyID,
 		AgentID:     entitygraph.StringProp(e.Properties, "agent_id"),
 		DisplayName: entitygraph.StringProp(e.Properties, "display_name"),
 		Capability:  entitygraph.StringProp(e.Properties, "capability"),
@@ -234,7 +230,6 @@ func projectToProperties(p Project) map[string]any {
 func projectFromEntity(e entitygraph.Entity) Project {
 	p := Project{
 		ID:          e.ID,
-		AgencyID:    e.AgencyID,
 		Name:        entitygraph.StringProp(e.Properties, "name"),
 		ProjectName: entitygraph.StringProp(e.Properties, "project_name"),
 		Description: entitygraph.StringProp(e.Properties, "description"),
@@ -269,7 +264,6 @@ func deliverableToProperties(d Deliverable) map[string]any {
 func deliverableFromEntity(e entitygraph.Entity) Deliverable {
 	return Deliverable{
 		ID:              e.ID,
-		AgencyID:        e.AgencyID,
 		Title:           entitygraph.StringProp(e.Properties, "title"),
 		Description:     entitygraph.StringProp(e.Properties, "description"),
 		DeliverableType: entitygraph.StringProp(e.Properties, "deliverable_type"),
@@ -300,7 +294,6 @@ func acceptanceCriteriaToProperties(a AcceptanceCriteria) map[string]any {
 func acceptanceCriteriaFromEntity(e entitygraph.Entity) AcceptanceCriteria {
 	return AcceptanceCriteria{
 		ID:            e.ID,
-		AgencyID:      e.AgencyID,
 		Title:         entitygraph.StringProp(e.Properties, "title"),
 		Description:   entitygraph.StringProp(e.Properties, "description"),
 		ParentID:      entitygraph.StringProp(e.Properties, "parent_id"),

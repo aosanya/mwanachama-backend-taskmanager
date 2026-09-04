@@ -25,8 +25,8 @@ import (
 
 // CancelWorkflowRun implements [TaskManager.CancelWorkflowRun]. See the
 // interface for the contract.
-func (m *taskManager) CancelWorkflowRun(ctx context.Context, agencyID, runID, reason, cancelledBy string, quiesceDeadline time.Time) (WorkflowRun, error) {
-	run, err := m.GetWorkflowRun(ctx, agencyID, runID)
+func (m *taskManager) CancelWorkflowRun(ctx context.Context, runID, reason, cancelledBy string, quiesceDeadline time.Time) (WorkflowRun, error) {
+	run, err := m.GetWorkflowRun(ctx, runID)
 	if err != nil {
 		return WorkflowRun{}, err
 	}
@@ -48,7 +48,7 @@ func (m *taskManager) CancelWorkflowRun(ctx context.Context, agencyID, runID, re
 	run.CancelReason = reason
 	run.CancellingUntil = quiesceDeadline.UTC().Format(time.RFC3339)
 
-	updated, err := m.dm.UpdateEntity(ctx, agencyID, runID, entitygraph.UpdateEntityRequest{
+	updated, err := m.dm.UpdateEntity(ctx, runID, entitygraph.UpdateEntityRequest{
 		Properties: workflowRunToProperties(run),
 	})
 	if err != nil {
@@ -61,18 +61,18 @@ func (m *taskManager) CancelWorkflowRun(ctx context.Context, agencyID, runID, re
 	// tasks are logged but do not abort the cancel — the run-level signal is
 	// the authoritative quiesce trigger; per-service subscribers handle each
 	// task cancellation idempotently.
-	m.cascadeTaskCancellation(ctx, agencyID, runID, reason)
+	m.cascadeTaskCancellation(ctx, runID, reason)
 
 	// Publish the run-level quiesce signal.
-	m.publishRunStatusEvent(ctx, agencyID, result, now, reason)
+	m.publishRunStatusEvent(ctx, result, now, reason)
 	return result, nil
 }
 
 // FinalizeWorkflowRunCancellation implements
 // [TaskManager.FinalizeWorkflowRunCancellation]. See the interface for the
 // contract.
-func (m *taskManager) FinalizeWorkflowRunCancellation(ctx context.Context, agencyID, runID string) (WorkflowRun, error) {
-	run, err := m.GetWorkflowRun(ctx, agencyID, runID)
+func (m *taskManager) FinalizeWorkflowRunCancellation(ctx context.Context, runID string) (WorkflowRun, error) {
+	run, err := m.GetWorkflowRun(ctx, runID)
 	if err != nil {
 		return WorkflowRun{}, err
 	}
@@ -88,7 +88,7 @@ func (m *taskManager) FinalizeWorkflowRunCancellation(ctx context.Context, agenc
 	run.UpdatedAt = now.Format(time.RFC3339)
 	run.CompletedAt = run.UpdatedAt
 
-	updated, err := m.dm.UpdateEntity(ctx, agencyID, runID, entitygraph.UpdateEntityRequest{
+	updated, err := m.dm.UpdateEntity(ctx, runID, entitygraph.UpdateEntityRequest{
 		Properties: workflowRunToProperties(run),
 	})
 	if err != nil {
@@ -96,15 +96,15 @@ func (m *taskManager) FinalizeWorkflowRunCancellation(ctx context.Context, agenc
 	}
 	result := workflowRunFromEntity(updated)
 
-	m.publishRunStatusEvent(ctx, agencyID, result, now, result.CancelReason)
+	m.publishRunStatusEvent(ctx, result, now, result.CancelReason)
 	return result, nil
 }
 
 // cascadeTaskCancellation flips every non-terminal Task whose workflow_run_id
 // matches runID to cancelled and emits work.task.cancelled per affected task.
 // Best-effort: per-task failures are logged and do not abort the cascade.
-func (m *taskManager) cascadeTaskCancellation(ctx context.Context, agencyID, runID, reason string) {
-	tasks, err := m.ListTasks(ctx, agencyID, TaskFilter{WorkflowRunID: runID})
+func (m *taskManager) cascadeTaskCancellation(ctx context.Context, runID, reason string) {
+	tasks, err := m.ListTasks(ctx, TaskFilter{WorkflowRunID: runID})
 	if err != nil {
 		slog.ErrorContext(ctx, "CancelWorkflowRun: list tasks for cascade", "run_id", runID, "err", err)
 		return
@@ -113,7 +113,7 @@ func (m *taskManager) cascadeTaskCancellation(ctx context.Context, agencyID, run
 		if isTerminalStatus(t.Status) {
 			continue
 		}
-		if err := m.cancelTask(ctx, agencyID, t, reason); err != nil {
+		if err := m.cancelTask(ctx, t, reason); err != nil {
 			slog.ErrorContext(ctx, "CancelWorkflowRun: cancel task", "task_id", t.ID, "run_id", runID, "err", err)
 		}
 	}
@@ -122,7 +122,7 @@ func (m *taskManager) cascadeTaskCancellation(ctx context.Context, agencyID, run
 // cancelTask transitions a single Task to cancelled and publishes
 // work.task.cancelled. Returns nil even if the state-machine rejects the
 // transition (handled by the caller); a real persistence error is surfaced.
-func (m *taskManager) cancelTask(ctx context.Context, agencyID string, task Task, reason string) error {
+func (m *taskManager) cancelTask(ctx context.Context, task Task, reason string) error {
 	if !task.Status.CanTransitionTo(TaskStatusCancelled) {
 		return nil
 	}
@@ -132,7 +132,7 @@ func (m *taskManager) cancelTask(ctx context.Context, agencyID string, task Task
 	if task.CompletedAt == "" {
 		task.CompletedAt = now
 	}
-	_, err := m.dm.UpdateEntity(ctx, agencyID, task.ID, entitygraph.UpdateEntityRequest{
+	_, err := m.dm.UpdateEntity(ctx, task.ID, entitygraph.UpdateEntityRequest{
 		Properties: taskToProperties(task),
 	})
 	if err != nil {
@@ -141,7 +141,7 @@ func (m *taskManager) cancelTask(ctx context.Context, agencyID string, task Task
 		}
 		return fmt.Errorf("cancelTask: %w", err)
 	}
-	m.publish(ctx, TopicTaskCancelled, agencyID, TaskCancelledPayload{
+	m.publish(ctx, TopicTaskCancelled, TaskCancelledPayload{
 		TaskID:        task.ID,
 		WorkflowRunID: task.WorkflowRunID,
 		Reason:        reason,

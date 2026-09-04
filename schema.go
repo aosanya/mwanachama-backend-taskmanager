@@ -2,9 +2,8 @@
 //
 // This file exposes [DefaultWorkSchema], which returns the fixed
 // [schema.Schema] for mwanachama-backend-taskmanager. Wiring code in
-// mwanachama-backend-api-gateway seeds this schema per agency at startup via
-// SchemaManager.SetSchema (set s.AgencyID before calling; DefaultWorkSchema
-// itself returns an agency-agnostic template).
+// mwanachama-backend-api-gateway seeds this schema at startup via
+// SchemaManager.SetSchema.
 //
 // The schema declares eight TypeDefinitions:
 //   - Task               — a unit of work assigned to an AI Agent (mutable)
@@ -351,7 +350,7 @@ func DefaultWorkSchema() schema.Schema {
 				// UpsertEntity — UpsertAgent relies on this for find-or-create.
 				UniqueKey: []string{"agent_id"},
 				Properties: []schema.PropertyDefinition{
-					// agent_id is the external agent identifier. Unique per agency.
+					// agent_id is the external agent identifier. Globally unique.
 					{Name: "agent_id", Type: schema.PropertyTypeString, Required: true},
 					// display_name is a human-readable label for the agent.
 					{Name: "display_name", Type: schema.PropertyTypeString},
@@ -408,13 +407,13 @@ func DefaultWorkSchema() schema.Schema {
 				Name:              "WorkflowRun",
 				DisplayName:       "Workflow Run",
 				StorageCollection: "work_workflow_runs",
-				// UniqueKey on name guarantees one (agency, name) pair maps to
-				// at most one run vertex, so callers can correlate by a
-				// caller-supplied or server-generated label.
+				// UniqueKey on name guarantees the name maps to at most one
+				// run vertex, so callers can correlate by a caller-supplied
+				// or server-generated label.
 				UniqueKey: []string{"name"},
 				Properties: []schema.PropertyDefinition{
-					// name is a caller-supplied or server-generated label
-					// unique per agency. Used as the correlation handle by
+					// name is a caller-supplied or server-generated label,
+					// globally unique. Used as the correlation handle by
 					// test scripts and the headline column in the UI list.
 					{Name: "name", Type: schema.PropertyTypeString},
 					// status is the run lifecycle state: pending, in_progress,
@@ -454,7 +453,7 @@ func DefaultWorkSchema() schema.Schema {
 					{Name: "root_workflow_run_id", Type: schema.PropertyTypeString},
 					// failure_pipeline_budget is the maximum number of recovery
 					// pipeline activations allowed under this run's lineage.
-					// Resolved at start-pipeline time (payload > agency > env)
+					// Resolved at start-pipeline time (payload override > global default)
 					// and frozen for the run's lifetime. Lives only on the root run.
 					{Name: "failure_pipeline_budget", Type: schema.PropertyTypeInteger},
 					// failure_pipelines_used counts recovery activations charged

@@ -16,7 +16,7 @@ func TestSetFailureBudget_RoundTrip(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	run, err := mgr.CreateWorkflowRun(ctx, "ag", "", "pipeline.requested", "operator")
+	run, err := mgr.CreateWorkflowRun(ctx, "", "pipeline.requested", "operator")
 	if err != nil {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestSetFailureBudget_RoundTrip(t *testing.T) {
 		t.Fatalf("expected zero budget on fresh run, got %d", run.FailurePipelineBudget)
 	}
 
-	updated, err := mgr.SetFailureBudget(ctx, "ag", run.ID, 5)
+	updated, err := mgr.SetFailureBudget(ctx, run.ID, 5)
 	if err != nil {
 		t.Fatalf("SetFailureBudget: %v", err)
 	}
@@ -35,7 +35,7 @@ func TestSetFailureBudget_RoundTrip(t *testing.T) {
 		t.Errorf("expected root=%s, got %s", run.ID, updated.RootWorkflowRunID)
 	}
 
-	got, err := mgr.GetWorkflowRun(ctx, "ag", run.ID)
+	got, err := mgr.GetWorkflowRun(ctx, run.ID)
 	if err != nil {
 		t.Fatalf("GetWorkflowRun: %v", err)
 	}
@@ -50,11 +50,11 @@ func TestSetFailureBudget_AlreadySet(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	run, _ := mgr.CreateWorkflowRun(ctx, "ag", "", "", "")
-	if _, err := mgr.SetFailureBudget(ctx, "ag", run.ID, 5); err != nil {
+	run, _ := mgr.CreateWorkflowRun(ctx, "", "", "")
+	if _, err := mgr.SetFailureBudget(ctx, run.ID, 5); err != nil {
 		t.Fatalf("first SetFailureBudget: %v", err)
 	}
-	_, err := mgr.SetFailureBudget(ctx, "ag", run.ID, 9)
+	_, err := mgr.SetFailureBudget(ctx, run.ID, 9)
 	if !errors.Is(err, mwanachamataskmanager.ErrFailureBudgetAlreadySet) {
 		t.Fatalf("expected ErrFailureBudgetAlreadySet, got %v", err)
 	}
@@ -67,15 +67,15 @@ func TestSetFailureBudget_NonRootRejected(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	root, _ := mgr.CreateWorkflowRun(ctx, "ag", "root-run", "", "")
-	if _, err := mgr.SetFailureBudget(ctx, "ag", root.ID, 5); err != nil {
+	root, _ := mgr.CreateWorkflowRun(ctx, "root-run", "", "")
+	if _, err := mgr.SetFailureBudget(ctx, root.ID, 5); err != nil {
 		t.Fatalf("SetFailureBudget root: %v", err)
 	}
-	child, err := mgr.CreateRecoveryWorkflowRun(ctx, "ag", "child-run", "pipeline.requested", "cross", root.ID, root.ID)
+	child, err := mgr.CreateRecoveryWorkflowRun(ctx, "child-run", "pipeline.requested", "cross", root.ID, root.ID)
 	if err != nil {
 		t.Fatalf("CreateRecoveryWorkflowRun: %v", err)
 	}
-	_, err = mgr.SetFailureBudget(ctx, "ag", child.ID, 3)
+	_, err = mgr.SetFailureBudget(ctx, child.ID, 3)
 	if !errors.Is(err, mwanachamataskmanager.ErrNotRootWorkflowRun) {
 		t.Fatalf("expected ErrNotRootWorkflowRun, got %v", err)
 	}
@@ -88,23 +88,23 @@ func TestIncrementFailureBudget_Increments(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	root, _ := mgr.CreateWorkflowRun(ctx, "ag", "", "", "")
-	if _, err := mgr.SetFailureBudget(ctx, "ag", root.ID, 2); err != nil {
+	root, _ := mgr.CreateWorkflowRun(ctx, "", "", "")
+	if _, err := mgr.SetFailureBudget(ctx, root.ID, 2); err != nil {
 		t.Fatalf("SetFailureBudget: %v", err)
 	}
 
-	used, budget, exhausted, err := mgr.IncrementFailureBudget(ctx, "ag", root.ID, "child-1")
+	used, budget, exhausted, err := mgr.IncrementFailureBudget(ctx, root.ID, "child-1")
 	if err != nil || used != 1 || budget != 2 || exhausted {
 		t.Fatalf("first increment: used=%d budget=%d exhausted=%v err=%v", used, budget, exhausted, err)
 	}
 
-	used, _, exhausted, err = mgr.IncrementFailureBudget(ctx, "ag", root.ID, "child-2")
+	used, _, exhausted, err = mgr.IncrementFailureBudget(ctx, root.ID, "child-2")
 	if err != nil || used != 2 || exhausted {
 		t.Fatalf("second increment: used=%d exhausted=%v err=%v", used, exhausted, err)
 	}
 
 	// Third increment crosses the cap; counter is side-effected then exhausted.
-	used, _, exhausted, err = mgr.IncrementFailureBudget(ctx, "ag", root.ID, "child-3")
+	used, _, exhausted, err = mgr.IncrementFailureBudget(ctx, root.ID, "child-3")
 	if err != nil || used != 3 || !exhausted {
 		t.Fatalf("third increment: used=%d exhausted=%v err=%v", used, exhausted, err)
 	}
@@ -117,15 +117,15 @@ func TestIncrementFailureBudget_Idempotent(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	root, _ := mgr.CreateWorkflowRun(ctx, "ag", "", "", "")
-	if _, err := mgr.SetFailureBudget(ctx, "ag", root.ID, 5); err != nil {
+	root, _ := mgr.CreateWorkflowRun(ctx, "", "", "")
+	if _, err := mgr.SetFailureBudget(ctx, root.ID, 5); err != nil {
 		t.Fatalf("SetFailureBudget: %v", err)
 	}
-	if _, _, _, err := mgr.IncrementFailureBudget(ctx, "ag", root.ID, "child-1"); err != nil {
+	if _, _, _, err := mgr.IncrementFailureBudget(ctx, root.ID, "child-1"); err != nil {
 		t.Fatalf("first increment: %v", err)
 	}
 
-	used, budget, exhausted, err := mgr.IncrementFailureBudget(ctx, "ag", root.ID, "child-1")
+	used, budget, exhausted, err := mgr.IncrementFailureBudget(ctx, root.ID, "child-1")
 	if err != nil {
 		t.Fatalf("idempotent increment: %v", err)
 	}
@@ -141,9 +141,9 @@ func TestIncrementFailureBudget_ZeroBudgetNeverExhausts(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	root, _ := mgr.CreateWorkflowRun(ctx, "ag", "", "", "")
+	root, _ := mgr.CreateWorkflowRun(ctx, "", "", "")
 	for i := 1; i <= 3; i++ {
-		_, _, exhausted, err := mgr.IncrementFailureBudget(ctx, "ag", root.ID, "child-"+string(rune('a'-1+i)))
+		_, _, exhausted, err := mgr.IncrementFailureBudget(ctx, root.ID, "child-"+string(rune('a'-1+i)))
 		if err != nil || exhausted {
 			t.Fatalf("iter %d: exhausted=%v err=%v", i, exhausted, err)
 		}
@@ -157,8 +157,8 @@ func TestCreateRecoveryWorkflowRun_ChainsParentage(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	root, _ := mgr.CreateWorkflowRun(ctx, "ag", "root", "", "")
-	child, err := mgr.CreateRecoveryWorkflowRun(ctx, "ag", "recovery", "pipeline.requested", "cross", root.ID, root.ID)
+	root, _ := mgr.CreateWorkflowRun(ctx, "root", "", "")
+	child, err := mgr.CreateRecoveryWorkflowRun(ctx, "recovery", "pipeline.requested", "cross", root.ID, root.ID)
 	if err != nil {
 		t.Fatalf("CreateRecoveryWorkflowRun: %v", err)
 	}
@@ -177,11 +177,11 @@ func TestCreateRecoveryWorkflowRun_DefaultsRootFromParent(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	root, _ := mgr.CreateWorkflowRun(ctx, "ag", "root", "", "")
-	if _, err := mgr.SetFailureBudget(ctx, "ag", root.ID, 5); err != nil {
+	root, _ := mgr.CreateWorkflowRun(ctx, "root", "", "")
+	if _, err := mgr.SetFailureBudget(ctx, root.ID, 5); err != nil {
 		t.Fatalf("SetFailureBudget: %v", err)
 	}
-	child, err := mgr.CreateRecoveryWorkflowRun(ctx, "ag", "recovery", "", "", root.ID, "")
+	child, err := mgr.CreateRecoveryWorkflowRun(ctx, "recovery", "", "", root.ID, "")
 	if err != nil {
 		t.Fatalf("CreateRecoveryWorkflowRun: %v", err)
 	}

@@ -11,21 +11,18 @@ import (
 
 // ListDeliverablesForTask returns all Deliverable entities linked to taskID
 // via outbound has_deliverable edges.
-func (m *taskManager) ListDeliverablesForTask(ctx context.Context, agencyID, taskID string) ([]Deliverable, error) {
-	res, err := m.dm.TraverseGraph(ctx, entitygraph.TraverseGraphRequest{
-		AgencyID:  agencyID,
-		StartID:   taskID,
-		Direction: DirectionOutbound.String(),
-		Depth:     1,
-		Names:     []string{RelLabelHasDeliverable},
+func (m *taskManager) ListDeliverablesForTask(ctx context.Context, taskID string) ([]Deliverable, error) {
+	edges, err := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{
+		FromID: taskID,
+		Name:   RelLabelHasDeliverable,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ListDeliverablesForTask: %w", err)
 	}
 
-	out := make([]Deliverable, 0, len(res.Edges))
-	for _, edge := range res.Edges {
-		e, err := m.dm.GetEntity(ctx, agencyID, edge.ToID)
+	out := make([]Deliverable, 0, len(edges))
+	for _, edge := range edges {
+		e, err := m.dm.GetEntity(ctx, edge.ToID)
 		if err != nil {
 			if errors.Is(err, entitygraph.ErrEntityNotFound) {
 				continue
@@ -39,21 +36,18 @@ func (m *taskManager) ListDeliverablesForTask(ctx context.Context, agencyID, tas
 
 // ListAcceptanceCriteriaForTask returns all AcceptanceCriteria entities linked
 // to taskID via outbound has_acceptance_criteria edges.
-func (m *taskManager) ListAcceptanceCriteriaForTask(ctx context.Context, agencyID, taskID string) ([]AcceptanceCriteria, error) {
-	res, err := m.dm.TraverseGraph(ctx, entitygraph.TraverseGraphRequest{
-		AgencyID:  agencyID,
-		StartID:   taskID,
-		Direction: DirectionOutbound.String(),
-		Depth:     1,
-		Names:     []string{RelLabelHasAcceptanceCriteria},
+func (m *taskManager) ListAcceptanceCriteriaForTask(ctx context.Context, taskID string) ([]AcceptanceCriteria, error) {
+	edges, err := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{
+		FromID: taskID,
+		Name:   RelLabelHasAcceptanceCriteria,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ListAcceptanceCriteriaForTask: %w", err)
 	}
 
-	out := make([]AcceptanceCriteria, 0, len(res.Edges))
-	for _, edge := range res.Edges {
-		e, err := m.dm.GetEntity(ctx, agencyID, edge.ToID)
+	out := make([]AcceptanceCriteria, 0, len(edges))
+	for _, edge := range edges {
+		e, err := m.dm.GetEntity(ctx, edge.ToID)
 		if err != nil {
 			if errors.Is(err, entitygraph.ErrEntityNotFound) {
 				continue
@@ -67,8 +61,8 @@ func (m *taskManager) ListAcceptanceCriteriaForTask(ctx context.Context, agencyI
 
 // WriteAcceptanceCriteriaResult writes the reviewer's result and result_notes
 // onto an AcceptanceCriteria entity.
-func (m *taskManager) WriteAcceptanceCriteriaResult(ctx context.Context, agencyID, criteriaID, result, notes string) error {
-	e, err := m.dm.GetEntity(ctx, agencyID, criteriaID)
+func (m *taskManager) WriteAcceptanceCriteriaResult(ctx context.Context, criteriaID, result, notes string) error {
+	e, err := m.dm.GetEntity(ctx, criteriaID)
 	if err != nil {
 		if errors.Is(err, entitygraph.ErrEntityNotFound) {
 			return ErrAcceptanceCriteriaNotFound
@@ -81,7 +75,7 @@ func (m *taskManager) WriteAcceptanceCriteriaResult(ctx context.Context, agencyI
 	props["result_notes"] = notes
 	props["updated_at"] = time.Now().UTC().Format(time.RFC3339)
 
-	_, err = m.dm.UpdateEntity(ctx, agencyID, criteriaID, entitygraph.UpdateEntityRequest{
+	_, err = m.dm.UpdateEntity(ctx, criteriaID, entitygraph.UpdateEntityRequest{
 		Properties: props,
 	})
 	if err != nil {

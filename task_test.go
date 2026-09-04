@@ -31,7 +31,7 @@ func TestNewTaskManager_ValidDataManager(t *testing.T) {
 
 func TestCreateTask_Success(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	task, err := mgr.CreateTask(context.Background(), "agency-1", mwanachamataskmanager.Task{})
+	task, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -44,15 +44,12 @@ func TestCreateTask_Success(t *testing.T) {
 	if task.Priority != mwanachamataskmanager.TaskPriorityMedium {
 		t.Errorf("want default priority medium, got %s", task.Priority)
 	}
-	if task.AgencyID != "agency-1" {
-		t.Errorf("want agencyID agency-1, got %s", task.AgencyID)
-	}
 }
 
 func TestCreateTask_PublishesEvent(t *testing.T) {
 	pub := &recordingPublisher{}
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
-	if _, err := mgr.CreateTask(context.Background(), "agency-1", mwanachamataskmanager.Task{}); err != nil {
+	if _, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{}); err != nil {
 		t.Fatal(err)
 	}
 	// No "|agencyID" suffix here — unlike the original's eventbus.Event,
@@ -68,7 +65,7 @@ func TestCreateTask_PublishesEvent(t *testing.T) {
 
 func TestGetTask_NotFound(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	_, err := mgr.GetTask(context.Background(), "agency-1", "nonexistent")
+	_, err := mgr.GetTask(context.Background(), "nonexistent")
 	if !errors.Is(err, mwanachamataskmanager.ErrTaskNotFound) {
 		t.Fatalf("want ErrTaskNotFound, got %v", err)
 	}
@@ -76,11 +73,11 @@ func TestGetTask_NotFound(t *testing.T) {
 
 func TestGetTask_Found(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	created, err := mgr.CreateTask(context.Background(), "agency-1", mwanachamataskmanager.Task{})
+	created, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := mgr.GetTask(context.Background(), "agency-1", created.ID)
+	got, err := mgr.GetTask(context.Background(), created.ID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -93,7 +90,7 @@ func TestGetTask_Found(t *testing.T) {
 
 func TestUpdateTask_NotFound(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	_, err := mgr.UpdateTask(context.Background(), "agency-1", mwanachamataskmanager.Task{
+	_, err := mgr.UpdateTask(context.Background(), mwanachamataskmanager.Task{
 		ID: "nonexistent", Status: mwanachamataskmanager.TaskStatusInProgress,
 	})
 	if !errors.Is(err, mwanachamataskmanager.ErrTaskNotFound) {
@@ -103,12 +100,12 @@ func TestUpdateTask_NotFound(t *testing.T) {
 
 func TestUpdateTask_InvalidTransition_PendingToCompleted(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	created, err := mgr.CreateTask(context.Background(), "a", mwanachamataskmanager.Task{})
+	created, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	created.Status = mwanachamataskmanager.TaskStatusCompleted
-	_, err = mgr.UpdateTask(context.Background(), "a", created)
+	_, err = mgr.UpdateTask(context.Background(), created)
 	if !errors.Is(err, mwanachamataskmanager.ErrInvalidStatusTransition) {
 		t.Fatalf("want ErrInvalidStatusTransition, got %v", err)
 	}
@@ -116,12 +113,12 @@ func TestUpdateTask_InvalidTransition_PendingToCompleted(t *testing.T) {
 
 func TestUpdateTask_ValidTransition_PendingToInProgress(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	created, err := mgr.CreateTask(context.Background(), "a", mwanachamataskmanager.Task{})
+	created, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	created.Status = mwanachamataskmanager.TaskStatusInProgress
-	updated, err := mgr.UpdateTask(context.Background(), "a", created)
+	updated, err := mgr.UpdateTask(context.Background(), created)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -133,16 +130,16 @@ func TestUpdateTask_ValidTransition_PendingToInProgress(t *testing.T) {
 func TestUpdateTask_ValidTransition_InProgressToCompleted(t *testing.T) {
 	pub := &recordingPublisher{}
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
-	created, err := mgr.CreateTask(context.Background(), "a", mwanachamataskmanager.Task{})
+	created, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	created.Status = mwanachamataskmanager.TaskStatusInProgress
-	if _, err := mgr.UpdateTask(context.Background(), "a", created); err != nil {
+	if _, err := mgr.UpdateTask(context.Background(), created); err != nil {
 		t.Fatal(err)
 	}
 	created.Status = mwanachamataskmanager.TaskStatusCompleted
-	updated, err := mgr.UpdateTask(context.Background(), "a", created)
+	updated, err := mgr.UpdateTask(context.Background(), created)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -171,20 +168,20 @@ func TestUpdateTask_ValidTransition_InProgressToCompleted(t *testing.T) {
 
 func TestUpdateTask_InvalidTransition_CompletedToPending(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	created, err := mgr.CreateTask(context.Background(), "a", mwanachamataskmanager.Task{})
+	created, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	created.Status = mwanachamataskmanager.TaskStatusInProgress
-	if _, err := mgr.UpdateTask(context.Background(), "a", created); err != nil {
+	if _, err := mgr.UpdateTask(context.Background(), created); err != nil {
 		t.Fatal(err)
 	}
 	created.Status = mwanachamataskmanager.TaskStatusCompleted
-	if _, err := mgr.UpdateTask(context.Background(), "a", created); err != nil {
+	if _, err := mgr.UpdateTask(context.Background(), created); err != nil {
 		t.Fatal(err)
 	}
 	created.Status = mwanachamataskmanager.TaskStatusPending
-	_, err = mgr.UpdateTask(context.Background(), "a", created)
+	_, err = mgr.UpdateTask(context.Background(), created)
 	if !errors.Is(err, mwanachamataskmanager.ErrInvalidStatusTransition) {
 		t.Fatalf("want ErrInvalidStatusTransition, got %v", err)
 	}
@@ -194,7 +191,7 @@ func TestUpdateTask_InvalidTransition_CompletedToPending(t *testing.T) {
 
 func TestDeleteTask_NotFound(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	err := mgr.DeleteTask(context.Background(), "agency-1", "nonexistent")
+	err := mgr.DeleteTask(context.Background(), "nonexistent")
 	if !errors.Is(err, mwanachamataskmanager.ErrTaskNotFound) {
 		t.Fatalf("want ErrTaskNotFound, got %v", err)
 	}
@@ -202,14 +199,14 @@ func TestDeleteTask_NotFound(t *testing.T) {
 
 func TestDeleteTask_Success(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	created, err := mgr.CreateTask(context.Background(), "a", mwanachamataskmanager.Task{})
+	created, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := mgr.DeleteTask(context.Background(), "a", created.ID); err != nil {
+	if err := mgr.DeleteTask(context.Background(), created.ID); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	_, err = mgr.GetTask(context.Background(), "a", created.ID)
+	_, err = mgr.GetTask(context.Background(), created.ID)
 	if !errors.Is(err, mwanachamataskmanager.ErrTaskNotFound) {
 		t.Fatalf("want ErrTaskNotFound after delete, got %v", err)
 	}
@@ -217,9 +214,9 @@ func TestDeleteTask_Success(t *testing.T) {
 
 // ── ListTasks ────────────────────────────────────────────────────────────────
 
-func TestListTasks_EmptyAgency(t *testing.T) {
+func TestListTasks_Empty(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	tasks, err := mgr.ListTasks(context.Background(), "agency-1", mwanachamataskmanager.TaskFilter{})
+	tasks, err := mgr.ListTasks(context.Background(), mwanachamataskmanager.TaskFilter{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -232,22 +229,22 @@ func TestListTasks_FilterByStatus(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	var ids []string
 	for range 3 {
-		created, err := mgr.CreateTask(context.Background(), "a", mwanachamataskmanager.Task{})
+		created, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 		if err != nil {
 			t.Fatal(err)
 		}
 		ids = append(ids, created.ID)
 	}
-	first, err := mgr.GetTask(context.Background(), "a", ids[0])
+	first, err := mgr.GetTask(context.Background(), ids[0])
 	if err != nil {
 		t.Fatal(err)
 	}
 	first.Status = mwanachamataskmanager.TaskStatusInProgress
-	if _, err := mgr.UpdateTask(context.Background(), "a", first); err != nil {
+	if _, err := mgr.UpdateTask(context.Background(), first); err != nil {
 		t.Fatal(err)
 	}
 
-	pending, err := mgr.ListTasks(context.Background(), "a", mwanachamataskmanager.TaskFilter{
+	pending, err := mgr.ListTasks(context.Background(), mwanachamataskmanager.TaskFilter{
 		Status: mwanachamataskmanager.TaskStatusPending,
 	})
 	if err != nil {
@@ -257,7 +254,7 @@ func TestListTasks_FilterByStatus(t *testing.T) {
 		t.Errorf("want 2 pending tasks, got %d", len(pending))
 	}
 
-	inProgress, err := mgr.ListTasks(context.Background(), "a", mwanachamataskmanager.TaskFilter{
+	inProgress, err := mgr.ListTasks(context.Background(), mwanachamataskmanager.TaskFilter{
 		Status: mwanachamataskmanager.TaskStatusInProgress,
 	})
 	if err != nil {
@@ -268,24 +265,21 @@ func TestListTasks_FilterByStatus(t *testing.T) {
 	}
 }
 
-func TestListTasks_AgencyIsolation(t *testing.T) {
+func TestListTasks_ReturnsAllTasks(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	if _, err := mgr.CreateTask(context.Background(), "agency-A", mwanachamataskmanager.Task{}); err != nil {
+	if _, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.CreateTask(context.Background(), "agency-B", mwanachamataskmanager.Task{}); err != nil {
+	if _, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{}); err != nil {
 		t.Fatal(err)
 	}
 
-	tasksA, err := mgr.ListTasks(context.Background(), "agency-A", mwanachamataskmanager.TaskFilter{})
+	tasks, err := mgr.ListTasks(context.Background(), mwanachamataskmanager.TaskFilter{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tasksA) != 1 {
-		t.Errorf("agency-A: want 1 task, got %d", len(tasksA))
-	}
-	if tasksA[0].AgencyID != "agency-A" {
-		t.Errorf("expected agency-A task, got agencyID=%s", tasksA[0].AgencyID)
+	if len(tasks) != 2 {
+		t.Errorf("want 2 tasks, got %d", len(tasks))
 	}
 }
 

@@ -13,7 +13,7 @@ import (
 func TestCreateTask_PublishesTypedTaskCreatedPayload(t *testing.T) {
 	pub := &recordingPublisher{}
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
-	created, _ := mgr.CreateTask(context.Background(), "ag", mwanachamataskmanager.Task{
+	created, _ := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{
 		Priority: mwanachamataskmanager.TaskPriorityHigh,
 	})
 
@@ -38,10 +38,10 @@ func TestCreateTask_PublishesTypedTaskCreatedPayload(t *testing.T) {
 func TestUpdateTask_NoStatusChange_PublishesUpdatedNotStatusChanged(t *testing.T) {
 	pub := &recordingPublisher{}
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
-	created, _ := mgr.CreateTask(context.Background(), "ag", mwanachamataskmanager.Task{})
+	created, _ := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 
 	created.Description = "patched"
-	if _, err := mgr.UpdateTask(context.Background(), "ag", created); err != nil {
+	if _, err := mgr.UpdateTask(context.Background(), created); err != nil {
 		t.Fatalf("UpdateTask: %v", err)
 	}
 
@@ -61,10 +61,10 @@ func TestUpdateTask_NoStatusChange_PublishesUpdatedNotStatusChanged(t *testing.T
 func TestUpdateTask_StatusChange_FiresStatusChangedWithFromTo(t *testing.T) {
 	pub := &recordingPublisher{}
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
-	created, _ := mgr.CreateTask(context.Background(), "ag", mwanachamataskmanager.Task{})
+	created, _ := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 
 	created.Status = mwanachamataskmanager.TaskStatusInProgress
-	if _, err := mgr.UpdateTask(context.Background(), "ag", created); err != nil {
+	if _, err := mgr.UpdateTask(context.Background(), created); err != nil {
 		t.Fatalf("UpdateTask: %v", err)
 	}
 
@@ -85,11 +85,11 @@ func TestUpdateTask_StatusChange_FiresStatusChangedWithFromTo(t *testing.T) {
 func TestUpdateTask_StatusChangeOnly_DoesNotFireUpdated(t *testing.T) {
 	pub := &recordingPublisher{}
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
-	created, _ := mgr.CreateTask(context.Background(), "ag", mwanachamataskmanager.Task{})
+	created, _ := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 
 	// Only the status field differs.
 	created.Status = mwanachamataskmanager.TaskStatusInProgress
-	if _, err := mgr.UpdateTask(context.Background(), "ag", created); err != nil {
+	if _, err := mgr.UpdateTask(context.Background(), created); err != nil {
 		t.Fatalf("UpdateTask: %v", err)
 	}
 	if _, ok := findEvent(pub.full, mwanachamataskmanager.TopicTaskUpdated); ok {
@@ -101,18 +101,18 @@ func TestAssignTask_Replacement_FiresAssignedOnce(t *testing.T) {
 	pub := &recordingPublisher{}
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
 	ctx := context.Background()
-	task, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	a1, _ := mgr.UpsertAgent(ctx, "ag", mwanachamataskmanager.Agent{AgentID: "a1"})
-	a2, _ := mgr.UpsertAgent(ctx, "ag", mwanachamataskmanager.Agent{AgentID: "a2"})
+	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	a1, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "a1"})
+	a2, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "a2"})
 
 	// Reset captured events so we count only the reassign hits.
-	if err := mgr.AssignTask(ctx, "ag", task.ID, a1.ID, ""); err != nil {
+	if err := mgr.AssignTask(ctx, task.ID, a1.ID, ""); err != nil {
 		t.Fatalf("AssignTask a1: %v", err)
 	}
 	pub.full = nil
 	pub.events = nil
 
-	if err := mgr.AssignTask(ctx, "ag", task.ID, a2.ID, ""); err != nil {
+	if err := mgr.AssignTask(ctx, task.ID, a2.ID, ""); err != nil {
 		t.Fatalf("AssignTask a2: %v", err)
 	}
 
@@ -137,17 +137,17 @@ func TestAssignTask_PayloadHydrated_IncludesTaskCodeAndTitle(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
 	ctx := context.Background()
 
-	task, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{
+	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{
 		TaskName:    "UTIL-001",
 		Title:       "Implement app version display widget",
 		Description: "Add a read-only widget to the settings screen showing the current app version.",
 	})
-	agent, _ := mgr.UpsertAgent(ctx, "ag", mwanachamataskmanager.Agent{
+	agent, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{
 		AgentID:  "dev-01",
 		RoleName: "Developer",
 	})
 
-	if err := mgr.AssignTask(ctx, "ag", task.ID, agent.ID, ""); err != nil {
+	if err := mgr.AssignTask(ctx, task.ID, agent.ID, ""); err != nil {
 		t.Fatalf("AssignTask: %v", err)
 	}
 
@@ -177,10 +177,10 @@ func TestCreateRelationship_PublishesTypedRelationshipCreatedPayload(t *testing.
 	pub := &recordingPublisher{}
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
 	ctx := context.Background()
-	a, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	b, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
+	a, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 
-	if _, err := mgr.CreateRelationship(ctx, "ag", mwanachamataskmanager.Relationship{
+	if _, err := mgr.CreateRelationship(ctx, mwanachamataskmanager.Relationship{
 		Label: mwanachamataskmanager.RelLabelBlocks, FromID: a.ID, ToID: b.ID,
 	}); err != nil {
 		t.Fatalf("CreateRelationship: %v", err)
@@ -211,10 +211,9 @@ func TestEventSequence_FullPhase2Flow_EmitsExactOrderedTopics(t *testing.T) {
 	pub := &recordingPublisher{}
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
 	ctx := context.Background()
-	const agency = "ag"
 
 	// Step 1 — create a Task.
-	task, err := mgr.CreateTask(ctx, agency, mwanachamataskmanager.Task{
+	task, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{
 		Priority: mwanachamataskmanager.TaskPriorityHigh,
 	})
 	if err != nil {
@@ -223,39 +222,39 @@ func TestEventSequence_FullPhase2Flow_EmitsExactOrderedTopics(t *testing.T) {
 
 	// Step 2 — non-status update (description only).
 	task.Description = "patched"
-	if _, err := mgr.UpdateTask(ctx, agency, task); err != nil {
+	if _, err := mgr.UpdateTask(ctx, task); err != nil {
 		t.Fatalf("UpdateTask description: %v", err)
 	}
 
 	// Step 3 — assign to a fresh agent.
-	agent, err := mgr.UpsertAgent(ctx, agency, mwanachamataskmanager.Agent{AgentID: "a1"})
+	agent, err := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "a1"})
 	if err != nil {
 		t.Fatalf("UpsertAgent: %v", err)
 	}
-	if err := mgr.AssignTask(ctx, agency, task.ID, agent.ID, ""); err != nil {
+	if err := mgr.AssignTask(ctx, task.ID, agent.ID, ""); err != nil {
 		t.Fatalf("AssignTask: %v", err)
 	}
 
 	// Step 4 — drive task to completed via in_progress.
-	cur, err := mgr.GetTask(ctx, agency, task.ID)
+	cur, err := mgr.GetTask(ctx, task.ID)
 	if err != nil {
 		t.Fatalf("GetTask: %v", err)
 	}
 	cur.Status = mwanachamataskmanager.TaskStatusInProgress
-	if _, err := mgr.UpdateTask(ctx, agency, cur); err != nil {
+	if _, err := mgr.UpdateTask(ctx, cur); err != nil {
 		t.Fatalf("→ in_progress: %v", err)
 	}
 	cur.Status = mwanachamataskmanager.TaskStatusCompleted
-	if _, err := mgr.UpdateTask(ctx, agency, cur); err != nil {
+	if _, err := mgr.UpdateTask(ctx, cur); err != nil {
 		t.Fatalf("→ completed: %v", err)
 	}
 
 	// Step 5 — create a blocks edge to a sibling Task.
-	other, err := mgr.CreateTask(ctx, agency, mwanachamataskmanager.Task{})
+	other, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	if err != nil {
 		t.Fatalf("CreateTask other: %v", err)
 	}
-	if _, err := mgr.CreateRelationship(ctx, agency, mwanachamataskmanager.Relationship{
+	if _, err := mgr.CreateRelationship(ctx, mwanachamataskmanager.Relationship{
 		Label: mwanachamataskmanager.RelLabelBlocks, FromID: task.ID, ToID: other.ID,
 	}); err != nil {
 		t.Fatalf("CreateRelationship: %v", err)

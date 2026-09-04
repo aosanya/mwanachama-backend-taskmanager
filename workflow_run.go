@@ -30,9 +30,9 @@ const runNameSuffixBytes = 3
 // whitespace is rejected (returns [ErrInvalidTask]); case is preserved.
 //
 // Returns [ErrWorkflowRunNameExists] when a run with the same
-// (agencyID, name) pair already exists — names are immutable, so the
+// (name) pair already exists — names are immutable, so the
 // caller should append a discriminator and retry.
-func (m *taskManager) CreateWorkflowRun(ctx context.Context, agencyID, name, triggerEvent, initiator string) (WorkflowRun, error) {
+func (m *taskManager) CreateWorkflowRun(ctx context.Context, name, triggerEvent, initiator string) (WorkflowRun, error) {
 	if name != "" && strings.TrimSpace(name) != name {
 		return WorkflowRun{}, fmt.Errorf("%w: WorkflowRun.Name must not have leading/trailing whitespace", ErrInvalidTask)
 	}
@@ -43,13 +43,12 @@ func (m *taskManager) CreateWorkflowRun(ctx context.Context, agencyID, name, tri
 	// CreateEntity does not enforce the schema [UniqueKey] (that is the
 	// contract of UpsertEntity). We need exact-match collision detection,
 	// not merge semantics, so explicitly look up by name first.
-	if existing, err := m.GetWorkflowRunByName(ctx, agencyID, name); err == nil && existing.ID != "" {
+	if existing, err := m.GetWorkflowRunByName(ctx, name); err == nil && existing.ID != "" {
 		return WorkflowRun{}, ErrWorkflowRunNameExists
 	} else if err != nil && !errors.Is(err, ErrWorkflowRunNotFound) {
 		return WorkflowRun{}, fmt.Errorf("CreateWorkflowRun: name precheck: %w", err)
 	}
 	run := WorkflowRun{
-		AgencyID:     agencyID,
 		Name:         name,
 		Status:       WorkflowRunStatusPending,
 		TriggerEvent: triggerEvent,
@@ -60,7 +59,6 @@ func (m *taskManager) CreateWorkflowRun(ctx context.Context, agencyID, name, tri
 		LastEventAt:  now.Format(time.RFC3339),
 	}
 	created, err := m.dm.CreateEntity(ctx, entitygraph.CreateEntityRequest{
-		AgencyID:   agencyID,
 		TypeID:     workflowRunTypeID,
 		Properties: workflowRunToProperties(run),
 	})
@@ -87,29 +85,28 @@ func generateRunName(now time.Time) string {
 }
 
 // GetWorkflowRun reads a single WorkflowRun entity.
-func (m *taskManager) GetWorkflowRun(ctx context.Context, agencyID, runID string) (WorkflowRun, error) {
-	e, err := m.dm.GetEntity(ctx, agencyID, runID)
+func (m *taskManager) GetWorkflowRun(ctx context.Context, runID string) (WorkflowRun, error) {
+	e, err := m.dm.GetEntity(ctx, runID)
 	if err != nil {
 		if errors.Is(err, entitygraph.ErrEntityNotFound) {
 			return WorkflowRun{}, ErrWorkflowRunNotFound
 		}
 		return WorkflowRun{}, fmt.Errorf("GetWorkflowRun: %w", err)
 	}
-	if e.AgencyID != agencyID || e.TypeID != workflowRunTypeID {
+	if e.TypeID != workflowRunTypeID {
 		return WorkflowRun{}, ErrWorkflowRunNotFound
 	}
 	return workflowRunFromEntity(e), nil
 }
 
-// ListWorkflowRuns returns every WorkflowRun in the agency, sorted newest first
-// by created_at. Returns an empty slice (not an error) when none exist.
+// ListWorkflowRuns returns every WorkflowRun, sorted newest first by
+// created_at. Returns an empty slice (not an error) when none exist.
 //
 // When name is non-empty, the result is filtered to runs whose Name field
 // matches exactly — at most one row given the schema [schema.TypeDefinition.UniqueKey] on name.
-func (m *taskManager) ListWorkflowRuns(ctx context.Context, agencyID, name string) ([]WorkflowRun, error) {
+func (m *taskManager) ListWorkflowRuns(ctx context.Context, name string) ([]WorkflowRun, error) {
 	entities, err := m.dm.ListEntities(ctx, entitygraph.EntityFilter{
-		AgencyID: agencyID,
-		TypeID:   workflowRunTypeID,
+		TypeID: workflowRunTypeID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ListWorkflowRuns: %w", err)
@@ -126,13 +123,13 @@ func (m *taskManager) ListWorkflowRuns(ctx context.Context, agencyID, name strin
 	return out, nil
 }
 
-// GetWorkflowRunByName looks up a single run by its unique (agency, name)
-// pair. Returns [ErrWorkflowRunNotFound] when no match exists.
-func (m *taskManager) GetWorkflowRunByName(ctx context.Context, agencyID, name string) (WorkflowRun, error) {
+// GetWorkflowRunByName looks up a single run by its unique name.
+// Returns [ErrWorkflowRunNotFound] when no match exists.
+func (m *taskManager) GetWorkflowRunByName(ctx context.Context, name string) (WorkflowRun, error) {
 	if name == "" {
 		return WorkflowRun{}, fmt.Errorf("%w: WorkflowRun.Name is required", ErrInvalidTask)
 	}
-	runs, err := m.ListWorkflowRuns(ctx, agencyID, name)
+	runs, err := m.ListWorkflowRuns(ctx, name)
 	if err != nil {
 		return WorkflowRun{}, err
 	}
@@ -143,14 +140,14 @@ func (m *taskManager) GetWorkflowRunByName(ctx context.Context, agencyID, name s
 }
 
 // LinkTaskToRun writes the started_task edge from the run to a task.
-func (m *taskManager) LinkTaskToRun(ctx context.Context, agencyID, runID, taskID string) error {
-	if _, err := m.GetWorkflowRun(ctx, agencyID, runID); err != nil {
+func (m *taskManager) LinkTaskToRun(ctx context.Context, runID, taskID string) error {
+	if _, err := m.GetWorkflowRun(ctx, runID); err != nil {
 		return err
 	}
-	if _, err := m.GetTask(ctx, agencyID, taskID); err != nil {
+	if _, err := m.GetTask(ctx, taskID); err != nil {
 		return err
 	}
-	_, err := m.CreateRelationship(ctx, agencyID, Relationship{
+	_, err := m.CreateRelationship(ctx, Relationship{
 		Label:  RelLabelStartedTask,
 		FromID: runID,
 		ToID:   taskID,
@@ -159,14 +156,14 @@ func (m *taskManager) LinkTaskToRun(ctx context.Context, agencyID, runID, taskID
 }
 
 // LinkTodoToRun writes the started_todo edge from the run to a todo.
-func (m *taskManager) LinkTodoToRun(ctx context.Context, agencyID, runID, todoID string) error {
-	if _, err := m.GetWorkflowRun(ctx, agencyID, runID); err != nil {
+func (m *taskManager) LinkTodoToRun(ctx context.Context, runID, todoID string) error {
+	if _, err := m.GetWorkflowRun(ctx, runID); err != nil {
 		return err
 	}
-	if _, err := m.GetTaskTodo(ctx, agencyID, todoID); err != nil {
+	if _, err := m.GetTaskTodo(ctx, todoID); err != nil {
 		return err
 	}
-	_, err := m.CreateRelationship(ctx, agencyID, Relationship{
+	_, err := m.CreateRelationship(ctx, Relationship{
 		Label:  RelLabelStartedTodo,
 		FromID: runID,
 		ToID:   todoID,
@@ -179,8 +176,8 @@ func (m *taskManager) LinkTodoToRun(ctx context.Context, agencyID, runID, todoID
 // entities and edges encountered. Edges whose endpoints land outside the
 // closure are still included — rollback needs them to plan compensating
 // actions on neighbours.
-func (m *taskManager) GetWorkflowRunClosure(ctx context.Context, agencyID, runID string) (WorkflowRunClosure, error) {
-	run, err := m.GetWorkflowRun(ctx, agencyID, runID)
+func (m *taskManager) GetWorkflowRunClosure(ctx context.Context, runID string) (WorkflowRunClosure, error) {
+	run, err := m.GetWorkflowRun(ctx, runID)
 	if err != nil {
 		return WorkflowRunClosure{}, err
 	}
@@ -208,7 +205,7 @@ func (m *taskManager) GetWorkflowRunClosure(ctx context.Context, agencyID, runID
 	}
 
 	// Step 1 — started_task edges from the run.
-	startedTaskEdges, err := m.TraverseRelationships(ctx, agencyID, runID, RelLabelStartedTask, DirectionOutbound)
+	startedTaskEdges, err := m.TraverseRelationships(ctx, runID, RelLabelStartedTask, DirectionOutbound)
 	if err != nil {
 		return WorkflowRunClosure{}, fmt.Errorf("GetWorkflowRunClosure: started_task: %w", err)
 	}
@@ -219,7 +216,7 @@ func (m *taskManager) GetWorkflowRunClosure(ctx context.Context, agencyID, runID
 
 	// Step 2 — started_todo edges from the run (some producers link todos
 	// directly without going through their parent task).
-	startedTodoEdges, err := m.TraverseRelationships(ctx, agencyID, runID, RelLabelStartedTodo, DirectionOutbound)
+	startedTodoEdges, err := m.TraverseRelationships(ctx, runID, RelLabelStartedTodo, DirectionOutbound)
 	if err != nil {
 		return WorkflowRunClosure{}, fmt.Errorf("GetWorkflowRunClosure: started_todo: %w", err)
 	}
@@ -232,26 +229,26 @@ func (m *taskManager) GetWorkflowRunClosure(ctx context.Context, agencyID, runID
 	// (both directions). Tag and member_of edges are not part of the
 	// rollback closure but might be added in a later revision.
 	for taskID := range taskIDs {
-		todoEdges, err := m.TraverseRelationships(ctx, agencyID, taskID, RelLabelHasTodo, DirectionOutbound)
+		todoEdges, err := m.TraverseRelationships(ctx, taskID, RelLabelHasTodo, DirectionOutbound)
 		if err == nil {
 			for _, e := range todoEdges {
 				addEdge(e)
 				todoIDs[e.ToID] = struct{}{}
 			}
 		}
-		assignedEdges, err := m.TraverseRelationships(ctx, agencyID, taskID, RelLabelAssignedTo, DirectionOutbound)
+		assignedEdges, err := m.TraverseRelationships(ctx, taskID, RelLabelAssignedTo, DirectionOutbound)
 		if err == nil {
 			for _, e := range assignedEdges {
 				addEdge(e)
 			}
 		}
-		dependsOut, err := m.TraverseRelationships(ctx, agencyID, taskID, RelLabelDependsOn, DirectionOutbound)
+		dependsOut, err := m.TraverseRelationships(ctx, taskID, RelLabelDependsOn, DirectionOutbound)
 		if err == nil {
 			for _, e := range dependsOut {
 				addEdge(e)
 			}
 		}
-		dependsIn, err := m.TraverseRelationships(ctx, agencyID, taskID, RelLabelDependsOn, DirectionInbound)
+		dependsIn, err := m.TraverseRelationships(ctx, taskID, RelLabelDependsOn, DirectionInbound)
 		if err == nil {
 			for _, e := range dependsIn {
 				addEdge(e)
@@ -264,7 +261,7 @@ func (m *taskManager) GetWorkflowRunClosure(ctx context.Context, agencyID, runID
 	// a deleted task should not fail the closure read).
 	tasks := make([]Task, 0, len(taskIDs))
 	for id := range taskIDs {
-		t, err := m.GetTask(ctx, agencyID, id)
+		t, err := m.GetTask(ctx, id)
 		if err != nil {
 			continue
 		}
@@ -275,7 +272,7 @@ func (m *taskManager) GetWorkflowRunClosure(ctx context.Context, agencyID, runID
 
 	todos := make([]TaskTodo, 0, len(todoIDs))
 	for id := range todoIDs {
-		td, err := m.GetTaskTodo(ctx, agencyID, id)
+		td, err := m.GetTaskTodo(ctx, id)
 		if err != nil {
 			continue
 		}
@@ -295,8 +292,8 @@ func (m *taskManager) GetWorkflowRunClosure(ctx context.Context, agencyID, runID
 // UpdateWorkflowRunStatus transitions a WorkflowRun to a new lifecycle status.
 // Valid transitions are defined by [WorkflowRunStatus.CanTransitionTo]; any
 // other request returns [ErrInvalidRunStatusTransition].
-func (m *taskManager) UpdateWorkflowRunStatus(ctx context.Context, agencyID, runID string, newStatus WorkflowRunStatus, reason string) (WorkflowRun, error) {
-	run, err := m.GetWorkflowRun(ctx, agencyID, runID)
+func (m *taskManager) UpdateWorkflowRunStatus(ctx context.Context, runID string, newStatus WorkflowRunStatus, reason string) (WorkflowRun, error) {
+	run, err := m.GetWorkflowRun(ctx, runID)
 	if err != nil {
 		return WorkflowRun{}, err
 	}
@@ -318,18 +315,18 @@ func (m *taskManager) UpdateWorkflowRunStatus(ctx context.Context, agencyID, run
 	if reason != "" {
 		props["failure_reason"] = reason
 	}
-	updated, err := m.dm.UpdateEntity(ctx, agencyID, runID, entitygraph.UpdateEntityRequest{Properties: props})
+	updated, err := m.dm.UpdateEntity(ctx, runID, entitygraph.UpdateEntityRequest{Properties: props})
 	if err != nil {
 		return WorkflowRun{}, fmt.Errorf("UpdateWorkflowRunStatus: %w", err)
 	}
 	result := workflowRunFromEntity(updated)
 
-	m.publishRunStatusEvent(ctx, agencyID, result, now, reason)
+	m.publishRunStatusEvent(ctx, result, now, reason)
 	return result, nil
 }
 
 // publishRunStatusEvent fires the appropriate work.run.* event after a status transition.
-func (m *taskManager) publishRunStatusEvent(ctx context.Context, agencyID string, run WorkflowRun, now time.Time, reason string) {
+func (m *taskManager) publishRunStatusEvent(ctx context.Context, run WorkflowRun, now time.Time, reason string) {
 	var topic string
 	var payload any
 	switch run.Status {
@@ -376,7 +373,7 @@ func (m *taskManager) publishRunStatusEvent(ctx context.Context, agencyID string
 	default:
 		return
 	}
-	m.publish(ctx, topic, agencyID, payload)
+	m.publish(ctx, topic, payload)
 }
 
 // workflowRunToProperties serialises a WorkflowRun for storage.
@@ -424,7 +421,6 @@ func workflowRunToProperties(r WorkflowRun) map[string]any {
 func workflowRunFromEntity(e entitygraph.Entity) WorkflowRun {
 	r := WorkflowRun{
 		ID:                    e.ID,
-		AgencyID:              e.AgencyID,
 		Name:                  entitygraph.StringProp(e.Properties, "name"),
 		Status:                WorkflowRunStatus(entitygraph.StringProp(e.Properties, "status")),
 		TriggerEvent:          entitygraph.StringProp(e.Properties, "trigger_event"),
@@ -514,10 +510,11 @@ func stringSliceProp(props map[string]any, key string) []string {
 }
 
 // TouchWorkflowRunLastEventAt bumps last_event_at to ts for the given run.
-// Best-effort: returns nil on NotFound (run may belong to another agency).
+// Best-effort: returns nil on NotFound (the run may have been deleted or
+// rolled back concurrently with the event that triggered this call).
 // Called on every published event that carries a workflow_run_id.
-func (m *taskManager) TouchWorkflowRunLastEventAt(ctx context.Context, agencyID, runID, ts string) error {
-	_, err := m.dm.UpdateEntity(ctx, agencyID, runID, entitygraph.UpdateEntityRequest{
+func (m *taskManager) TouchWorkflowRunLastEventAt(ctx context.Context, runID, ts string) error {
+	_, err := m.dm.UpdateEntity(ctx, runID, entitygraph.UpdateEntityRequest{
 		Properties: map[string]any{"last_event_at": ts},
 	})
 	if err != nil && errors.Is(err, entitygraph.ErrEntityNotFound) {

@@ -9,10 +9,10 @@ import (
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
-// setBlocks wires source --[blocks]--> target inside the given agency.
-func setBlocks(t *testing.T, mgr mwanachamataskmanager.TaskManager, agencyID, sourceID, targetID string) {
+// setBlocks wires source --[blocks]--> target.
+func setBlocks(t *testing.T, mgr mwanachamataskmanager.TaskManager, sourceID, targetID string) {
 	t.Helper()
-	if _, err := mgr.CreateRelationship(context.Background(), agencyID, mwanachamataskmanager.Relationship{
+	if _, err := mgr.CreateRelationship(context.Background(), mwanachamataskmanager.Relationship{
 		Label: mwanachamataskmanager.RelLabelBlocks, FromID: sourceID, ToID: targetID,
 	}); err != nil {
 		t.Fatalf("CreateRelationship blocks %s→%s: %v", sourceID, targetID, err)
@@ -21,31 +21,31 @@ func setBlocks(t *testing.T, mgr mwanachamataskmanager.TaskManager, agencyID, so
 
 // startTask drives a freshly-created task pending → in_progress, returning
 // any error from UpdateTask. Used to exercise the blocker gate.
-func startTask(mgr mwanachamataskmanager.TaskManager, agencyID string, task mwanachamataskmanager.Task) error {
+func startTask(mgr mwanachamataskmanager.TaskManager, task mwanachamataskmanager.Task) error {
 	task.Status = mwanachamataskmanager.TaskStatusInProgress
-	_, err := mgr.UpdateTask(context.Background(), agencyID, task)
+	_, err := mgr.UpdateTask(context.Background(), task)
 	return err
 }
 
 // completeBlocker drives a task pending → in_progress → completed. Used to
 // stand up scenarios where a blocker has reached terminal state.
-func completeBlocker(t *testing.T, mgr mwanachamataskmanager.TaskManager, agencyID string, task mwanachamataskmanager.Task) {
+func completeBlocker(t *testing.T, mgr mwanachamataskmanager.TaskManager, task mwanachamataskmanager.Task) {
 	t.Helper()
 	task.Status = mwanachamataskmanager.TaskStatusInProgress
-	if _, err := mgr.UpdateTask(context.Background(), agencyID, task); err != nil {
+	if _, err := mgr.UpdateTask(context.Background(), task); err != nil {
 		t.Fatalf("blocker pending→in_progress: %v", err)
 	}
 	task.Status = mwanachamataskmanager.TaskStatusCompleted
-	if _, err := mgr.UpdateTask(context.Background(), agencyID, task); err != nil {
+	if _, err := mgr.UpdateTask(context.Background(), task); err != nil {
 		t.Fatalf("blocker in_progress→completed: %v", err)
 	}
 }
 
 // cancelTask drives a task pending → cancelled.
-func cancelTask(t *testing.T, mgr mwanachamataskmanager.TaskManager, agencyID string, task mwanachamataskmanager.Task) {
+func cancelTask(t *testing.T, mgr mwanachamataskmanager.TaskManager, task mwanachamataskmanager.Task) {
 	t.Helper()
 	task.Status = mwanachamataskmanager.TaskStatusCancelled
-	if _, err := mgr.UpdateTask(context.Background(), agencyID, task); err != nil {
+	if _, err := mgr.UpdateTask(context.Background(), task); err != nil {
 		t.Fatalf("pending→cancelled: %v", err)
 	}
 }
@@ -53,11 +53,11 @@ func cancelTask(t *testing.T, mgr mwanachamataskmanager.TaskManager, agencyID st
 func TestUpdateTask_Blocked_PendingBlockerPreventsStart(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
-	a, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	b, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	setBlocks(t, mgr, "ag", a.ID, b.ID)
+	a, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	setBlocks(t, mgr, a.ID, b.ID)
 
-	err := startTask(mgr, "ag", b)
+	err := startTask(mgr, b)
 	if !errors.Is(err, mwanachamataskmanager.ErrBlocked) {
 		t.Fatalf("want ErrBlocked, got %v", err)
 	}
@@ -73,12 +73,12 @@ func TestUpdateTask_Blocked_PendingBlockerPreventsStart(t *testing.T) {
 func TestUpdateTask_Blocked_CompletedBlockerOpensGate(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
-	a, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	b, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	setBlocks(t, mgr, "ag", a.ID, b.ID)
+	a, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	setBlocks(t, mgr, a.ID, b.ID)
 
-	completeBlocker(t, mgr, "ag", a)
-	if err := startTask(mgr, "ag", b); err != nil {
+	completeBlocker(t, mgr, a)
+	if err := startTask(mgr, b); err != nil {
 		t.Errorf("after blocker completed: got %v, want nil", err)
 	}
 }
@@ -86,12 +86,12 @@ func TestUpdateTask_Blocked_CompletedBlockerOpensGate(t *testing.T) {
 func TestUpdateTask_Blocked_CancelledBlockerOpensGate(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
-	a, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	b, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	setBlocks(t, mgr, "ag", a.ID, b.ID)
+	a, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	setBlocks(t, mgr, a.ID, b.ID)
 
-	cancelTask(t, mgr, "ag", a)
-	if err := startTask(mgr, "ag", b); err != nil {
+	cancelTask(t, mgr, a)
+	if err := startTask(mgr, b); err != nil {
 		t.Errorf("after blocker cancelled: got %v, want nil", err)
 	}
 }
@@ -99,15 +99,15 @@ func TestUpdateTask_Blocked_CancelledBlockerOpensGate(t *testing.T) {
 func TestUpdateTask_Blocked_MultipleBlockers_OnlyNonTerminalReported(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
-	a1, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	a2, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	b, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	setBlocks(t, mgr, "ag", a1.ID, b.ID)
-	setBlocks(t, mgr, "ag", a2.ID, b.ID)
+	a1, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	a2, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	setBlocks(t, mgr, a1.ID, b.ID)
+	setBlocks(t, mgr, a2.ID, b.ID)
 
-	completeBlocker(t, mgr, "ag", a1) // a1 terminal, a2 still pending
+	completeBlocker(t, mgr, a1) // a1 terminal, a2 still pending
 
-	err := startTask(mgr, "ag", b)
+	err := startTask(mgr, b)
 	var be *mwanachamataskmanager.BlockedError
 	if !errors.As(err, &be) {
 		t.Fatalf("want *BlockedError, got %v", err)
@@ -123,13 +123,13 @@ func TestUpdateTask_Blocked_MultipleBlockers_OnlyNonTerminalReported(t *testing.
 func TestUpdateTask_Blocked_PendingToCancelledBypassesGate(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
-	a, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	b, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	setBlocks(t, mgr, "ag", a.ID, b.ID)
+	a, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	setBlocks(t, mgr, a.ID, b.ID)
 
 	// pending → cancelled must succeed even when the blocker is still pending.
 	b.Status = mwanachamataskmanager.TaskStatusCancelled
-	if _, err := mgr.UpdateTask(ctx, "ag", b); err != nil {
+	if _, err := mgr.UpdateTask(ctx, b); err != nil {
 		t.Errorf("pending→cancelled with active blocker: got %v, want nil", err)
 	}
 }
@@ -137,18 +137,18 @@ func TestUpdateTask_Blocked_PendingToCancelledBypassesGate(t *testing.T) {
 func TestUpdateTask_Blocked_DependsOnIsNotGated(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
-	a, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
-	b, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{})
+	a, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
+	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 
 	// depends_on is informational — it must not block the transition.
-	if _, err := mgr.CreateRelationship(ctx, "ag", mwanachamataskmanager.Relationship{
+	if _, err := mgr.CreateRelationship(ctx, mwanachamataskmanager.Relationship{
 		Label: mwanachamataskmanager.RelLabelDependsOn, FromID: b.ID, ToID: a.ID,
 	}); err != nil {
 		t.Fatalf("CreateRelationship depends_on: %v", err)
 	}
 	_ = a
 
-	if err := startTask(mgr, "ag", b); err != nil {
+	if err := startTask(mgr, b); err != nil {
 		t.Errorf("depends_on with non-terminal target: got %v, want nil", err)
 	}
 }

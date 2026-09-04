@@ -15,12 +15,12 @@ func TestCreateTask_WithWorkflowRunID_PersistsAndLinks(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	run, err := mgr.CreateWorkflowRun(ctx, "ag", "wfr-test", "next.requested", "tester")
+	run, err := mgr.CreateWorkflowRun(ctx, "wfr-test", "next.requested", "tester")
 	if err != nil {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
 
-	task, err := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{
+	task, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{
 		Title:         "t1",
 		WorkflowRunID: run.ID,
 	})
@@ -33,7 +33,7 @@ func TestCreateTask_WithWorkflowRunID_PersistsAndLinks(t *testing.T) {
 
 	// Re-read to confirm the property landed in storage, not just on the
 	// returned struct.
-	got, err := mgr.GetTask(ctx, "ag", task.ID)
+	got, err := mgr.GetTask(ctx, task.ID)
 	if err != nil {
 		t.Fatalf("GetTask: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestCreateTask_WithWorkflowRunID_PersistsAndLinks(t *testing.T) {
 	}
 
 	// The started_task edge from run → task must exist after CreateTask.
-	edges, err := mgr.TraverseRelationships(ctx, "ag", run.ID, mwanachamataskmanager.RelLabelStartedTask, mwanachamataskmanager.DirectionOutbound)
+	edges, err := mgr.TraverseRelationships(ctx, run.ID, mwanachamataskmanager.RelLabelStartedTask, mwanachamataskmanager.DirectionOutbound)
 	if err != nil {
 		t.Fatalf("traverse started_task: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestCreateTask_WithWorkflowRunID_PersistsAndLinks(t *testing.T) {
 
 func TestCreateTask_WithoutWorkflowRunID_LeavesEmpty(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	task, err := mgr.CreateTask(context.Background(), "ag", mwanachamataskmanager.Task{Title: "t"})
+	task, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{Title: "t"})
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
 	}
@@ -73,15 +73,15 @@ func TestListTasks_WorkflowRunIDFilter_ReturnsOnlyMatches(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	runA, _ := mgr.CreateWorkflowRun(ctx, "ag", "wfr-a", "", "")
-	runB, _ := mgr.CreateWorkflowRun(ctx, "ag", "wfr-b", "", "")
+	runA, _ := mgr.CreateWorkflowRun(ctx, "wfr-a", "", "")
+	runB, _ := mgr.CreateWorkflowRun(ctx, "wfr-b", "", "")
 
-	a1, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{Title: "a1", WorkflowRunID: runA.ID})
-	_, _ = mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{Title: "a2", WorkflowRunID: runA.ID})
-	_, _ = mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{Title: "b1", WorkflowRunID: runB.ID})
-	_, _ = mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{Title: "free"})
+	a1, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "a1", WorkflowRunID: runA.ID})
+	_, _ = mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "a2", WorkflowRunID: runA.ID})
+	_, _ = mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "b1", WorkflowRunID: runB.ID})
+	_, _ = mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "free"})
 
-	got, err := mgr.ListTasks(ctx, "ag", mwanachamataskmanager.TaskFilter{WorkflowRunID: runA.ID})
+	got, err := mgr.ListTasks(ctx, mwanachamataskmanager.TaskFilter{WorkflowRunID: runA.ID})
 	if err != nil {
 		t.Fatalf("ListTasks: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestListTasks_WorkflowRunIDFilter_ReturnsOnlyMatches(t *testing.T) {
 	}
 
 	// Sanity: unfiltered list returns all four.
-	all, _ := mgr.ListTasks(ctx, "ag", mwanachamataskmanager.TaskFilter{})
+	all, _ := mgr.ListTasks(ctx, mwanachamataskmanager.TaskFilter{})
 	if len(all) != 4 {
 		t.Errorf("unfiltered count = %d, want 4", len(all))
 	}
@@ -107,21 +107,21 @@ func TestAssignTask_InheritsRunIDWhenStoredEmpty(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
 	ctx := context.Background()
 
-	run, _ := mgr.CreateWorkflowRun(ctx, "ag", "wfr-inherit", "", "")
-	task, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{Title: "t"})
-	agent, _ := mgr.UpsertAgent(ctx, "ag", mwanachamataskmanager.Agent{AgentID: "dev-01"})
+	run, _ := mgr.CreateWorkflowRun(ctx, "wfr-inherit", "", "")
+	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "t"})
+	agent, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "dev-01"})
 
-	if err := mgr.AssignTask(ctx, "ag", task.ID, agent.ID, run.ID); err != nil {
+	if err := mgr.AssignTask(ctx, task.ID, agent.ID, run.ID); err != nil {
 		t.Fatalf("AssignTask: %v", err)
 	}
 
-	got, _ := mgr.GetTask(ctx, "ag", task.ID)
+	got, _ := mgr.GetTask(ctx, task.ID)
 	if got.WorkflowRunID != run.ID {
 		t.Errorf("Task.WorkflowRunID = %q, want %q (inherited)", got.WorkflowRunID, run.ID)
 	}
 
 	// started_task edge must have been written by AssignTask too.
-	edges, _ := mgr.TraverseRelationships(ctx, "ag", run.ID, mwanachamataskmanager.RelLabelStartedTask, mwanachamataskmanager.DirectionOutbound)
+	edges, _ := mgr.TraverseRelationships(ctx, run.ID, mwanachamataskmanager.RelLabelStartedTask, mwanachamataskmanager.DirectionOutbound)
 	found := false
 	for _, e := range edges {
 		if e.ToID == task.ID {
@@ -148,14 +148,14 @@ func TestAssignTask_SameRunID_IsIdempotent(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	run, _ := mgr.CreateWorkflowRun(ctx, "ag", "wfr-same", "", "")
-	task, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{Title: "t", WorkflowRunID: run.ID})
-	agent, _ := mgr.UpsertAgent(ctx, "ag", mwanachamataskmanager.Agent{AgentID: "dev-01"})
+	run, _ := mgr.CreateWorkflowRun(ctx, "wfr-same", "", "")
+	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "t", WorkflowRunID: run.ID})
+	agent, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "dev-01"})
 
-	if err := mgr.AssignTask(ctx, "ag", task.ID, agent.ID, run.ID); err != nil {
+	if err := mgr.AssignTask(ctx, task.ID, agent.ID, run.ID); err != nil {
 		t.Fatalf("AssignTask with same run-id: %v", err)
 	}
-	got, _ := mgr.GetTask(ctx, "ag", task.ID)
+	got, _ := mgr.GetTask(ctx, task.ID)
 	if got.WorkflowRunID != run.ID {
 		t.Errorf("WorkflowRunID drifted to %q", got.WorkflowRunID)
 	}
@@ -165,17 +165,17 @@ func TestAssignTask_MismatchedRunID_ReturnsErrWorkflowRunMismatch(t *testing.T) 
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	runA, _ := mgr.CreateWorkflowRun(ctx, "ag", "wfr-A", "", "")
-	runB, _ := mgr.CreateWorkflowRun(ctx, "ag", "wfr-B", "", "")
-	task, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{Title: "t", WorkflowRunID: runA.ID})
-	agent, _ := mgr.UpsertAgent(ctx, "ag", mwanachamataskmanager.Agent{AgentID: "dev-01"})
+	runA, _ := mgr.CreateWorkflowRun(ctx, "wfr-A", "", "")
+	runB, _ := mgr.CreateWorkflowRun(ctx, "wfr-B", "", "")
+	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "t", WorkflowRunID: runA.ID})
+	agent, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "dev-01"})
 
-	err := mgr.AssignTask(ctx, "ag", task.ID, agent.ID, runB.ID)
+	err := mgr.AssignTask(ctx, task.ID, agent.ID, runB.ID)
 	if !errors.Is(err, mwanachamataskmanager.ErrWorkflowRunMismatch) {
 		t.Fatalf("got %v, want ErrWorkflowRunMismatch", err)
 	}
 
-	got, _ := mgr.GetTask(ctx, "ag", task.ID)
+	got, _ := mgr.GetTask(ctx, task.ID)
 	if got.WorkflowRunID != runA.ID {
 		t.Errorf("WorkflowRunID changed despite rejected assign: got %q want %q", got.WorkflowRunID, runA.ID)
 	}
@@ -185,14 +185,14 @@ func TestAssignTask_EmptyRunID_PreservesStored(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	run, _ := mgr.CreateWorkflowRun(ctx, "ag", "wfr-pres", "", "")
-	task, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{Title: "t", WorkflowRunID: run.ID})
-	agent, _ := mgr.UpsertAgent(ctx, "ag", mwanachamataskmanager.Agent{AgentID: "dev-01"})
+	run, _ := mgr.CreateWorkflowRun(ctx, "wfr-pres", "", "")
+	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "t", WorkflowRunID: run.ID})
+	agent, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "dev-01"})
 
-	if err := mgr.AssignTask(ctx, "ag", task.ID, agent.ID, ""); err != nil {
+	if err := mgr.AssignTask(ctx, task.ID, agent.ID, ""); err != nil {
 		t.Fatalf("AssignTask: %v", err)
 	}
-	got, _ := mgr.GetTask(ctx, "ag", task.ID)
+	got, _ := mgr.GetTask(ctx, task.ID)
 	if got.WorkflowRunID != run.ID {
 		t.Errorf("WorkflowRunID = %q, want %q (preserved)", got.WorkflowRunID, run.ID)
 	}
@@ -202,10 +202,10 @@ func TestCreateTaskTodo_PersistsWorkflowRunID(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
 	ctx := context.Background()
 
-	run, _ := mgr.CreateWorkflowRun(ctx, "ag", "wfr-todo", "", "")
-	parent, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{Title: "p", WorkflowRunID: run.ID})
+	run, _ := mgr.CreateWorkflowRun(ctx, "wfr-todo", "", "")
+	parent, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "p", WorkflowRunID: run.ID})
 
-	todo, err := mgr.CreateTaskTodo(ctx, "ag", mwanachamataskmanager.TaskTodo{
+	todo, err := mgr.CreateTaskTodo(ctx, mwanachamataskmanager.TaskTodo{
 		Title:         "t",
 		Instructions:  "do it",
 		ParentTaskID:  parent.ID,
@@ -219,7 +219,7 @@ func TestCreateTaskTodo_PersistsWorkflowRunID(t *testing.T) {
 		t.Errorf("todo WorkflowRunID = %q, want %q", todo.WorkflowRunID, run.ID)
 	}
 
-	got, _ := mgr.GetTaskTodo(ctx, "ag", todo.ID)
+	got, _ := mgr.GetTaskTodo(ctx, todo.ID)
 	if got.WorkflowRunID != run.ID {
 		t.Errorf("re-read todo WorkflowRunID = %q, want %q", got.WorkflowRunID, run.ID)
 	}
@@ -230,8 +230,8 @@ func TestTaskCreatedPayload_CarriesWorkflowRunID(t *testing.T) {
 	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
 	ctx := context.Background()
 
-	run, _ := mgr.CreateWorkflowRun(ctx, "ag", "wfr-ev", "", "")
-	created, _ := mgr.CreateTask(ctx, "ag", mwanachamataskmanager.Task{Title: "t", WorkflowRunID: run.ID})
+	run, _ := mgr.CreateWorkflowRun(ctx, "wfr-ev", "", "")
+	created, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "t", WorkflowRunID: run.ID})
 
 	ev, ok := findEvent(pub.full, mwanachamataskmanager.TopicTaskCreated)
 	if !ok {
