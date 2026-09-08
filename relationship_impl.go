@@ -16,13 +16,12 @@ package mwanachamataskmanager
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
 	"gorm.io/gorm"
-
-	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
 )
 
 // relFieldKind selects which side of the edge holds the FK column.
@@ -140,20 +139,10 @@ func (m *taskManager) CreateRelationship(ctx context.Context, rel Relationship) 
 		var current string
 		if err := m.db.WithContext(ctx).Table(ownerTable).Where("id = ?", ownerID).
 			Select(spec.fkColumn).Row().Scan(&current); err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
+			if errors.Is(err, sql.ErrNoRows) {
 				return Relationship{}, ownerNotFound
 			}
 			return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
-		}
-		if current == "" {
-			// distinguish "row missing" from "fk empty" — Scan above only
-			// errors on missing row, so re-check existence explicitly when
-			// current is empty to give the right not-found error.
-			if exists, err := m.rowExists(ctx, ownerTable, ownerID); err != nil {
-				return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
-			} else if !exists {
-				return Relationship{}, ownerNotFound
-			}
 		}
 		wantValue := otherID
 		if current != wantValue {
