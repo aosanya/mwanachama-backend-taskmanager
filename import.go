@@ -6,12 +6,12 @@
 // blocking call. For large documents the async path is preferred.
 //
 // The async flow:
-//  1. StartImportProject creates an ImportProjectJob entity (status=pending)
+//  1. StartImportProject creates an ImportProjectJob row (status=pending)
 //     and returns immediately.
 //  2. A background goroutine parses the document, creates all entities, and
 //     transitions the job through pending → running → completed | failed |
 //     cancelled.
-//  3. GetImportProjectStatus polls the stored entity and augments the result
+//  3. GetImportProjectStatus polls the stored row and augments the result
 //     with in-memory progress steps while the goroutine is alive.
 //  4. CancelImportProject signals the goroutine via context cancellation.
 package mwanachamataskmanager
@@ -25,10 +25,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
-)
+	"gorm.io/gorm"
 
-// ── Status constants ──────────────────────────────────────────────────────────
+	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
+)
 
 const (
 	importJobStatusPending   = "pending"
@@ -37,11 +37,6 @@ const (
 	importJobStatusFailed    = "failed"
 	importJobStatusCancelled = "cancelled"
 )
-
-// importJobTypeID is the TypeDefinition.Name for ImportProjectJob entities.
-const importJobTypeID = "ImportProjectJob"
-
-// ── In-process job tracking ───────────────────────────────────────────────────
 
 // importJobEntry holds the cancel function and in-memory progress log for an
 // in-flight import goroutine.
@@ -70,8 +65,6 @@ var (
 	importJobs   = make(map[string]*importJobEntry)
 )
 
-// ── JSON document schema ──────────────────────────────────────────────────────
-
 // importDoc is the JSON schema for a project import document.
 type importDoc struct {
 	Project    string       `json:"project"`
@@ -89,8 +82,6 @@ type importTask struct {
 	SeparateBranch bool     `json:"separate_branch"`
 	BranchName     string   `json:"branch_name"`
 }
-
-// ── Public interface methods ──────────────────────────────────────────────────
 
 // ImportProject is a synchronous wrapper: it calls StartImportProject, then
 // blocks until the background goroutine finishes, and returns the result.
@@ -133,30 +124,23 @@ func (m *taskManager) ImportProject(ctx context.Context, document string) (Impor
 	}
 }
 
-// StartImportProject validates the document, creates an ImportProjectJob entity,
-// starts the background goroutine, and returns immediately.
+// StartImportProject validates the document, creates an ImportProjectJob
+// row, starts the background goroutine, and returns immediately.
 func (m *taskManager) StartImportProject(ctx context.Context, document string) (ImportProjectJob, error) {
-	// Validate the document before creating any entities.
 	if err := validateImportDoc(document); err != nil {
 		return ImportProjectJob{}, err
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	jobEntity, err := m.dm.CreateEntity(ctx, entitygraph.CreateEntityRequest{
-		TypeID: importJobTypeID,
-		Properties: map[string]any{
-			"status":        importJobStatusPending,
-			"error_message": "",
-			"tasks_created": 0,
-			"deps_created":  0,
-			"created_at":    now,
-			"updated_at":    now,
-		},
+	row := gormstore.ImportProjectJobToRow(ImportProjectJob{
+		Status:    importJobStatusPending,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
-	if err != nil {
+	if err := m.db.WithContext(ctx).Table(m.tables.ImportProjectJobs).Create(&row).Error; err != nil {
 		return ImportProjectJob{}, fmt.Errorf("StartImportProject: create job: %w", err)
 	}
-	job := importProjectJobFromEntity(jobEntity)
+	job := gormstore.ImportProjectJobFromRow(row)
 
 	jobCtx, cancel := context.WithCancel(context.Background())
 	entry := &importJobEntry{cancel: cancel}
@@ -171,17 +155,15 @@ func (m *taskManager) StartImportProject(ctx context.Context, document string) (
 
 // GetImportProjectStatus returns the current state of an async import job.
 func (m *taskManager) GetImportProjectStatus(ctx context.Context, jobID string) (ImportProjectJob, error) {
-	entity, err := m.dm.GetEntity(ctx, jobID)
+	var row gormstore.ImportProjectJobRow
+	err := m.db.WithContext(ctx).Table(m.tables.ImportProjectJobs).Where("id = ?", jobID).First(&row).Error
 	if err != nil {
-		if errors.Is(err, entitygraph.ErrEntityNotFound) {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ImportProjectJob{}, ErrImportJobNotFound
 		}
 		return ImportProjectJob{}, fmt.Errorf("GetImportProjectStatus: %w", err)
 	}
-	if entity.TypeID != importJobTypeID {
-		return ImportProjectJob{}, ErrImportJobNotFound
-	}
-	job := importProjectJobFromEntity(entity)
+	job := gormstore.ImportProjectJobFromRow(row)
 
 	importJobsMu.Lock()
 	entry, ok := importJobs[jobID]
@@ -288,9 +270,6 @@ func (m *taskManager) runImport(ctx context.Context, jobID, document string, ent
 				Label:  RelLabelDependsOn,
 				FromID: fromID,
 				ToID:   toID,
-				Properties: map[string]any{
-					"created_at": time.Now().UTC().Format(time.RFC3339),
-				},
 			})
 			if err != nil {
 				m.failImportJob(ctx, jobID, fmt.Sprintf("depends_on %s→%s: %v", it.Name, depShortID, err))
@@ -300,92 +279,34 @@ func (m *taskManager) runImport(ctx context.Context, jobID, document string, ent
 		}
 	}
 
-	entry.appendStep("Writing tag entities and edges…")
-	// tagIDMap maps tag name → entity ID, built once to avoid duplicate upserts.
-	tagIDMap := make(map[string]string)
-	for _, it := range doc.Tasks {
-		for _, tagName := range it.Tags {
-			if _, seen := tagIDMap[tagName]; seen {
-				continue
-			}
-			now := time.Now().UTC().Format(time.RFC3339)
-			tagEntity, err := m.dm.UpsertEntity(ctx, entitygraph.CreateEntityRequest{
-				TypeID: tagTypeID,
-				Properties: map[string]any{
-					"name":       tagName,
-					"created_at": now,
-					"updated_at": now,
-				},
-			})
-			if err != nil {
-				m.failImportJob(ctx, jobID, fmt.Sprintf("upsert tag %q: %v", tagName, err))
-				return
-			}
-			tagIDMap[tagName] = tagEntity.ID
-		}
-	}
-	for _, it := range doc.Tasks {
-		shortKey := strings.TrimPrefix(it.Name, doc.TaskPrefix)
-		taskID := idMap[shortKey]
-		for _, tagName := range it.Tags {
-			tagID := tagIDMap[tagName]
-			_, err := m.CreateRelationship(ctx, Relationship{
-				Label:  RelLabelHasTag,
-				FromID: taskID,
-				ToID:   tagID,
-				Properties: map[string]any{
-					"tagged_at": time.Now().UTC().Format(time.RFC3339),
-				},
-			})
-			if err != nil {
-				m.failImportJob(ctx, jobID, fmt.Sprintf("has_tag %s→%q: %v", it.Name, tagName, err))
-				return
-			}
-		}
-	}
+	// Tag entities + has_tag edges were already written by CreateTask above
+	// (via setTaskTags) for each task's own Tags — nothing left to do here.
 
 	entry.appendStep(fmt.Sprintf("Done: %d tasks, %d deps.", tasksCreated, depsCreated))
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, _ = m.dm.UpdateEntity(context.Background(), jobID, entitygraph.UpdateEntityRequest{
-		Properties: map[string]any{
+	_ = m.db.WithContext(context.Background()).Table(m.tables.ImportProjectJobs).Where("id = ?", jobID).
+		Updates(map[string]any{
 			"status":        importJobStatusCompleted,
 			"tasks_created": tasksCreated,
 			"deps_created":  depsCreated,
 			"project_name":  proj.ProjectName,
 			"updated_at":    now,
-		},
-	})
+		}).Error
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 func (m *taskManager) updateImportJobStatus(ctx context.Context, jobID, status, errMsg string) error {
-	_, err := m.dm.UpdateEntity(ctx, jobID, entitygraph.UpdateEntityRequest{
-		Properties: map[string]any{
+	return m.db.WithContext(ctx).Table(m.tables.ImportProjectJobs).Where("id = ?", jobID).
+		Updates(map[string]any{
 			"status":        status,
 			"error_message": errMsg,
 			"updated_at":    time.Now().UTC().Format(time.RFC3339),
-		},
-	})
-	return err
+		}).Error
 }
 
 func (m *taskManager) failImportJob(ctx context.Context, jobID, errMsg string) {
 	_ = m.updateImportJobStatus(context.Background(), jobID, importJobStatusFailed, errMsg)
-}
-
-// importProjectJobFromEntity converts an entity to an ImportProjectJob.
-func importProjectJobFromEntity(e entitygraph.Entity) ImportProjectJob {
-	return ImportProjectJob{
-		ID:           e.ID,
-		Status:       entitygraph.StringProp(e.Properties, "status"),
-		ErrorMessage: entitygraph.StringProp(e.Properties, "error_message"),
-		TasksCreated: int(entitygraph.Int64Prop(e.Properties, "tasks_created")),
-		DepsCreated:  int(entitygraph.Int64Prop(e.Properties, "deps_created")),
-		ProjectName:  entitygraph.StringProp(e.Properties, "project_name"),
-		CreatedAt:    entitygraph.StringProp(e.Properties, "created_at"),
-		UpdatedAt:    entitygraph.StringProp(e.Properties, "updated_at"),
-	}
 }
 
 // validateImportDoc parses and validates the document structure without side effects.
