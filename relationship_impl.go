@@ -20,8 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"time"
-
-	"gorm.io/gorm"
 )
 
 // relFieldKind selects which side of the edge holds the FK column.
