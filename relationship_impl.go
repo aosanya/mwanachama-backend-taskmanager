@@ -202,7 +202,7 @@ func (m *taskManager) DeleteRelationship(ctx context.Context, fromID, toID, labe
 		var current string
 		if err := m.db.WithContext(ctx).Table(ownerTable).Where("id = ?", ownerID).
 			Select(spec.fkColumn).Row().Scan(&current); err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
+			if errors.Is(err, sql.ErrNoRows) {
 				return ErrRelationshipNotFound
 			}
 			return fmt.Errorf("DeleteRelationship: %w", err)
@@ -259,7 +259,7 @@ func (m *taskManager) traverseFK(ctx context.Context, spec relSpec, vertexID str
 		err := m.db.WithContext(ctx).Table(ownerTable).Where("id = ?", vertexID).
 			Select(spec.fkColumn).Row().Scan(&value)
 		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, sqlNoRowsSentinel) {
+			if errors.Is(err, sql.ErrNoRows) {
 				return nil, nil
 			}
 			return nil, fmt.Errorf("TraverseRelationships: %w", err)
