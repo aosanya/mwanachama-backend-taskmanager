@@ -6,14 +6,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
+	"gorm.io/gorm"
+
+	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
 )
 
-// CreateTaskTodo creates a TaskTodo entity in the graph.
-// Todos with non-empty DependsOn start as [TodoStatusBlocked] and are NOT
-// dispatched — the caller must call [DispatchTaskTodo] once their predecessors
-// complete. Todos with no dependencies start as [TodoStatusPending]; callers
-// should call [DispatchTaskTodo] immediately after creation.
+// CreateTaskTodo creates a TaskTodo row. Todos with non-empty DependsOn
+// start as [TodoStatusBlocked] and are NOT dispatched — the caller must
+// call [DispatchTaskTodo] once their predecessors complete. Todos with no
+// dependencies start as [TodoStatusPending]; callers should call
+// [DispatchTaskTodo] immediately after creation.
 func (m *taskManager) CreateTaskTodo(ctx context.Context, todo TaskTodo) (TaskTodo, error) {
 	if todo.Title == "" || todo.Instructions == "" || todo.ParentTaskID == "" {
 		return TaskTodo{}, fmt.Errorf("%w: title, instructions, and parent_task_id are required", ErrInvalidTask)
@@ -27,19 +29,16 @@ func (m *taskManager) CreateTaskTodo(ctx context.Context, todo TaskTodo) (TaskTo
 	todo.CreatedAt = now
 	todo.UpdatedAt = now
 
-	created, err := m.dm.CreateEntity(ctx, entitygraph.CreateEntityRequest{
-		TypeID:     taskTodoTypeID,
-		Properties: taskTodoToProperties(todo),
-	})
-	if err != nil {
+	row := gormstore.TaskTodoToRow(todo)
+	if err := m.db.WithContext(ctx).Table(m.tables.TaskTodos).Create(&row).Error; err != nil {
 		return TaskTodo{}, fmt.Errorf("CreateTaskTodo: %w", err)
 	}
-	return taskTodoFromEntity(created), nil
+	return gormstore.TaskTodoFromRow(row), nil
 }
 
 // DispatchTaskTodo publishes [TopicTodoDispatched] for an existing todo so
-// agents can pick it up. If the todo is currently [TodoStatusBlocked], it is
-// first advanced to [TodoStatusPending].
+// agents can pick it up. If the todo is currently [TodoStatusBlocked], it
+// is first advanced to [TodoStatusPending].
 func (m *taskManager) DispatchTaskTodo(ctx context.Context, todoID string) error {
 	todo, err := m.GetTaskTodo(ctx, todoID)
 	if err != nil {
@@ -47,16 +46,12 @@ func (m *taskManager) DispatchTaskTodo(ctx context.Context, todoID string) error
 	}
 	if todo.Status == TodoStatusBlocked {
 		now := time.Now().UTC().Format(time.RFC3339)
-		updated, err := m.dm.UpdateEntity(ctx, todoID, entitygraph.UpdateEntityRequest{
-			Properties: map[string]any{
-				"status":     string(TodoStatusPending),
-				"updated_at": now,
-			},
-		})
-		if err != nil {
+		if err := m.db.WithContext(ctx).Table(m.tables.TaskTodos).Where("id = ?", todoID).
+			Updates(map[string]any{"status": string(TodoStatusPending), "updated_at": now}).Error; err != nil {
 			return fmt.Errorf("DispatchTaskTodo: unblock %s: %w", todoID, err)
 		}
-		todo = taskTodoFromEntity(updated)
+		todo.Status = TodoStatusPending
+		todo.UpdatedAt = now
 	}
 	m.publish(ctx, TopicTodoDispatched, TodoDispatchedPayload{
 		TodoID:         todo.ID,
@@ -75,19 +70,18 @@ func (m *taskManager) DispatchTaskTodo(ctx context.Context, todoID string) error
 	return nil
 }
 
-// GetTaskTodo reads a single TaskTodo entity from the graph.
+// GetTaskTodo reads a single TaskTodo row.
 func (m *taskManager) GetTaskTodo(ctx context.Context, todoID string) (TaskTodo, error) {
-	e, err := m.dm.GetEntity(ctx, todoID)
+	var row gormstore.TaskTodoRow
+	err := m.db.WithContext(ctx).Table(m.tables.TaskTodos).
+		Where("id = ? AND deleted = ?", todoID, false).First(&row).Error
 	if err != nil {
-		if errors.Is(err, entitygraph.ErrEntityNotFound) {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return TaskTodo{}, ErrTaskTodoNotFound
 		}
 		return TaskTodo{}, fmt.Errorf("GetTaskTodo: %w", err)
 	}
-	if e.TypeID != taskTodoTypeID {
-		return TaskTodo{}, ErrTaskTodoNotFound
-	}
-	return taskTodoFromEntity(e), nil
+	return gormstore.TaskTodoFromRow(row), nil
 }
 
 // UpdateTaskTodoStatus transitions a TaskTodo to a new [TodoStatus].
@@ -96,17 +90,9 @@ func (m *taskManager) UpdateTaskTodoStatus(ctx context.Context, todoID string, s
 		return TaskTodo{}, err
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	updated, err := m.dm.UpdateEntity(ctx, todoID, entitygraph.UpdateEntityRequest{
-		Properties: map[string]any{
-			"status":     string(status),
-			"updated_at": now,
-		},
-	})
-	if err != nil {
-		if errors.Is(err, entitygraph.ErrEntityNotFound) {
-			return TaskTodo{}, ErrTaskTodoNotFound
-		}
+	if err := m.db.WithContext(ctx).Table(m.tables.TaskTodos).Where("id = ?", todoID).
+		Updates(map[string]any{"status": string(status), "updated_at": now}).Error; err != nil {
 		return TaskTodo{}, fmt.Errorf("UpdateTaskTodoStatus: %w", err)
 	}
-	return taskTodoFromEntity(updated), nil
+	return m.GetTaskTodo(ctx, todoID)
 }

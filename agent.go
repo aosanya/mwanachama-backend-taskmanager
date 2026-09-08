@@ -4,80 +4,91 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
-	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
+	"gorm.io/gorm"
+
+	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
 )
 
-// UpsertAgent creates or merges an Agent vertex keyed by (agent_id).
+// UpsertAgent creates or merges an Agent row keyed by (agent_id).
 //
-// On the merge branch, display_name and capability are updated to the request
-// values; agent_id is treated as immutable (the natural key cannot change).
+// On the merge branch, display_name and capability are updated to the
+// request values; agent_id is treated as immutable (the natural key cannot
+// change).
 func (m *taskManager) UpsertAgent(ctx context.Context, agent Agent) (Agent, error) {
 	if agent.AgentID == "" {
 		return Agent{}, fmt.Errorf("%w: AgentID is required", ErrInvalidTask)
 	}
-	upserted, err := m.dm.UpsertEntity(ctx, entitygraph.CreateEntityRequest{
-		TypeID:     agentTypeID,
-		Properties: agentToProperties(agent),
-	})
-	if err != nil {
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	var existing gormstore.AgentRow
+	err := m.db.WithContext(ctx).Table(m.tables.Agents).Where("agent_id = ?", agent.AgentID).First(&existing).Error
+	switch {
+	case err == nil:
+		existing.DisplayName = agent.DisplayName
+		existing.Capability = agent.Capability
+		existing.RoleName = agent.RoleName
+		existing.UpdatedAt = now
+		if err := m.db.WithContext(ctx).Table(m.tables.Agents).Where("id = ?", existing.ID).Save(&existing).Error; err != nil {
+			return Agent{}, fmt.Errorf("UpsertAgent: %w", err)
+		}
+		return gormstore.AgentFromRow(existing), nil
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		agent.CreatedAt = now
+		agent.UpdatedAt = now
+		row := gormstore.AgentToRow(agent)
+		if err := m.db.WithContext(ctx).Table(m.tables.Agents).Create(&row).Error; err != nil {
+			return Agent{}, fmt.Errorf("UpsertAgent: %w", err)
+		}
+		return gormstore.AgentFromRow(row), nil
+	default:
 		return Agent{}, fmt.Errorf("UpsertAgent: %w", err)
 	}
-	return agentFromEntity(upserted), nil
 }
 
-// GetAgent reads an Agent vertex by either its entity ID (the storage UUID) or
-// its external AgentID slug (e.g. "developer-01"). UUID lookup is tried first;
-// on NotFound it falls back to a slug match against all Agents. This mirrors
-// UpsertAgent's slug-first semantics so HTTP routes that bind {agentId} can
-// be passed either form without the caller knowing which.
-// Returns [ErrAgentNotFound] if no match is found.
+// GetAgent reads an Agent row by either its entity ID (the storage UUID) or
+// its external AgentID slug (e.g. "developer-01"). ID lookup is tried
+// first; on NotFound it falls back to a slug match. Returns
+// [ErrAgentNotFound] if no match is found.
 func (m *taskManager) GetAgent(ctx context.Context, idOrSlug string) (Agent, error) {
-	e, err := m.dm.GetEntity(ctx, idOrSlug)
+	var row gormstore.AgentRow
+	err := m.db.WithContext(ctx).Table(m.tables.Agents).Where("id = ?", idOrSlug).First(&row).Error
 	if err == nil {
-		if e.TypeID != agentTypeID {
-			return Agent{}, ErrAgentNotFound
-		}
-		return agentFromEntity(e), nil
+		return gormstore.AgentFromRow(row), nil
 	}
-	if !errors.Is(err, entitygraph.ErrEntityNotFound) {
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return Agent{}, fmt.Errorf("GetAgent: %w", err)
 	}
-	// Fallback: treat the argument as the AgentID slug.
 	return m.GetAgentByAgentID(ctx, idOrSlug)
 }
 
-// GetAgentByAgentID reads an Agent vertex by its external AgentID slug
-// (e.g. "developer-01") — the same field UpsertAgent uses as the natural key.
-// Returns [ErrAgentNotFound] if no Agent has that slug.
+// GetAgentByAgentID reads an Agent row by its external AgentID slug (e.g.
+// "developer-01"). Returns [ErrAgentNotFound] if no Agent has that slug.
 func (m *taskManager) GetAgentByAgentID(ctx context.Context, agentIDSlug string) (Agent, error) {
 	if agentIDSlug == "" {
 		return Agent{}, ErrAgentNotFound
 	}
-	entities, err := m.dm.ListEntities(ctx, entitygraph.EntityFilter{
-		TypeID:     agentTypeID,
-		Properties: map[string]any{"agent_id": agentIDSlug},
-	})
+	var row gormstore.AgentRow
+	err := m.db.WithContext(ctx).Table(m.tables.Agents).Where("agent_id = ?", agentIDSlug).First(&row).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return Agent{}, ErrAgentNotFound
+		}
 		return Agent{}, fmt.Errorf("GetAgentByAgentID: %w", err)
 	}
-	if len(entities) == 0 {
-		return Agent{}, ErrAgentNotFound
-	}
-	return agentFromEntity(entities[0]), nil
+	return gormstore.AgentFromRow(row), nil
 }
 
-// ListAgents returns all non-deleted Agents.
+// ListAgents returns all Agents.
 func (m *taskManager) ListAgents(ctx context.Context) ([]Agent, error) {
-	entities, err := m.dm.ListEntities(ctx, entitygraph.EntityFilter{
-		TypeID: agentTypeID,
-	})
-	if err != nil {
+	var rows []gormstore.AgentRow
+	if err := m.db.WithContext(ctx).Table(m.tables.Agents).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("ListAgents: %w", err)
 	}
-	out := make([]Agent, 0, len(entities))
-	for _, e := range entities {
-		out = append(out, agentFromEntity(e))
+	out := make([]Agent, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, gormstore.AgentFromRow(r))
 	}
 	return out, nil
 }

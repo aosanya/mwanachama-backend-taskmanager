@@ -7,18 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
-)
+	"gorm.io/gorm"
 
-// effectiveTaskPrefix returns the prefix to use when auto-generating task names
-// for p. If p.TaskPrefix is set it is used directly; otherwise it defaults to
-// "<project_name>-".
-func (p Project) effectiveTaskPrefix() string {
-	if p.TaskPrefix != "" {
-		return p.TaskPrefix
-	}
-	return p.ProjectName + "-"
-}
+	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
+)
 
 // toSlug converts a project name to a URL-safe slug: lowercase with spaces
 // replaced by underscores.
@@ -26,7 +18,7 @@ func toSlug(name string) string {
 	return strings.ToLower(strings.ReplaceAll(name, " ", "_"))
 }
 
-// CreateProject creates a new Project vertex in the graph.
+// CreateProject creates a new Project row.
 func (m *taskManager) CreateProject(ctx context.Context, p Project) (Project, error) {
 	if p.Name == "" {
 		return Project{}, fmt.Errorf("%w: Project.Name is required", ErrInvalidTask)
@@ -35,54 +27,44 @@ func (m *taskManager) CreateProject(ctx context.Context, p Project) (Project, er
 	p.ProjectName = toSlug(p.Name)
 	p.CreatedAt = now
 	p.UpdatedAt = now
-	created, err := m.dm.CreateEntity(ctx, entitygraph.CreateEntityRequest{
-		TypeID:     projectTypeID,
-		Properties: projectToProperties(p),
-	})
-	if err != nil {
-		if errors.Is(err, entitygraph.ErrEntityAlreadyExists) {
-			return Project{}, ErrProjectAlreadyExists
-		}
+
+	row := gormstore.ProjectToRow(p)
+	if err := m.db.WithContext(ctx).Table(m.tables.Projects).Create(&row).Error; err != nil {
 		return Project{}, fmt.Errorf("CreateProject: %w", err)
 	}
-	return projectFromEntity(created), nil
+	return gormstore.ProjectFromRow(row), nil
 }
 
-// GetProject reads a single Project by its entity ID.
+// GetProject reads a single Project by its ID.
 func (m *taskManager) GetProject(ctx context.Context, projectID string) (Project, error) {
-	e, err := m.dm.GetEntity(ctx, projectID)
+	var row gormstore.ProjectRow
+	err := m.db.WithContext(ctx).Table(m.tables.Projects).
+		Where("id = ? AND deleted = ?", projectID, false).First(&row).Error
 	if err != nil {
-		if errors.Is(err, entitygraph.ErrEntityNotFound) {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return Project{}, ErrProjectNotFound
 		}
 		return Project{}, fmt.Errorf("GetProject: %w", err)
 	}
-	if e.TypeID != projectTypeID {
-		return Project{}, ErrProjectNotFound
-	}
-	return projectFromEntity(e), nil
+	return gormstore.ProjectFromRow(row), nil
 }
 
-// GetProjectByName retrieves a Project by its slug (project_name property).
+// GetProjectByName retrieves a Project by its slug (project_name column).
 // The caller-supplied projectName is normalized through [toSlug] so that
 // display-name casing (e.g. "SharedFarms") resolves to the stored lowercase
-// slug ("sharedfarms"). This keeps lookup symmetric with [CreateProject],
-// which slugifies via the same helper.
+// slug ("sharedfarms"), symmetric with [CreateProject].
 func (m *taskManager) GetProjectByName(ctx context.Context, projectName string) (Project, error) {
 	slug := toSlug(projectName)
-	entities, err := m.dm.ListEntities(ctx, entitygraph.EntityFilter{
-		TypeID: projectTypeID,
-	})
+	var row gormstore.ProjectRow
+	err := m.db.WithContext(ctx).Table(m.tables.Projects).
+		Where("project_name = ? AND deleted = ?", slug, false).First(&row).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return Project{}, ErrProjectNotFound
+		}
 		return Project{}, fmt.Errorf("GetProjectByName: %w", err)
 	}
-	for _, e := range entities {
-		p := projectFromEntity(e)
-		if p.ProjectName == slug {
-			return p, nil
-		}
-	}
-	return Project{}, ErrProjectNotFound
+	return gormstore.ProjectFromRow(row), nil
 }
 
 // UpdateProject patches the mutable fields of an existing Project.
@@ -97,40 +79,25 @@ func (m *taskManager) UpdateProject(ctx context.Context, p Project) (Project, er
 	p.CreatedAt = current.CreatedAt
 	p.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 
-	updated, err := m.dm.UpdateEntity(ctx, p.ID, entitygraph.UpdateEntityRequest{
-		Properties: projectToProperties(p),
-	})
-	if err != nil {
-		if errors.Is(err, entitygraph.ErrEntityNotFound) {
-			return Project{}, ErrProjectNotFound
-		}
+	row := gormstore.ProjectToRow(p)
+	if err := m.db.WithContext(ctx).Table(m.tables.Projects).Where("id = ?", p.ID).Save(&row).Error; err != nil {
 		return Project{}, fmt.Errorf("UpdateProject: %w", err)
 	}
-	return projectFromEntity(updated), nil
+	return gormstore.ProjectFromRow(row), nil
 }
 
-// DeleteProject soft-deletes the Project vertex AND hard-deletes every
-// inbound `member_of` edge.
+// DeleteProject soft-deletes the Project row AND removes every inbound
+// `member_of` edge.
 func (m *taskManager) DeleteProject(ctx context.Context, projectID string) error {
 	if _, err := m.GetProject(ctx, projectID); err != nil {
 		return err
 	}
-	edges, err := m.TraverseRelationships(ctx, projectID, RelLabelMemberOf, DirectionInbound)
-	if err != nil {
-		return fmt.Errorf("DeleteProject: traverse: %w", err)
+	if err := m.db.WithContext(ctx).Table(m.tables.TaskProjectMemberships).
+		Where("project_id = ?", projectID).Delete(nil).Error; err != nil {
+		return fmt.Errorf("DeleteProject: clear memberships: %w", err)
 	}
-	for _, e := range edges {
-		if err := m.dm.DeleteRelationship(ctx, e.ID); err != nil {
-			if errors.Is(err, entitygraph.ErrRelationshipNotFound) {
-				continue
-			}
-			return fmt.Errorf("DeleteProject: delete edge %s: %w", e.ID, err)
-		}
-	}
-	if err := m.dm.DeleteEntity(ctx, projectID); err != nil {
-		if errors.Is(err, entitygraph.ErrEntityNotFound) {
-			return ErrProjectNotFound
-		}
+	if err := m.db.WithContext(ctx).Table(m.tables.Projects).Where("id = ?", projectID).
+		UpdateColumn("deleted", true).Error; err != nil {
 		return fmt.Errorf("DeleteProject: %w", err)
 	}
 	return nil
@@ -138,15 +105,13 @@ func (m *taskManager) DeleteProject(ctx context.Context, projectID string) error
 
 // ListProjects returns all non-deleted Projects.
 func (m *taskManager) ListProjects(ctx context.Context) ([]Project, error) {
-	entities, err := m.dm.ListEntities(ctx, entitygraph.EntityFilter{
-		TypeID: projectTypeID,
-	})
-	if err != nil {
+	var rows []gormstore.ProjectRow
+	if err := m.db.WithContext(ctx).Table(m.tables.Projects).Where("deleted = ?", false).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("ListProjects: %w", err)
 	}
-	out := make([]Project, 0, len(entities))
-	for _, e := range entities {
-		out = append(out, projectFromEntity(e))
+	out := make([]Project, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, gormstore.ProjectFromRow(r))
 	}
 	return out, nil
 }
@@ -157,9 +122,6 @@ func (m *taskManager) AddTaskToProject(ctx context.Context, taskID, projectID st
 		Label:  RelLabelMemberOf,
 		FromID: taskID,
 		ToID:   projectID,
-		Properties: map[string]any{
-			"added_at": time.Now().UTC().Format(time.RFC3339),
-		},
 	})
 	if err != nil {
 		return fmt.Errorf("AddTaskToProject: %w", err)
@@ -241,7 +203,7 @@ func (m *taskManager) CreateTaskInProject(ctx context.Context, projectName strin
 	if err != nil {
 		return Task{}, fmt.Errorf("CreateTaskInProject: count existing: %w", err)
 	}
-	task.TaskName = fmt.Sprintf("%s%03d", project.effectiveTaskPrefix(), len(existing)+1)
+	task.TaskName = fmt.Sprintf("%s%03d", project.EffectiveTaskPrefix(), len(existing)+1)
 	task.ProjectName = projectName
 
 	created, err := m.CreateTask(ctx, task)

@@ -1,11 +1,4 @@
 // task_impl_task.go — core Task CRUD implementation for [taskManager].
-//
-// Project operations are in project.go.
-// Assignment operations are in assignment.go.
-// Agent operations are in agent.go.
-// Relationship operations are in relationship.go.
-// Import operations land in task_impl_import.go (W8).
-// Entity↔domain converters are in task_impl_converters.go.
 package mwanachamataskmanager
 
 import (
@@ -16,14 +9,16 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
+	"gorm.io/gorm"
+
+	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
 )
 
-// CreateTask creates a Task entity in the graph.
+// CreateTask creates a Task row.
 //
 // When task.WorkflowRunID is non-empty, the task is also linked to the named
-// run via the started_task edge (denormalised + graph edge — see the
-// chain-through behaviour on [TaskManager.AssignTask]). The edge write is
+// run via the started_task edge (denormalised WorkflowRunID column — see
+// [TaskManager.AssignTask]'s chain-through behaviour). The edge write is
 // best-effort: a failure is logged but does not roll back the task creation.
 func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -35,24 +30,25 @@ func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
 	}
 	task.CompletedAt = ""
 
-	created, err := m.dm.CreateEntity(ctx, entitygraph.CreateEntityRequest{
-		TypeID:     taskTypeID,
-		Properties: taskToProperties(task),
-	})
-	if err != nil {
-		if errors.Is(err, entitygraph.ErrEntityAlreadyExists) {
-			return Task{}, ErrTaskAlreadyExists
-		}
+	row := gormstore.TaskToRow(task)
+	if err := m.db.WithContext(ctx).Table(m.tables.Tasks).Create(&row).Error; err != nil {
 		return Task{}, fmt.Errorf("CreateTask: %w", err)
 	}
 
-	out := taskFromEntity(created)
+	out := gormstore.TaskFromRow(row)
 	if task.WorkflowRunID != "" {
 		if err := m.LinkTaskToRun(ctx, task.WorkflowRunID, out.ID); err != nil {
 			log.Printf("mwanachamataskmanager: CreateTask: LinkTaskToRun run=%s task=%s: %v",
 				task.WorkflowRunID, out.ID, err)
 		}
+		out.WorkflowRunID = task.WorkflowRunID
 	}
+	if len(task.Tags) > 0 {
+		if err := m.setTaskTags(ctx, out.ID, task.Tags); err != nil {
+			log.Printf("mwanachamataskmanager: CreateTask: setTaskTags task=%s: %v", out.ID, err)
+		}
+	}
+	out.Tags = m.loadTagNames(ctx, out.ID)
 	m.publish(ctx, TopicTaskCreated, TaskCreatedPayload{
 		TaskID:        out.ID,
 		Priority:      out.Priority,
@@ -61,26 +57,24 @@ func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
 	return out, nil
 }
 
-// GetTask reads a single Task entity from the graph.
+// GetTask reads a single Task row.
 func (m *taskManager) GetTask(ctx context.Context, taskID string) (Task, error) {
-	e, err := m.dm.GetEntity(ctx, taskID)
+	var row gormstore.TaskRow
+	err := m.db.WithContext(ctx).Table(m.tables.Tasks).
+		Where("id = ? AND deleted = ?", taskID, false).First(&row).Error
 	if err != nil {
-		if errors.Is(err, entitygraph.ErrEntityNotFound) {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return Task{}, ErrTaskNotFound
 		}
 		return Task{}, fmt.Errorf("GetTask: %w", err)
 	}
-	if e.TypeID != taskTypeID {
-		return Task{}, ErrTaskNotFound
-	}
-	t := taskFromEntity(e)
+	t := gormstore.TaskFromRow(row)
 	t.Tags = m.loadTagNames(ctx, t.ID)
-	t.AssignedTo = m.loadAssigneeID(ctx, t.ID)
 	return t, nil
 }
 
 // UpdateTask validates the requested status transition then patches the
-// stored entity properties.
+// stored row.
 //
 // The pending → in_progress transition is additionally gated by the blocker
 // rule: any inbound `blocks` edge whose source task has not reached a
@@ -107,20 +101,23 @@ func (m *taskManager) UpdateTask(ctx context.Context, task Task) (Task, error) {
 	if isTerminalStatus(task.Status) && task.CompletedAt == "" {
 		task.CompletedAt = now
 	}
-
-	updated, err := m.dm.UpdateEntity(ctx, task.ID, entitygraph.UpdateEntityRequest{
-		Properties: taskToProperties(task),
-	})
-	if err != nil {
-		if errors.Is(err, entitygraph.ErrEntityNotFound) {
-			return Task{}, ErrTaskNotFound
-		}
-		return Task{}, fmt.Errorf("UpdateTask: %w", err)
+	task.AssignedTo = current.AssignedTo
+	if task.WorkflowRunID == "" {
+		task.WorkflowRunID = current.WorkflowRunID
 	}
 
-	out := taskFromEntity(updated)
+	row := gormstore.TaskToRow(task)
+	if err := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("id = ?", task.ID).
+		Save(&row).Error; err != nil {
+		return Task{}, fmt.Errorf("UpdateTask: %w", err)
+	}
+	if err := m.setTaskTags(ctx, task.ID, task.Tags); err != nil {
+		log.Printf("mwanachamataskmanager: UpdateTask: setTaskTags task=%s: %v", task.ID, err)
+	}
 
-	// If workflow_run_id was just stamped for the first time, create the started_task edge.
+	out := gormstore.TaskFromRow(row)
+	out.Tags = m.loadTagNames(ctx, out.ID)
+
 	if out.WorkflowRunID != "" && current.WorkflowRunID == "" {
 		if err := m.LinkTaskToRun(ctx, out.WorkflowRunID, out.ID); err != nil {
 			slog.WarnContext(ctx, "UpdateTask: LinkTaskToRun", "run_id", out.WorkflowRunID, "task_id", out.ID, "err", err)
@@ -157,85 +154,108 @@ func (m *taskManager) UpdateTask(ctx context.Context, task Task) (Task, error) {
 	return out, nil
 }
 
-// DeleteTask soft-deletes the Task entity.
+// DeleteTask soft-deletes the Task row.
 func (m *taskManager) DeleteTask(ctx context.Context, taskID string) error {
 	if _, err := m.GetTask(ctx, taskID); err != nil {
 		return err
 	}
-	if err := m.dm.DeleteEntity(ctx, taskID); err != nil {
-		if errors.Is(err, entitygraph.ErrEntityNotFound) {
-			return ErrTaskNotFound
-		}
+	if err := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("id = ?", taskID).
+		UpdateColumn("deleted", true).Error; err != nil {
 		return fmt.Errorf("DeleteTask: %w", err)
 	}
 	return nil
 }
 
-// ListTasks returns all non-deleted Task entities that match the filter.
+// ListTasks returns all non-deleted Task rows that match the filter.
 func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task, error) {
-	props := map[string]any{}
+	q := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("deleted = ?", false)
 	if filter.Status != "" {
-		props["status"] = string(filter.Status)
+		q = q.Where("status = ?", string(filter.Status))
 	}
 	if filter.Priority != "" {
-		props["priority"] = string(filter.Priority)
+		q = q.Where("priority = ?", string(filter.Priority))
 	}
 	if filter.WorkflowRunID != "" {
-		props["workflow_run_id"] = filter.WorkflowRunID
+		q = q.Where("workflow_run_id = ?", filter.WorkflowRunID)
 	}
 
-	entities, err := m.dm.ListEntities(ctx, entitygraph.EntityFilter{
-		TypeID:     taskTypeID,
-		Properties: props,
-	})
-	if err != nil {
+	var rows []gormstore.TaskRow
+	if err := q.Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("ListTasks: %w", err)
 	}
 
-	tasks := make([]Task, 0, len(entities))
-	for _, e := range entities {
-		t := taskFromEntity(e)
+	tasks := make([]Task, 0, len(rows))
+	for _, r := range rows {
+		t := gormstore.TaskFromRow(r)
 		t.Tags = m.loadTagNames(ctx, t.ID)
-		t.AssignedTo = m.loadAssigneeID(ctx, t.ID)
 		tasks = append(tasks, t)
 	}
 	return tasks, nil
 }
 
-// loadTagNames traverses outbound has_tag edges from taskID and returns the
-// name of each linked Tag entity. Errors are silently swallowed — a missing
-// or unreadable tag is omitted rather than failing the parent call.
+// loadTagNames returns the names of every Tag linked to taskID via has_tag.
+// Errors are silently swallowed — a missing or unreadable tag is omitted
+// rather than failing the parent call.
 func (m *taskManager) loadTagNames(ctx context.Context, taskID string) []string {
-	edges, err := m.TraverseRelationships(ctx, taskID, RelLabelHasTag, DirectionOutbound)
-	if err != nil || len(edges) == 0 {
+	var names []string
+	err := m.db.WithContext(ctx).Table(m.tables.TaskTags).
+		Joins("JOIN "+m.tables.Tags+" ON "+m.tables.Tags+".id = "+m.tables.TaskTags+".tag_id").
+		Where(m.tables.TaskTags+".task_id = ?", taskID).
+		Pluck(m.tables.Tags+".name", &names).Error
+	if err != nil {
 		return nil
-	}
-	names := make([]string, 0, len(edges))
-	for _, edge := range edges {
-		tagEntity, err := m.dm.GetEntity(ctx, edge.ToID)
-		if err != nil {
-			continue
-		}
-		if name := entitygraph.StringProp(tagEntity.Properties, "name"); name != "" {
-			names = append(names, name)
-		}
 	}
 	return names
 }
 
-// loadAssigneeID traverses the outbound assigned_to edge from taskID and
-// returns the agent entity ID. Returns empty string when unassigned or on error.
-func (m *taskManager) loadAssigneeID(ctx context.Context, taskID string) string {
-	edges, err := m.TraverseRelationships(ctx, taskID, RelLabelAssignedTo, DirectionOutbound)
-	if err != nil || len(edges) == 0 {
-		return ""
+// setTaskTags replaces taskID's has_tag edges with one per name in tagNames,
+// upserting each Tag by its unique Name.
+func (m *taskManager) setTaskTags(ctx context.Context, taskID string, tagNames []string) error {
+	if err := m.db.WithContext(ctx).Table(m.tables.TaskTags).Where("task_id = ?", taskID).Delete(nil).Error; err != nil {
+		return fmt.Errorf("setTaskTags: clear: %w", err)
 	}
-	return edges[0].ToID
+	for _, name := range tagNames {
+		if name == "" {
+			continue
+		}
+		tagID, err := m.upsertTagByName(ctx, name)
+		if err != nil {
+			return fmt.Errorf("setTaskTags: upsert tag %q: %w", name, err)
+		}
+		if _, err := m.CreateRelationship(ctx, Relationship{Label: RelLabelHasTag, FromID: taskID, ToID: tagID}); err != nil {
+			return fmt.Errorf("setTaskTags: link tag %q: %w", name, err)
+		}
+	}
+	return nil
 }
 
-// publish emits an event via the optional Publisher.
-// A nil publisher is silently skipped; errors are swallowed — events are
-// best-effort and must not fail the originating operation.
+// upsertTagByName finds or creates a Tag row by its unique Name and returns
+// its ID.
+func (m *taskManager) upsertTagByName(ctx context.Context, name string) (string, error) {
+	var row gormstore.TagRow
+	err := m.db.WithContext(ctx).Table(m.tables.Tags).Where("name = ?", name).First(&row).Error
+	if err == nil {
+		return row.ID, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", err
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	row = gormstore.TagToRow(Tag{Name: name, CreatedAt: now, UpdatedAt: now})
+	if err := m.db.WithContext(ctx).Table(m.tables.Tags).Create(&row).Error; err != nil {
+		// Lost the race against a concurrent upsert of the same name — re-read.
+		var existing gormstore.TagRow
+		if reErr := m.db.WithContext(ctx).Table(m.tables.Tags).Where("name = ?", name).First(&existing).Error; reErr == nil {
+			return existing.ID, nil
+		}
+		return "", err
+	}
+	return row.ID, nil
+}
+
+// publish emits an event via the optional Publisher. A nil publisher is
+// silently skipped; errors are swallowed — events are best-effort and must
+// not fail the originating operation.
 func (m *taskManager) publish(ctx context.Context, topic string, payload any) {
 	log.Printf("mwanachamataskmanager: publish: topic=%q payloadType=%T publisherNil=%v payload=%+v",
 		topic, payload, m.publisher == nil, payload)
@@ -245,8 +265,8 @@ func (m *taskManager) publish(ctx context.Context, topic string, payload any) {
 	_ = m.publisher.Publish(ctx, topic, payload)
 }
 
-// isTerminalStatus reports whether the status is one of the terminal lifecycle
-// states (completed, failed, cancelled).
+// isTerminalStatus reports whether the status is one of the terminal
+// lifecycle states (completed, failed, cancelled).
 func isTerminalStatus(s TaskStatus) bool {
 	switch s {
 	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
