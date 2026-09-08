@@ -12,7 +12,7 @@ import (
 )
 
 func TestCreateTask_WithWorkflowRunID_PersistsAndLinks(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, err := mgr.CreateWorkflowRun(ctx, "wfr-test", "next.requested", "tester")
@@ -59,7 +59,7 @@ func TestCreateTask_WithWorkflowRunID_PersistsAndLinks(t *testing.T) {
 }
 
 func TestCreateTask_WithoutWorkflowRunID_LeavesEmpty(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	task, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{Title: "t"})
 	if err != nil {
 		t.Fatalf("CreateTask: %v", err)
@@ -70,7 +70,7 @@ func TestCreateTask_WithoutWorkflowRunID_LeavesEmpty(t *testing.T) {
 }
 
 func TestListTasks_WorkflowRunIDFilter_ReturnsOnlyMatches(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	runA, _ := mgr.CreateWorkflowRun(ctx, "wfr-a", "", "")
@@ -104,7 +104,7 @@ func TestListTasks_WorkflowRunIDFilter_ReturnsOnlyMatches(t *testing.T) {
 
 func TestAssignTask_InheritsRunIDWhenStoredEmpty(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	ctx := context.Background()
 
 	run, _ := mgr.CreateWorkflowRun(ctx, "wfr-inherit", "", "")
@@ -145,7 +145,7 @@ func TestAssignTask_InheritsRunIDWhenStoredEmpty(t *testing.T) {
 }
 
 func TestAssignTask_SameRunID_IsIdempotent(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, _ := mgr.CreateWorkflowRun(ctx, "wfr-same", "", "")
@@ -162,7 +162,7 @@ func TestAssignTask_SameRunID_IsIdempotent(t *testing.T) {
 }
 
 func TestAssignTask_MismatchedRunID_ReturnsErrWorkflowRunMismatch(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	runA, _ := mgr.CreateWorkflowRun(ctx, "wfr-A", "", "")
@@ -182,7 +182,7 @@ func TestAssignTask_MismatchedRunID_ReturnsErrWorkflowRunMismatch(t *testing.T) 
 }
 
 func TestAssignTask_EmptyRunID_PreservesStored(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, _ := mgr.CreateWorkflowRun(ctx, "wfr-pres", "", "")
@@ -199,7 +199,7 @@ func TestAssignTask_EmptyRunID_PreservesStored(t *testing.T) {
 }
 
 func TestCreateTaskTodo_PersistsWorkflowRunID(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, _ := mgr.CreateWorkflowRun(ctx, "wfr-todo", "", "")
@@ -227,7 +227,7 @@ func TestCreateTaskTodo_PersistsWorkflowRunID(t *testing.T) {
 
 func TestTaskCreatedPayload_CarriesWorkflowRunID(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	ctx := context.Background()
 
 	run, _ := mgr.CreateWorkflowRun(ctx, "wfr-ev", "", "")

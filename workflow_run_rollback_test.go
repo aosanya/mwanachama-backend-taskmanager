@@ -13,11 +13,7 @@ import (
 func newManagerWithPublisher(t *testing.T) (mwanachamataskmanager.TaskManager, *recordingPublisher) {
 	t.Helper()
 	pub := &recordingPublisher{}
-	mgr, err := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
-	if err != nil {
-		t.Fatalf("NewTaskManager: %v", err)
-	}
-	return mgr, pub
+	return newTestManagerWithPublisher(t, pub), pub
 }
 
 func createRunAtStatus(t *testing.T, mgr mwanachamataskmanager.TaskManager, target mwanachamataskmanager.WorkflowRunStatus) mwanachamataskmanager.WorkflowRun {

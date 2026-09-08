@@ -6,13 +6,11 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
-// seedTask creates a real Task via the manager so that the resulting entity
-// has the correct TypeID = "Task" in the underlying fake. Returns the task
-// ID for use as a relationship endpoint.
+// seedTask creates a real Task via the manager. Returns the task ID for use
+// as a relationship endpoint.
 func seedTask(t *testing.T, mgr mwanachamataskmanager.TaskManager, title string) string {
 	t.Helper()
 	task, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
@@ -22,55 +20,52 @@ func seedTask(t *testing.T, mgr mwanachamataskmanager.TaskManager, title string)
 	return task.ID
 }
 
-// seedVertex inserts a raw entity of the given TypeID into the fake — used to
-// stand up Agent / Project vertices without going through the manager's own
-// UpsertAgent / CreateProject.
-func seedVertex(t *testing.T, fake *fakeDataManager, typeID string) string {
+// seedAgent creates a real Agent via the manager, with a unique AgentID
+// slug derived from name.
+func seedAgent(t *testing.T, mgr mwanachamataskmanager.TaskManager, name string) string {
 	t.Helper()
-	e, err := fake.CreateEntity(context.Background(), entitygraph.CreateEntityRequest{
-		TypeID:     typeID,
-		Properties: map[string]any{},
-	})
+	a, err := mgr.UpsertAgent(context.Background(), mwanachamataskmanager.Agent{AgentID: name})
 	if err != nil {
-		t.Fatalf("seedVertex(%s): %v", typeID, err)
+		t.Fatalf("seedAgent(%q): %v", name, err)
 	}
-	return e.ID
+	return a.ID
+}
+
+// seedProject creates a real Project via the manager.
+func seedProject(t *testing.T, mgr mwanachamataskmanager.TaskManager, name string) string {
+	t.Helper()
+	p, err := mgr.CreateProject(context.Background(), mwanachamataskmanager.Project{Name: name})
+	if err != nil {
+		t.Fatalf("seedProject(%q): %v", name, err)
+	}
+	return p.ID
 }
 
 // ── CreateRelationship ───────────────────────────────────────────────────────
 
 func TestCreateRelationship_AllWhitelistedLabels(t *testing.T) {
-	fake := newFakeDataManager()
-	mgr, err := mwanachamataskmanager.NewTaskManager(fake, nil)
-	if err != nil {
-		t.Fatalf("NewTaskManager: %v", err)
-	}
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
-	taskA := seedTask(t, mgr, "A")
-	taskB := seedTask(t, mgr, "B")
-	agent := seedVertex(t, fake, "Agent")
-	project := seedVertex(t, fake, "Project")
+	agent := seedAgent(t, mgr, "agent-all-labels")
+	project := seedProject(t, mgr, "project-all-labels")
 
 	cases := []struct {
-		label  string
-		fromID string
-		toID   string
+		label string
+		toID  string
 	}{
-		{mwanachamataskmanager.RelLabelAssignedTo, taskA, agent},
-		{mwanachamataskmanager.RelLabelBlocks, taskA, taskB},
-		{mwanachamataskmanager.RelLabelSubtaskOf, taskA, taskB},
-		{mwanachamataskmanager.RelLabelDependsOn, taskA, taskB},
-		{mwanachamataskmanager.RelLabelMemberOf, taskA, project},
+		{mwanachamataskmanager.RelLabelAssignedTo, agent},
+		{mwanachamataskmanager.RelLabelBlocks, ""},
+		{mwanachamataskmanager.RelLabelSubtaskOf, ""},
+		{mwanachamataskmanager.RelLabelDependsOn, ""},
+		{mwanachamataskmanager.RelLabelMemberOf, project},
 	}
 	for _, tc := range cases {
 		// Use a fresh source-target pair per label to avoid cardinality
 		// constraints (assigned_to / subtask_of are functional).
 		from := seedTask(t, mgr, "from-"+tc.label)
 		to := tc.toID
-		if tc.label == mwanachamataskmanager.RelLabelBlocks ||
-			tc.label == mwanachamataskmanager.RelLabelSubtaskOf ||
-			tc.label == mwanachamataskmanager.RelLabelDependsOn {
+		if to == "" {
 			to = seedTask(t, mgr, "to-"+tc.label)
 		}
 		out, err := mgr.CreateRelationship(ctx, mwanachamataskmanager.Relationship{
@@ -88,13 +83,11 @@ func TestCreateRelationship_AllWhitelistedLabels(t *testing.T) {
 		if out.Label != tc.label || out.FromID != from || out.ToID != to {
 			t.Errorf("%s: round-trip mismatch: %+v", tc.label, out)
 		}
-		_ = tc.fromID
 	}
 }
 
 func TestCreateRelationship_UnknownLabel_ReturnsErrInvalidRelationship(t *testing.T) {
-	fake := newFakeDataManager()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	mgr := newTestManager(t)
 	a := seedTask(t, mgr, "a")
 	b := seedTask(t, mgr, "b")
 
@@ -107,10 +100,9 @@ func TestCreateRelationship_UnknownLabel_ReturnsErrInvalidRelationship(t *testin
 }
 
 func TestCreateRelationship_WrongVertexType_ReturnsErrInvalidRelationship(t *testing.T) {
-	fake := newFakeDataManager()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	mgr := newTestManager(t)
 	taskID := seedTask(t, mgr, "task")
-	projectID := seedVertex(t, fake, "Project")
+	projectID := seedProject(t, mgr, "project-wrong-type")
 
 	// blocks must point Task→Task; using Project as the target is invalid.
 	_, err := mgr.CreateRelationship(context.Background(), mwanachamataskmanager.Relationship{
@@ -122,8 +114,7 @@ func TestCreateRelationship_WrongVertexType_ReturnsErrInvalidRelationship(t *tes
 }
 
 func TestCreateRelationship_MissingTaskEndpoint_ReturnsErrTaskNotFound(t *testing.T) {
-	fake := newFakeDataManager()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	mgr := newTestManager(t)
 	taskID := seedTask(t, mgr, "a")
 
 	_, err := mgr.CreateRelationship(context.Background(), mwanachamataskmanager.Relationship{
@@ -135,8 +126,7 @@ func TestCreateRelationship_MissingTaskEndpoint_ReturnsErrTaskNotFound(t *testin
 }
 
 func TestCreateRelationship_MissingAgentEndpoint_ReturnsErrAgentNotFound(t *testing.T) {
-	fake := newFakeDataManager()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	mgr := newTestManager(t)
 	taskID := seedTask(t, mgr, "a")
 
 	_, err := mgr.CreateRelationship(context.Background(), mwanachamataskmanager.Relationship{
@@ -148,8 +138,7 @@ func TestCreateRelationship_MissingAgentEndpoint_ReturnsErrAgentNotFound(t *test
 }
 
 func TestCreateRelationship_MissingProjectEndpoint_ReturnsErrProjectNotFound(t *testing.T) {
-	fake := newFakeDataManager()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	mgr := newTestManager(t)
 	taskID := seedTask(t, mgr, "a")
 
 	_, err := mgr.CreateRelationship(context.Background(), mwanachamataskmanager.Relationship{
@@ -161,8 +150,7 @@ func TestCreateRelationship_MissingProjectEndpoint_ReturnsErrProjectNotFound(t *
 }
 
 func TestCreateRelationship_RecreateExisting_IsIdempotent(t *testing.T) {
-	fake := newFakeDataManager()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	mgr := newTestManager(t)
 	a := seedTask(t, mgr, "a")
 	b := seedTask(t, mgr, "b")
 	ctx := context.Background()
@@ -183,16 +171,15 @@ func TestCreateRelationship_RecreateExisting_IsIdempotent(t *testing.T) {
 		t.Errorf("idempotent re-create returned new edge: first=%s second=%s", first.ID, second.ID)
 	}
 
-	all, _ := fake.ListRelationships(ctx, entitygraph.RelationshipFilter{})
+	all, _ := mgr.TraverseRelationships(ctx, a, mwanachamataskmanager.RelLabelBlocks, mwanachamataskmanager.DirectionOutbound)
 	if len(all) != 1 {
 		t.Errorf("want exactly 1 edge in store, got %d", len(all))
 	}
 }
 
 func TestCreateRelationship_PublishesEvent(t *testing.T) {
-	fake := newFakeDataManager()
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	a := seedTask(t, mgr, "a")
 	b := seedTask(t, mgr, "b")
 
@@ -216,8 +203,7 @@ func TestCreateRelationship_PublishesEvent(t *testing.T) {
 // ── DeleteRelationship ───────────────────────────────────────────────────────
 
 func TestDeleteRelationship_Existing_RemovesEdge(t *testing.T) {
-	fake := newFakeDataManager()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	mgr := newTestManager(t)
 	a := seedTask(t, mgr, "a")
 	b := seedTask(t, mgr, "b")
 	ctx := context.Background()
@@ -230,15 +216,14 @@ func TestDeleteRelationship_Existing_RemovesEdge(t *testing.T) {
 	if err := mgr.DeleteRelationship(ctx, a, b, mwanachamataskmanager.RelLabelBlocks); err != nil {
 		t.Fatalf("DeleteRelationship: %v", err)
 	}
-	edges, _ := fake.ListRelationships(ctx, entitygraph.RelationshipFilter{})
+	edges, _ := mgr.TraverseRelationships(ctx, a, mwanachamataskmanager.RelLabelBlocks, mwanachamataskmanager.DirectionOutbound)
 	if len(edges) != 0 {
 		t.Errorf("want 0 edges after delete, got %d", len(edges))
 	}
 }
 
 func TestDeleteRelationship_Missing_ReturnsErrRelationshipNotFound(t *testing.T) {
-	fake := newFakeDataManager()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	mgr := newTestManager(t)
 	a := seedTask(t, mgr, "a")
 	b := seedTask(t, mgr, "b")
 
@@ -251,8 +236,7 @@ func TestDeleteRelationship_Missing_ReturnsErrRelationshipNotFound(t *testing.T)
 // ── TraverseRelationships ────────────────────────────────────────────────────
 
 func TestTraverseRelationships_Outbound_ReturnsAllMatchingEdges(t *testing.T) {
-	fake := newFakeDataManager()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	mgr := newTestManager(t)
 	source := seedTask(t, mgr, "source")
 	target1 := seedTask(t, mgr, "t1")
 	target2 := seedTask(t, mgr, "t2")
@@ -286,8 +270,7 @@ func TestTraverseRelationships_Outbound_ReturnsAllMatchingEdges(t *testing.T) {
 }
 
 func TestTraverseRelationships_Inbound_ReturnsOnlyEdgesPointingAtVertex(t *testing.T) {
-	fake := newFakeDataManager()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	mgr := newTestManager(t)
 	a := seedTask(t, mgr, "a")
 	b := seedTask(t, mgr, "b") // a blocks b
 	c := seedTask(t, mgr, "c") // b blocks c (b is on the OUTBOUND side here)
@@ -318,8 +301,7 @@ func TestTraverseRelationships_Inbound_ReturnsOnlyEdgesPointingAtVertex(t *testi
 }
 
 func TestTraverseRelationships_NoMatches_ReturnsEmpty(t *testing.T) {
-	fake := newFakeDataManager()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	mgr := newTestManager(t)
 	a := seedTask(t, mgr, "a")
 
 	edges, err := mgr.TraverseRelationships(context.Background(), a, mwanachamataskmanager.RelLabelBlocks, mwanachamataskmanager.DirectionOutbound)

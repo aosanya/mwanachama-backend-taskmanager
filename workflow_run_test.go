@@ -10,7 +10,7 @@ import (
 )
 
 func TestCreateWorkflowRun_DefaultsAndReadback(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, err := mgr.CreateWorkflowRun(ctx, "qa-scenario-09", "next.requested", "operator-1")
@@ -43,7 +43,7 @@ func TestCreateWorkflowRun_DefaultsAndReadback(t *testing.T) {
 }
 
 func TestCreateWorkflowRun_GeneratesName(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, err := mgr.CreateWorkflowRun(ctx, "", "next.requested", "")
@@ -60,7 +60,7 @@ func TestCreateWorkflowRun_GeneratesName(t *testing.T) {
 }
 
 func TestCreateWorkflowRun_DuplicateName_ReturnsExistsError(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	if _, err := mgr.CreateWorkflowRun(ctx, "qa-1", "trig", ""); err != nil {
@@ -73,7 +73,7 @@ func TestCreateWorkflowRun_DuplicateName_ReturnsExistsError(t *testing.T) {
 }
 
 func TestCreateWorkflowRun_LeadingWhitespace_Rejected(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	_, err := mgr.CreateWorkflowRun(context.Background(), " padded", "trig", "")
 	if !errors.Is(err, mwanachamataskmanager.ErrInvalidTask) {
 		t.Errorf("err = %v want ErrInvalidTask", err)
@@ -81,7 +81,7 @@ func TestCreateWorkflowRun_LeadingWhitespace_Rejected(t *testing.T) {
 }
 
 func TestGetWorkflowRun_NotFound(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	_, err := mgr.GetWorkflowRun(context.Background(), "missing-id")
 	if !errors.Is(err, mwanachamataskmanager.ErrWorkflowRunNotFound) {
 		t.Errorf("err = %v want ErrWorkflowRunNotFound", err)
@@ -89,7 +89,7 @@ func TestGetWorkflowRun_NotFound(t *testing.T) {
 }
 
 func TestGetWorkflowRunByName_RoundTrip(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	created, err := mgr.CreateWorkflowRun(ctx, "lookup-me", "trig", "")
@@ -106,7 +106,7 @@ func TestGetWorkflowRunByName_RoundTrip(t *testing.T) {
 }
 
 func TestGetWorkflowRunByName_NotFound(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	_, err := mgr.GetWorkflowRunByName(context.Background(), "no-such-run")
 	if !errors.Is(err, mwanachamataskmanager.ErrWorkflowRunNotFound) {
 		t.Errorf("err = %v want ErrWorkflowRunNotFound", err)
@@ -114,7 +114,7 @@ func TestGetWorkflowRunByName_NotFound(t *testing.T) {
 }
 
 func TestListWorkflowRuns_NewestFirst(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	for i, trig := range []string{"a", "b", "c"} {
@@ -138,7 +138,7 @@ func TestListWorkflowRuns_NewestFirst(t *testing.T) {
 }
 
 func TestListWorkflowRuns_NameFilter(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	if _, err := mgr.CreateWorkflowRun(ctx, "match-me", "trig", ""); err != nil {
@@ -157,8 +157,7 @@ func TestListWorkflowRuns_NameFilter(t *testing.T) {
 }
 
 func TestGetWorkflowRunClosure_TaskAndTodo(t *testing.T) {
-	fake := newFakeDataManager()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, err := mgr.CreateWorkflowRun(ctx, "", "next.requested", "")
@@ -207,7 +206,7 @@ func TestGetWorkflowRunClosure_TaskAndTodo(t *testing.T) {
 }
 
 func TestLinkTaskToRun_Idempotent(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, _ := mgr.CreateWorkflowRun(ctx, "", "trig", "")
@@ -238,7 +237,7 @@ func TestLinkTaskToRun_Idempotent(t *testing.T) {
 // ── UpdateWorkflowRunStatus ───────────────────────────────────────────────────
 
 func TestUpdateWorkflowRunStatus_PendingToInProgress(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, _ := mgr.CreateWorkflowRun(ctx, "run-1", "", "")
@@ -252,7 +251,7 @@ func TestUpdateWorkflowRunStatus_PendingToInProgress(t *testing.T) {
 }
 
 func TestUpdateWorkflowRunStatus_InProgressToCompleted(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, _ := mgr.CreateWorkflowRun(ctx, "run-2", "", "")
@@ -271,7 +270,7 @@ func TestUpdateWorkflowRunStatus_InProgressToCompleted(t *testing.T) {
 }
 
 func TestUpdateWorkflowRunStatus_InProgressToFailed(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, _ := mgr.CreateWorkflowRun(ctx, "run-3", "", "")
@@ -287,7 +286,7 @@ func TestUpdateWorkflowRunStatus_InProgressToFailed(t *testing.T) {
 }
 
 func TestUpdateWorkflowRunStatus_InvalidTransitionFailedToCompleted(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, _ := mgr.CreateWorkflowRun(ctx, "run-4", "", "")
@@ -304,7 +303,7 @@ func TestUpdateWorkflowRunStatus_InvalidTransitionFailedToCompleted(t *testing.T
 }
 
 func TestUpdateWorkflowRunStatus_InvalidTransitionCompletedIsTerminal(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, _ := mgr.CreateWorkflowRun(ctx, "run-5", "", "")
@@ -321,7 +320,7 @@ func TestUpdateWorkflowRunStatus_InvalidTransitionCompletedIsTerminal(t *testing
 }
 
 func TestUpdateWorkflowRunStatus_TerminalEventRoundTrip(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, _ := mgr.CreateWorkflowRun(ctx, "run-te", "", "")

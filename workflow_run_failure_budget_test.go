@@ -13,7 +13,7 @@ import (
 // trips through GetWorkflowRun.
 func TestSetFailureBudget_RoundTrip(t *testing.T) {
 	t.Parallel()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, err := mgr.CreateWorkflowRun(ctx, "", "pipeline.requested", "operator")
@@ -47,7 +47,7 @@ func TestSetFailureBudget_RoundTrip(t *testing.T) {
 // TestSetFailureBudget_AlreadySet refuses to overwrite a locked budget.
 func TestSetFailureBudget_AlreadySet(t *testing.T) {
 	t.Parallel()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	run, _ := mgr.CreateWorkflowRun(ctx, "", "", "")
@@ -64,7 +64,7 @@ func TestSetFailureBudget_AlreadySet(t *testing.T) {
 // (child) run — budget lives only on the root.
 func TestSetFailureBudget_NonRootRejected(t *testing.T) {
 	t.Parallel()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	root, _ := mgr.CreateWorkflowRun(ctx, "root-run", "", "")
@@ -85,7 +85,7 @@ func TestSetFailureBudget_NonRootRejected(t *testing.T) {
 // reports exhaustion correctly across calls.
 func TestIncrementFailureBudget_Increments(t *testing.T) {
 	t.Parallel()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	root, _ := mgr.CreateWorkflowRun(ctx, "", "", "")
@@ -114,7 +114,7 @@ func TestIncrementFailureBudget_Increments(t *testing.T) {
 // child_run_id does not double-count.
 func TestIncrementFailureBudget_Idempotent(t *testing.T) {
 	t.Parallel()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	root, _ := mgr.CreateWorkflowRun(ctx, "", "", "")
@@ -138,7 +138,7 @@ func TestIncrementFailureBudget_Idempotent(t *testing.T) {
 // budget=0 means "unconfigured" and the gate stays open.
 func TestIncrementFailureBudget_ZeroBudgetNeverExhausts(t *testing.T) {
 	t.Parallel()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	root, _ := mgr.CreateWorkflowRun(ctx, "", "", "")
@@ -154,7 +154,7 @@ func TestIncrementFailureBudget_ZeroBudgetNeverExhausts(t *testing.T) {
 // the new child run.
 func TestCreateRecoveryWorkflowRun_ChainsParentage(t *testing.T) {
 	t.Parallel()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	root, _ := mgr.CreateWorkflowRun(ctx, "root", "", "")
@@ -174,7 +174,7 @@ func TestCreateRecoveryWorkflowRun_ChainsParentage(t *testing.T) {
 // when the caller omits it.
 func TestCreateRecoveryWorkflowRun_DefaultsRootFromParent(t *testing.T) {
 	t.Parallel()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	root, _ := mgr.CreateWorkflowRun(ctx, "root", "", "")

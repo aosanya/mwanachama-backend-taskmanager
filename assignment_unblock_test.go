@@ -33,7 +33,7 @@ func seedDependentScenario(t *testing.T, mgr mwanachamataskmanager.TaskManager) 
 
 func TestUnblockDependents_FlipsBlockedToPending(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	ctx := context.Background()
 	a, b, _ := seedDependentScenario(t, mgr)
 
@@ -52,7 +52,7 @@ func TestUnblockDependents_FlipsBlockedToPending(t *testing.T) {
 
 func TestUnblockDependents_RepublishesAssignedEvent(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	ctx := context.Background()
 	a, b, agent := seedDependentScenario(t, mgr)
 	completeBlocker(t, mgr, a)
@@ -87,7 +87,7 @@ func TestUnblockDependents_RepublishesAssignedEvent(t *testing.T) {
 
 func TestUnblockDependents_LeavesBlockedWhenOtherDepUnmet(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	ctx := context.Background()
 	a1, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	a2, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
@@ -117,7 +117,7 @@ func TestUnblockDependents_LeavesBlockedWhenOtherDepUnmet(t *testing.T) {
 
 func TestUnblockDependents_NoAssigneeStaysBlocked(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	ctx := context.Background()
 	a, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
@@ -144,7 +144,7 @@ func TestUnblockDependents_NoAssigneeStaysBlocked(t *testing.T) {
 
 func TestUnblockDependents_Idempotent(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	ctx := context.Background()
 	a, b, _ := seedDependentScenario(t, mgr)
 	completeBlocker(t, mgr, a)
@@ -169,7 +169,7 @@ func TestUnblockDependents_Idempotent(t *testing.T) {
 }
 
 func TestUnblockDependents_UnknownTaskReturnsError(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	if err := mgr.UnblockDependents(context.Background(), "no-such-task"); err == nil {
 		t.Errorf("UnblockDependents on missing task: got nil, want error")
 	}

@@ -1,79 +1,67 @@
 // postgres_integration_test.go exercises TaskManager against a real
-// Postgres-backed entitygraph.DataManager (mwanachama-backend-shared's
-// postgres.Backend), rather than the in-memory fakeDataManager the rest of
-// this package's tests use.
+// Postgres database, rather than the in-memory sqlite-backed manager the
+// rest of this package's tests use.
 //
-// Skipped unless POSTGRES_URL is set — mirrors mwanachama-backend-shared's own
-// postgres/backend_test.go split ("go test ./..." needs no database; set
-// POSTGRES_URL to also run this file, see the Makefile's test-pg target).
-// The unit tests elsewhere in this package already exhaustively cover
-// TaskManager's business logic against fakeDataManager; this file's job is
-// narrower — prove the real Postgres wiring (schema activation, jsonb
-// property round-trips, unique-key upserts, recursive-CTE traversal) works
-// end-to-end, not to re-run all ~160 unit tests a second time.
+// Skipped unless POSTGRES_URL is set. The unit tests elsewhere in this
+// package already exhaustively cover TaskManager's business logic; this
+// file's job is narrower — prove the real Postgres wiring (GORM AutoMigrate,
+// the join tables, jsonb array round-trips) works end-to-end.
 package mwanachamataskmanager_test
 
 import (
 	"context"
-	"database/sql"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/aosanya/mwanachama-backend-shared/postgres"
+	gormpostgres "gorm.io/driver/postgres"
+	"gorm.io/gorm"
+
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
+	"github.com/aosanya/mwanachama-backend-shared/postgres"
 )
 
-// applyDDL runs a multi-statement SQL script as one command, the way
-// database/sql's ExecContext accepts it via the pgx stdlib driver.
-func applyDDL(ctx context.Context, db *sql.DB, script string) error {
-	_, err := db.ExecContext(ctx, script)
-	return err
-}
-
-// newPostgresTaskManager opens POSTGRES_URL, creates a scratch set of
-// work_-prefixed tables, seeds+activates DefaultWorkSchema, and
+// newPostgresTaskManager opens POSTGRES_URL via
+// mwanachama-backend-shared/postgres.Open (the same DSN parsing, pgx
+// driver, and pooling every other repo already uses), wraps that connection
+// with GORM's Postgres dialector, migrates a unique-enough table prefix, and
 // returns a ready-to-use TaskManager plus its recordingPublisher. Skips the
 // calling test if POSTGRES_URL is unset. Tables are dropped on cleanup.
 func newPostgresTaskManager(t *testing.T) (mwanachamataskmanager.TaskManager, *recordingPublisher) {
 	t.Helper()
 	dsn := os.Getenv("POSTGRES_URL")
 	if dsn == "" {
-		t.Skip("POSTGRES_URL not set; skipping Postgres integration test (see Makefile's test-pg target)")
+		t.Skip("POSTGRES_URL not set; skipping Postgres integration test")
 	}
 
 	ctx := context.Background()
-	db, err := postgres.Open(ctx, postgres.Config{DSN: dsn})
+	sqlDB, err := postgres.Open(ctx, postgres.Config{DSN: dsn})
 	if err != nil {
-		t.Fatalf("Open: %v", err)
+		t.Fatalf("postgres.Open: %v", err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(func() { _ = sqlDB.Close() })
 
-	// A unique-enough prefix per test keeps concurrent -run invocations
-	// from colliding on the same physical tables.
-	tables := postgres.DefaultTableNames("workit_")
-	if err := applyDDL(ctx, db, postgres.DDL(tables)); err != nil {
-		t.Fatalf("applying DDL: %v", err)
+	db, err := gorm.Open(gormpostgres.New(gormpostgres.Config{Conn: sqlDB}), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("gorm.Open: %v", err)
+	}
+
+	// A unique-enough prefix per test keeps concurrent -run invocations from
+	// colliding on the same physical tables.
+	tables := mwanachamataskmanager.DefaultTableNames("workit")
+	if err := mwanachamataskmanager.Migrate(db, tables); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = applyDDL(context.Background(), db, postgres.DropDDL(tables))
+		_ = db.Migrator().DropTable(
+			tables.TaskBlocks, tables.TaskDependencies, tables.TaskProjectMemberships, tables.TaskTags,
+			tables.Deliverables, tables.AcceptanceCriteria, tables.TaskTodos,
+			tables.ImportProjectJobs, tables.WorkflowRuns, tables.Tasks, tables.Projects, tables.Agents, tables.Tags,
+		)
 	})
 
-	backend := postgres.NewBackend(db, tables)
-
-	s := mwanachamataskmanager.DefaultWorkSchema()
-	if err := backend.SetSchema(ctx, s); err != nil {
-		t.Fatalf("SetSchema: %v", err)
-	}
-	if err := backend.Publish(ctx); err != nil {
-		t.Fatalf("Publish: %v", err)
-	}
-	if err := backend.Activate(ctx, 1); err != nil {
-		t.Fatalf("Activate: %v", err)
-	}
-
 	pub := &recordingPublisher{}
-	mgr, err := mwanachamataskmanager.NewTaskManager(backend, pub)
+	mgr, err := mwanachamataskmanager.NewTaskManager(db, tables, pub)
 	if err != nil {
 		t.Fatalf("NewTaskManager: %v", err)
 	}
@@ -104,7 +92,7 @@ func TestPostgres_TaskCRUD_RoundTrip(t *testing.T) {
 		t.Errorf("round-trip mismatch: %+v", got)
 	}
 	if len(got.Tags) != 2 {
-		t.Errorf("Tags = %v, want 2 entries (jsonb array round-trip)", got.Tags)
+		t.Errorf("Tags = %v, want 2 entries (has_tag join-table round-trip)", got.Tags)
 	}
 
 	got.Status = mwanachamataskmanager.TaskStatusInProgress
@@ -123,7 +111,7 @@ func TestPostgres_TaskCRUD_RoundTrip(t *testing.T) {
 	}
 }
 
-func TestPostgres_AgentUpsert_UsesSchemaUniqueKey(t *testing.T) {
+func TestPostgres_AgentUpsert_UsesUniqueIndex(t *testing.T) {
 	mgr, _ := newPostgresTaskManager(t)
 	ctx := context.Background()
 
@@ -140,7 +128,7 @@ func TestPostgres_AgentUpsert_UsesSchemaUniqueKey(t *testing.T) {
 		t.Fatalf("second UpsertAgent: %v", err)
 	}
 	if first.ID != second.ID {
-		t.Errorf("UpsertEntity's ON CONFLICT unique-key merge did not find the same row: %s vs %s", first.ID, second.ID)
+		t.Errorf("unique-key merge did not find the same row: %s vs %s", first.ID, second.ID)
 	}
 	if second.DisplayName != "Second" {
 		t.Errorf("merge did not patch DisplayName: %+v", second)
@@ -165,7 +153,7 @@ func TestPostgres_AssignTask_And_Relationship_Traversal(t *testing.T) {
 
 	edges, err := mgr.TraverseRelationships(ctx, task.ID, mwanachamataskmanager.RelLabelAssignedTo, mwanachamataskmanager.DirectionOutbound)
 	if err != nil {
-		t.Fatalf("TraverseRelationships (recursive CTE): %v", err)
+		t.Fatalf("TraverseRelationships: %v", err)
 	}
 	if len(edges) != 1 || edges[0].ToID != agent.ID {
 		t.Errorf("assigned_to edges = %+v, want exactly one pointing at %s", edges, agent.ID)
