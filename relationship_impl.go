@@ -115,6 +115,43 @@ func (m *taskManager) rowExists(ctx context.Context, table, id string) (bool, er
 	return count > 0, nil
 }
 
+// vertexTables lists every table that holds a distinct relationship
+// endpoint "type". Unlike the pre-GORM entitygraph implementation (one
+// shared `entities` table keyed by id, so any id's TypeID was a single
+// lookup away), each type now lives in its own physical table — so
+// distinguishing "id does not exist at all" from "id exists, but as the
+// wrong type" (see [taskManager.checkEndpoint]) means checking each table
+// in turn.
+func (m *taskManager) vertexTables() []string {
+	return []string{
+		m.tables.Tasks, m.tables.Agents, m.tables.Projects, m.tables.Tags,
+		m.tables.TaskTodos, m.tables.WorkflowRuns, m.tables.Deliverables, m.tables.AcceptanceCriteria,
+	}
+}
+
+// checkEndpoint verifies id exists in wantTable. Returns notFoundErr if id
+// exists in no vertex table at all; returns ErrInvalidRelationship if id
+// exists but in a different table than wantTable (the entitygraph-era
+// "endpoint type does not match label" case).
+func (m *taskManager) checkEndpoint(ctx context.Context, id, wantTable string, notFoundErr error) error {
+	if ok, err := m.rowExists(ctx, wantTable, id); err != nil {
+		return err
+	} else if ok {
+		return nil
+	}
+	for _, table := range m.vertexTables() {
+		if table == wantTable {
+			continue
+		}
+		if ok, err := m.rowExists(ctx, table, id); err != nil {
+			return err
+		} else if ok {
+			return fmt.Errorf("%w: vertex %q is not the expected type for this label", ErrInvalidRelationship, id)
+		}
+	}
+	return notFoundErr
+}
+
 // CreateRelationship validates the (label, FromID, ToID) triple and writes
 // the edge. Re-creating an existing edge is idempotent.
 func (m *taskManager) CreateRelationship(ctx context.Context, rel Relationship) (Relationship, error) {
@@ -129,17 +166,15 @@ func (m *taskManager) CreateRelationship(ctx context.Context, rel Relationship) 
 	switch spec.kind {
 	case relFieldOnFrom, relFieldOnTo:
 		otherTable, ownerTable, ownerID, otherID, ownerNotFound, otherNotFound := m.fkEndpoints(spec, rel)
-		if ok, err := m.rowExists(ctx, otherTable, otherID); err != nil {
-			return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
-		} else if !ok {
-			return Relationship{}, otherNotFound
+		if err := m.checkEndpoint(ctx, ownerID, ownerTable, ownerNotFound); err != nil {
+			return Relationship{}, err
+		}
+		if err := m.checkEndpoint(ctx, otherID, otherTable, otherNotFound); err != nil {
+			return Relationship{}, err
 		}
 		var current string
 		if err := m.db.WithContext(ctx).Table(ownerTable).Where("id = ?", ownerID).
 			Select(spec.fkColumn).Row().Scan(&current); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return Relationship{}, ownerNotFound
-			}
 			return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
 		}
 		wantValue := otherID
@@ -150,20 +185,19 @@ func (m *taskManager) CreateRelationship(ctx context.Context, rel Relationship) 
 				return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
 			}
 			rel.CreatedAt = now
+			rel.ID = syntheticEdgeID(rel.FromID, rel.Label, rel.ToID)
+			m.publish(ctx, TopicRelationshipCreated, RelationshipCreatedPayload{FromID: rel.FromID, ToID: rel.ToID, Label: rel.Label})
+			return rel, nil
 		}
 		rel.ID = syntheticEdgeID(rel.FromID, rel.Label, rel.ToID)
 		return rel, nil
 
 	case relFieldJoinTable:
-		if ok, err := m.rowExists(ctx, m.joinFromEndpointTable(rel.Label), rel.FromID); err != nil {
-			return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
-		} else if !ok {
-			return Relationship{}, spec.fromNotFound
+		if err := m.checkEndpoint(ctx, rel.FromID, m.joinFromEndpointTable(rel.Label), spec.fromNotFound); err != nil {
+			return Relationship{}, err
 		}
-		if ok, err := m.rowExists(ctx, m.joinToEndpointTable(rel.Label), rel.ToID); err != nil {
-			return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
-		} else if !ok {
-			return Relationship{}, spec.toNotFound
+		if err := m.checkEndpoint(ctx, rel.ToID, m.joinToEndpointTable(rel.Label), spec.toNotFound); err != nil {
+			return Relationship{}, err
 		}
 		var count int64
 		if err := m.db.WithContext(ctx).Table(spec.joinTable).
@@ -171,8 +205,8 @@ func (m *taskManager) CreateRelationship(ctx context.Context, rel Relationship) 
 			Count(&count).Error; err != nil {
 			return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
 		}
-		now := time.Now().UTC().Format(time.RFC3339)
 		if count == 0 {
+			now := time.Now().UTC().Format(time.RFC3339)
 			row := map[string]any{spec.joinFromCol: rel.FromID, spec.joinToCol: rel.ToID}
 			if spec.joinExtraCol != "" {
 				row[spec.joinExtraCol] = now
@@ -181,6 +215,9 @@ func (m *taskManager) CreateRelationship(ctx context.Context, rel Relationship) 
 				return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
 			}
 			rel.CreatedAt = now
+			rel.ID = syntheticEdgeID(rel.FromID, rel.Label, rel.ToID)
+			m.publish(ctx, TopicRelationshipCreated, RelationshipCreatedPayload{FromID: rel.FromID, ToID: rel.ToID, Label: rel.Label})
+			return rel, nil
 		}
 		rel.ID = syntheticEdgeID(rel.FromID, rel.Label, rel.ToID)
 		return rel, nil
@@ -279,8 +316,13 @@ func (m *taskManager) traverseFK(ctx context.Context, spec relSpec, vertexID str
 	}
 	out := make([]Relationship, 0, len(ids))
 	for _, id := range ids {
+		// vertexID is the value fkColumn points at, so it's the same side as
+		// the FIRST branch's `value` above — mirror that branch's swap
+		// exactly (swap when fkOnFrom, not when !fkOnFrom): the row owning
+		// the fk column (spec.fkTable, i.e. this `id`) is the FROM side for
+		// relFieldOnFrom labels and the TO side for relFieldOnTo labels.
 		from, to := vertexID, id
-		if !fkOnFrom {
+		if fkOnFrom {
 			from, to = id, vertexID
 		}
 		out = append(out, Relationship{ID: syntheticEdgeID(from, label, to), Label: label, FromID: from, ToID: to})

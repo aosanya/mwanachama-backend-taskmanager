@@ -68,7 +68,7 @@ const (
 	RelLabelDependsOn             = models.RelLabelDependsOn
 	RelLabelMemberOf              = models.RelLabelMemberOf
 	RelLabelHasTag                = models.RelLabelHasTag
-	RelLabelHasTodo                = models.RelLabelHasTodo
+	RelLabelHasTodo               = models.RelLabelHasTodo
 	RelLabelTodoAssignedTo        = models.RelLabelTodoAssignedTo
 	RelLabelStartedTask           = models.RelLabelStartedTask
 	RelLabelStartedTodo           = models.RelLabelStartedTodo

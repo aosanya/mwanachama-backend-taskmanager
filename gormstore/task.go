@@ -18,27 +18,27 @@ import (
 // behaviour where the stored "tags" property was always overwritten by a
 // has_tag traversal on every read.
 type TaskRow struct {
-	ID                string `gorm:"primaryKey"`
-	Title             string
-	Description       string
-	Status            string
-	Priority          string
-	DueAt             string
-	EstimatedHours    float64
-	Context           string
-	CreatedAt         string
-	UpdatedAt         string
-	CompletedAt       string
-	TaskName          string
-	ProjectName       string
-	SeparateBranch    bool
-	BranchName        string
-	AssignedAgentID   string `gorm:"index"`
-	WorkflowRunID     string `gorm:"index"`
-	RecoveryRunsUsed  int
-	BlockerNote       string
-	DirectionHistory  string
-	ParentTaskID      string `gorm:"index"`
+	ID               string `gorm:"primaryKey"`
+	Title            string
+	Description      string
+	Status           string
+	Priority         string
+	DueAt            string
+	EstimatedHours   float64
+	Context          string
+	CreatedAt        string
+	UpdatedAt        string
+	CompletedAt      string
+	TaskName         string
+	ProjectName      string
+	SeparateBranch   bool
+	BranchName       string
+	AssignedAgentID  string `gorm:"index"`
+	WorkflowRunID    string `gorm:"index"`
+	RecoveryRunsUsed int
+	BlockerNote      string
+	DirectionHistory string
+	ParentTaskID     string `gorm:"index"`
 
 	// Deleted marks a soft-deleted task, matching entitygraph.DataManager's
 	// DeleteEntity semantics (always soft-delete, regardless of entity

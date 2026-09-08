@@ -17,8 +17,8 @@ import (
 	gormpostgres "gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 	"github.com/aosanya/mwanachama-backend-shared/postgres"
+	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
 // newPostgresTaskManager opens POSTGRES_URL via
