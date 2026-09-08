@@ -52,19 +52,13 @@ func (m *taskManager) maybeUnblockDependent(ctx context.Context, completedTaskID
 	if len(unmet) > 0 {
 		return
 	}
-	assignedEdges, err := m.TraverseRelationships(ctx, dependentID, RelLabelAssignedTo, DirectionOutbound)
-	if err != nil {
-		log.Printf("mwanachamataskmanager: UnblockDependents: traverse assigned_to %s: %v", dependentID, err)
-		return
-	}
-	if len(assignedEdges) == 0 {
+	if dependent.AssignedTo == "" {
 		// No cached assignee — leave blocked; nothing to dispatch.
 		return
 	}
-	agentEntityID := assignedEdges[0].ToID
-	agent, err := m.GetAgent(ctx, agentEntityID)
+	agent, err := m.GetAgent(ctx, dependent.AssignedTo)
 	if err != nil {
-		log.Printf("mwanachamataskmanager: UnblockDependents: GetAgent %s: %v", agentEntityID, err)
+		log.Printf("mwanachamataskmanager: UnblockDependents: GetAgent %s: %v", dependent.AssignedTo, err)
 		return
 	}
 	if err := m.setTaskStatus(ctx, dependentID, TaskStatusPending); err != nil {
@@ -78,7 +72,7 @@ func (m *taskManager) maybeUnblockDependent(ctx context.Context, completedTaskID
 	})
 	m.publish(ctx, TopicTaskAssigned, TaskAssignedPayload{
 		TaskID:      dependentID,
-		AgentID:     agentEntityID,
+		AgentID:     dependent.AssignedTo,
 		RoleName:    agent.RoleName,
 		TaskCode:    dependent.TaskName,
 		Title:       dependent.Title,

@@ -4,14 +4,11 @@ import (
 	"context"
 	"fmt"
 	"time"
-
-	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 )
 
-// AssignTask sets the Agent currently responsible for a Task by writing the
-// `assigned_to` graph edge (Task → Agent). A Task has at most one assignee —
-// any pre-existing outbound `assigned_to` edge from the Task is removed
-// before the new one is created.
+// AssignTask sets the Agent currently responsible for a Task by writing its
+// AssignedAgentID column. A Task has at most one assignee — any prior value
+// is simply overwritten.
 //
 // workflowRunID propagates the WorkflowRun anchor from the inbound event onto
 // the Task per the chain-through rule:
@@ -24,11 +21,9 @@ import (
 // If the task has any unmet outbound `depends_on` edges (i.e. depends on a
 // source task that has not reached a terminal status), the assignment is
 // still recorded but the task is transitioned to TaskStatusBlocked and the
-// usual work.task.assigned dispatch is suppressed. The caller (operator or
-// frontend) sees the assignment immediately; the AI does not see a dispatch
-// it could not act on. When every blocking dependency eventually reaches a
-// terminal status, a separate unblock path can flip blocked → pending and
-// re-fire work.task.assigned.
+// usual work.task.assigned dispatch is suppressed. When every blocking
+// dependency eventually reaches a terminal status, [UnblockDependents] flips
+// blocked → pending and re-fires work.task.assigned.
 func (m *taskManager) AssignTask(ctx context.Context, taskID, agentID, workflowRunID string) error {
 	task, err := m.GetTask(ctx, taskID)
 	if err != nil {
@@ -38,12 +33,12 @@ func (m *taskManager) AssignTask(ctx context.Context, taskID, agentID, workflowR
 	if err != nil {
 		return err
 	}
-	// GetAgent accepts either the entity UUID or the AgentID slug; downstream
-	// edge writes + the work.task.assigned payload need the entity UUID so
-	// subscribers can resolve the agent via GetEntity without slug knowledge.
+	// GetAgent accepts either the row ID or the AgentID slug; downstream
+	// edge writes + the work.task.assigned payload need the row ID so
+	// subscribers can resolve the agent without slug knowledge.
 	resolvedAgentID := agent.ID
 
-	// Apply chain-through before any edge writes so a mismatch fails fast
+	// Apply chain-through before any writes so a mismatch fails fast
 	// without partially mutating state.
 	effectiveRunID := task.WorkflowRunID
 	if workflowRunID != "" {
@@ -64,25 +59,9 @@ func (m *taskManager) AssignTask(ctx context.Context, taskID, agentID, workflowR
 		}
 	}
 
-	existing, err := m.TraverseRelationships(ctx, taskID, RelLabelAssignedTo, DirectionOutbound)
-	if err != nil {
-		return fmt.Errorf("AssignTask: traverse: %w", err)
-	}
-	for _, edge := range existing {
-		if err := m.dm.DeleteRelationship(ctx, edge.ID); err != nil {
-			return fmt.Errorf("AssignTask: delete prior edge: %w", err)
-		}
-	}
-
-	if _, err := m.dm.CreateRelationship(ctx, entitygraph.CreateRelationshipRequest{
-		Name:   RelLabelAssignedTo,
-		FromID: taskID,
-		ToID:   resolvedAgentID,
-		Properties: map[string]any{
-			"assigned_at": time.Now().UTC().Format(time.RFC3339),
-		},
-	}); err != nil {
-		return fmt.Errorf("AssignTask: create edge: %w", err)
+	if err := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("id = ?", taskID).
+		UpdateColumn("assigned_agent_id", resolvedAgentID).Error; err != nil {
+		return fmt.Errorf("AssignTask: assign: %w", err)
 	}
 
 	// Check outbound depends_on edges. Any non-terminal target blocks dispatch.
@@ -103,7 +82,7 @@ func (m *taskManager) AssignTask(ctx context.Context, taskID, agentID, workflowR
 			})
 		}
 		// Suppress work.task.assigned — the AI must not run a task whose
-		// dependencies have not landed. The assigned_to edge is preserved
+		// dependencies have not landed. The assignment column is preserved
 		// so an operator viewing the task sees the chosen agent.
 		return nil
 	}
@@ -120,23 +99,20 @@ func (m *taskManager) AssignTask(ctx context.Context, taskID, agentID, workflowR
 	return nil
 }
 
-// setTaskWorkflowRunID updates only the workflow_run_id property on a Task
-// without touching other fields. Mirrors [setTaskStatus] for the chain-through
+// setTaskWorkflowRunID updates only the workflow_run_id column, without
+// touching other fields. Mirrors [setTaskStatus] for the chain-through
 // path in AssignTask.
 func (m *taskManager) setTaskWorkflowRunID(ctx context.Context, taskID, runID string) error {
-	entity, err := m.dm.GetEntity(ctx, taskID)
-	if err != nil {
-		return fmt.Errorf("setTaskWorkflowRunID: get entity: %w", err)
+	res := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("id = ?", taskID).
+		Updates(map[string]any{
+			"workflow_run_id": runID,
+			"updated_at":      time.Now().UTC().Format(time.RFC3339),
+		})
+	if res.Error != nil {
+		return fmt.Errorf("setTaskWorkflowRunID: %w", res.Error)
 	}
-	if entity.Properties == nil {
-		entity.Properties = map[string]any{}
-	}
-	entity.Properties["workflow_run_id"] = runID
-	entity.Properties["updated_at"] = time.Now().UTC().Format(time.RFC3339)
-	if _, err := m.dm.UpdateEntity(ctx, taskID, entitygraph.UpdateEntityRequest{
-		Properties: entity.Properties,
-	}); err != nil {
-		return fmt.Errorf("setTaskWorkflowRunID: update entity: %w", err)
+	if res.RowsAffected == 0 {
+		return ErrTaskNotFound
 	}
 	return nil
 }
@@ -167,43 +143,32 @@ func (m *taskManager) findUnmetDependencies(ctx context.Context, taskID string) 
 	return unmet, nil
 }
 
-// setTaskStatus updates only the status property on the Task entity, leaving
-// every other property untouched. Reads the current task, mutates Status,
-// and writes back via UpdateEntity — heavier than a single-field write but
-// matches the surface area the rest of taskManager uses, and avoids the
-// "zero-other-fields" replace-all foot-gun a naive PATCH path would have.
+// setTaskStatus updates only the status column, leaving every other field
+// untouched.
 func (m *taskManager) setTaskStatus(ctx context.Context, taskID string, status TaskStatus) error {
-	entity, err := m.dm.GetEntity(ctx, taskID)
-	if err != nil {
-		return fmt.Errorf("setTaskStatus: get entity: %w", err)
+	res := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("id = ?", taskID).
+		Updates(map[string]any{
+			"status":     string(status),
+			"updated_at": time.Now().UTC().Format(time.RFC3339),
+		})
+	if res.Error != nil {
+		return fmt.Errorf("setTaskStatus: %w", res.Error)
 	}
-	if entity.Properties == nil {
-		entity.Properties = map[string]any{}
-	}
-	entity.Properties["status"] = string(status)
-	entity.Properties["updated_at"] = time.Now().UTC().Format(time.RFC3339)
-	if _, err := m.dm.UpdateEntity(ctx, taskID, entitygraph.UpdateEntityRequest{
-		Properties: entity.Properties,
-	}); err != nil {
-		return fmt.Errorf("setTaskStatus: update entity: %w", err)
+	if res.RowsAffected == 0 {
+		return ErrTaskNotFound
 	}
 	return nil
 }
 
-// UnassignTask removes any outbound `assigned_to` edge from the Task.
-// Idempotent — returns nil whether or not an edge was present.
+// UnassignTask clears the Task's AssignedAgentID column. Idempotent —
+// returns nil whether or not an assignee was set.
 func (m *taskManager) UnassignTask(ctx context.Context, taskID string) error {
 	if _, err := m.GetTask(ctx, taskID); err != nil {
 		return err
 	}
-	existing, err := m.TraverseRelationships(ctx, taskID, RelLabelAssignedTo, DirectionOutbound)
-	if err != nil {
-		return fmt.Errorf("UnassignTask: traverse: %w", err)
-	}
-	for _, edge := range existing {
-		if err := m.dm.DeleteRelationship(ctx, edge.ID); err != nil {
-			return fmt.Errorf("UnassignTask: delete edge: %w", err)
-		}
+	if err := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("id = ?", taskID).
+		UpdateColumn("assigned_agent_id", "").Error; err != nil {
+		return fmt.Errorf("UnassignTask: %w", err)
 	}
 	return nil
 }
