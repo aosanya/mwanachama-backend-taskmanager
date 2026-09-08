@@ -376,16 +376,3 @@ func (m *taskManager) joinToEndpointTable(label string) string {
 func syntheticEdgeID(fromID, label, toID string) string {
 	return fromID + "→" + label + "→" + toID
 }
-
-// sqlNoRowsSentinel lets traverseFK's error check share one branch for both
-// gorm.ErrRecordNotFound (from First/Take) and sql.ErrNoRows (from a raw
-// Row().Scan() on a query gorm didn't wrap) without importing database/sql
-// solely for its sentinel — Row().Scan() returns the latter.
-var sqlNoRowsSentinel = gorm.ErrRecordNotFound
-
-func init() {
-	// no-op: keeps sqlNoRowsSentinel's declaration self-documenting without
-	// a separate database/sql import; see traverseFK.
-	_ = sqlNoRowsSentinel
-	_ = gormstore.TableNames{}
-}
