@@ -20,23 +20,21 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
+	"gorm.io/gorm"
+
+	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
 )
 
-// CancelWorkflowRun implements [TaskManager.CancelWorkflowRun]. See the
-// interface for the contract.
+// CancelWorkflowRun implements [TaskManager.CancelWorkflowRun].
 func (m *taskManager) CancelWorkflowRun(ctx context.Context, runID, reason, cancelledBy string, quiesceDeadline time.Time) (WorkflowRun, error) {
 	run, err := m.GetWorkflowRun(ctx, runID)
 	if err != nil {
 		return WorkflowRun{}, err
 	}
 
-	// Idempotency: a repeated cancel on an already-cancelling run returns the
-	// stored envelope without shifting the deadline or re-firing events.
 	if run.Status == WorkflowRunStatusCancelling {
 		return run, nil
 	}
-
 	if run.Status != WorkflowRunStatusInProgress {
 		return WorkflowRun{}, fmt.Errorf("%w: status=%s", ErrCannotCancelTerminalRun, run.Status)
 	}
@@ -48,37 +46,28 @@ func (m *taskManager) CancelWorkflowRun(ctx context.Context, runID, reason, canc
 	run.CancelReason = reason
 	run.CancellingUntil = quiesceDeadline.UTC().Format(time.RFC3339)
 
-	updated, err := m.dm.UpdateEntity(ctx, runID, entitygraph.UpdateEntityRequest{
-		Properties: workflowRunToProperties(run),
-	})
-	if err != nil {
+	row := gormstore.WorkflowRunToRow(run)
+	if err := m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).Where("id = ?", runID).Save(&row).Error; err != nil {
 		return WorkflowRun{}, fmt.Errorf("CancelWorkflowRun: %w", err)
 	}
-	result := workflowRunFromEntity(updated)
+	result := gormstore.WorkflowRunFromRow(row)
 
 	// Cascade: flip every non-terminal Task anchored by the run to cancelled
 	// and emit work.task.cancelled per task. Failures cascading individual
-	// tasks are logged but do not abort the cancel — the run-level signal is
-	// the authoritative quiesce trigger; per-service subscribers handle each
-	// task cancellation idempotently.
+	// tasks are logged but do not abort the cancel.
 	m.cascadeTaskCancellation(ctx, runID, reason)
 
-	// Publish the run-level quiesce signal.
 	m.publishRunStatusEvent(ctx, result, now, reason)
 	return result, nil
 }
 
 // FinalizeWorkflowRunCancellation implements
-// [TaskManager.FinalizeWorkflowRunCancellation]. See the interface for the
-// contract.
+// [TaskManager.FinalizeWorkflowRunCancellation].
 func (m *taskManager) FinalizeWorkflowRunCancellation(ctx context.Context, runID string) (WorkflowRun, error) {
 	run, err := m.GetWorkflowRun(ctx, runID)
 	if err != nil {
 		return WorkflowRun{}, err
 	}
-
-	// Idempotency: if someone else already finalized (or the run was never
-	// cancelling), return the current state without effect.
 	if run.Status != WorkflowRunStatusCancelling {
 		return run, nil
 	}
@@ -88,13 +77,11 @@ func (m *taskManager) FinalizeWorkflowRunCancellation(ctx context.Context, runID
 	run.UpdatedAt = now.Format(time.RFC3339)
 	run.CompletedAt = run.UpdatedAt
 
-	updated, err := m.dm.UpdateEntity(ctx, runID, entitygraph.UpdateEntityRequest{
-		Properties: workflowRunToProperties(run),
-	})
-	if err != nil {
+	row := gormstore.WorkflowRunToRow(run)
+	if err := m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).Where("id = ?", runID).Save(&row).Error; err != nil {
 		return WorkflowRun{}, fmt.Errorf("FinalizeWorkflowRunCancellation: %w", err)
 	}
-	result := workflowRunFromEntity(updated)
+	result := gormstore.WorkflowRunFromRow(row)
 
 	m.publishRunStatusEvent(ctx, result, now, result.CancelReason)
 	return result, nil
@@ -132,14 +119,13 @@ func (m *taskManager) cancelTask(ctx context.Context, task Task, reason string) 
 	if task.CompletedAt == "" {
 		task.CompletedAt = now
 	}
-	_, err := m.dm.UpdateEntity(ctx, task.ID, entitygraph.UpdateEntityRequest{
-		Properties: taskToProperties(task),
-	})
-	if err != nil {
-		if errors.Is(err, entitygraph.ErrEntityNotFound) {
+	row := gormstore.TaskToRow(task)
+	res := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("id = ?", task.ID).Save(&row)
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			return ErrTaskNotFound
 		}
-		return fmt.Errorf("cancelTask: %w", err)
+		return fmt.Errorf("cancelTask: %w", res.Error)
 	}
 	m.publish(ctx, TopicTaskCancelled, TaskCancelledPayload{
 		TaskID:        task.ID,

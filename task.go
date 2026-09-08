@@ -287,9 +287,14 @@ type TaskManager interface {
 	//     On partial failure: transitions run → rollback_failed; publishes
 	//     work.run.rollback_failed. Operator can re-trigger after remediation.
 	//
-	// Steps 1-3 run inside a single database transaction — a crash or error
-	// partway through leaves the run at its pre-rollback status rather than a
-	// partially-compensated one.
+	// Step 3's own work (the foreign-dependency guard check, every Task
+	// reset, and every TaskTodo delete) runs inside a single database
+	// transaction — a crash or error partway through leaves every artifact
+	// at its pre-rollback state rather than partially compensated. The run
+	// status transitions (steps 1 and 4) stay separate, non-transactional
+	// steps either side of it, matching [WorkflowRunStatus.CanTransitionTo]:
+	// rolling_back is a durably-committed transient state, not something
+	// step 3 failing should silently revert.
 	//
 	// Returns [ErrWorkflowRunNotFound] when the run does not exist,
 	// [ErrRollbackConflict] when already rolling_back,

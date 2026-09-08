@@ -2,99 +2,78 @@
 //
 // This file adds the query helpers a watchdog sweeper uses, plus the
 // handlers that process work.run.timeout and work.task.timeout events.
-// mwanachama-backend-taskmanager has no scheduler of its own — the sweep loop and
-// event dispatch live in whatever wires this package in (the original's
-// CodeValdCross registrar is not ported here).
+// mwanachama-backend-taskmanager has no scheduler of its own — the sweep
+// loop and event dispatch live in whatever wires this package in.
 package mwanachamataskmanager
 
 import (
 	"context"
-	"errors"
 	"time"
 
-	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
+	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
 )
 
 // ListWorkflowRunsStaleSince returns all non-terminal, unpaused WorkflowRuns
 // whose last_event_at is before cutoff and whose timeout_published is false.
-// Used by a watchdog sweeper to find runs to time out.
 func (m *taskManager) ListWorkflowRunsStaleSince(ctx context.Context, cutoff time.Time) ([]WorkflowRun, error) {
-	entities, err := m.dm.ListEntities(ctx, entitygraph.EntityFilter{
-		TypeID: workflowRunTypeID,
-	})
+	cutoffStr := cutoff.UTC().Format(time.RFC3339)
+	var rows []gormstore.WorkflowRunRow
+	err := m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).
+		Where("(paused_at = '' OR paused_at IS NULL)").
+		Where("timeout_published = ?", false).
+		Where("last_event_at <> '' AND last_event_at < ?", cutoffStr).
+		Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}
-	cutoffStr := cutoff.UTC().Format(time.RFC3339)
 	var out []WorkflowRun
-	for _, e := range entities {
-		r := workflowRunFromEntity(e)
-		if r.Status.IsTerminal() {
+	for _, r := range rows {
+		run := gormstore.WorkflowRunFromRow(r)
+		if run.Status.IsTerminal() {
 			continue
 		}
-		if r.PausedAt != "" {
-			continue
-		}
-		if r.TimeoutPublished {
-			continue
-		}
-		if r.LastEventAt == "" || r.LastEventAt >= cutoffStr {
-			continue
-		}
-		out = append(out, r)
+		out = append(out, run)
 	}
 	return out, nil
 }
 
 // ListWorkflowRunsStepStaleSince returns non-terminal, unpaused WorkflowRuns
 // that have a current_step_id set and current_step_started_at before cutoff.
-// Used by a watchdog sweeper to find stalled per-step executions.
 func (m *taskManager) ListWorkflowRunsStepStaleSince(ctx context.Context, cutoff time.Time) ([]WorkflowRun, error) {
-	entities, err := m.dm.ListEntities(ctx, entitygraph.EntityFilter{
-		TypeID: workflowRunTypeID,
-	})
+	cutoffStr := cutoff.UTC().Format(time.RFC3339)
+	var rows []gormstore.WorkflowRunRow
+	err := m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).
+		Where("(paused_at = '' OR paused_at IS NULL)").
+		Where("current_step_id <> ''").
+		Where("current_step_started_at <> '' AND current_step_started_at < ?", cutoffStr).
+		Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}
-	cutoffStr := cutoff.UTC().Format(time.RFC3339)
 	var out []WorkflowRun
-	for _, e := range entities {
-		r := workflowRunFromEntity(e)
-		if r.Status.IsTerminal() {
+	for _, r := range rows {
+		run := gormstore.WorkflowRunFromRow(r)
+		if run.Status.IsTerminal() {
 			continue
 		}
-		if r.PausedAt != "" {
-			continue
-		}
-		if r.CurrentStepID == "" {
-			continue
-		}
-		if r.CurrentStepStartedAt == "" || r.CurrentStepStartedAt >= cutoffStr {
-			continue
-		}
-		out = append(out, r)
+		out = append(out, run)
 	}
 	return out, nil
 }
 
-// MarkTimeoutPublished sets timeout_published=true so the sweeper skips the run on
-// subsequent ticks. Called before publishing work.run.timeout for idempotency.
+// MarkTimeoutPublished sets timeout_published=true so the sweeper skips the
+// run on subsequent ticks.
 func (m *taskManager) MarkTimeoutPublished(ctx context.Context, runID string) error {
-	_, err := m.dm.UpdateEntity(ctx, runID, entitygraph.UpdateEntityRequest{
-		Properties: map[string]any{"timeout_published": true},
-	})
-	if err != nil && errors.Is(err, entitygraph.ErrEntityNotFound) {
-		return nil
-	}
-	return err
+	return m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).Where("id = ?", runID).
+		UpdateColumn("timeout_published", true).Error
 }
 
-// HandleRunTimeout processes a work.run.timeout event: flips the run to failed
-// (if not already terminal) and cascades to non-terminal tasks.
+// HandleRunTimeout processes a work.run.timeout event: flips the run to
+// failed (if not already terminal) and cascades to non-terminal tasks.
 func (m *taskManager) HandleRunTimeout(ctx context.Context, runID string) error {
 	run, err := m.GetWorkflowRun(ctx, runID)
 	if err != nil {
-		if errors.Is(err, ErrWorkflowRunNotFound) {
+		if err == ErrWorkflowRunNotFound {
 			return nil
 		}
 		return err
@@ -109,8 +88,7 @@ func (m *taskManager) HandleRunTimeout(ctx context.Context, runID string) error 
 
 	tasks, _ := m.ListTasksForRun(ctx, runID)
 	for _, t := range tasks {
-		if t.Status == TaskStatusCompleted || t.Status == TaskStatusFailed ||
-			t.Status == TaskStatusCancelled {
+		if t.Status == TaskStatusCompleted || t.Status == TaskStatusFailed || t.Status == TaskStatusCancelled {
 			continue
 		}
 		t.Status = TaskStatusFailed
@@ -130,13 +108,12 @@ func (m *taskManager) HandleRunTimeout(ctx context.Context, runID string) error 
 func (m *taskManager) HandleTaskTimeout(ctx context.Context, taskOrTodoID string, runID string) error {
 	task, err := m.GetTask(ctx, taskOrTodoID)
 	if err != nil {
-		if errors.Is(err, ErrTaskNotFound) {
+		if err == ErrTaskNotFound {
 			return nil
 		}
 		return err
 	}
-	if task.Status == TaskStatusCompleted || task.Status == TaskStatusFailed ||
-		task.Status == TaskStatusCancelled {
+	if task.Status == TaskStatusCompleted || task.Status == TaskStatusFailed || task.Status == TaskStatusCancelled {
 		return nil
 	}
 	task.Status = TaskStatusFailed
