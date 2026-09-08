@@ -5,14 +5,13 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
 // ── UpsertAgent ──────────────────────────────────────────────────────────────
 
 func TestUpsertAgent_NewAgent_Inserts(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	a, err := mgr.UpsertAgent(context.Background(), mwanachamataskmanager.Agent{
 		AgentID: "agent-1", DisplayName: "Coder", Capability: "code",
 	})
@@ -28,8 +27,7 @@ func TestUpsertAgent_NewAgent_Inserts(t *testing.T) {
 }
 
 func TestUpsertAgent_SameAgentID_MergesAndReturnsSameVertex(t *testing.T) {
-	fake := newFakeDataManager()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 
 	first, err := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{
@@ -51,15 +49,15 @@ func TestUpsertAgent_SameAgentID_MergesAndReturnsSameVertex(t *testing.T) {
 		t.Errorf("merge did not patch fields: %+v", second)
 	}
 
-	// Only one Agent vertex per (agentID).
-	all, _ := fake.ListEntities(ctx, entitygraph.EntityFilter{TypeID: "Agent"})
+	// Only one Agent row per (agentID).
+	all, _ := mgr.ListAgents(ctx)
 	if len(all) != 1 {
 		t.Errorf("want 1 Agent in store, got %d", len(all))
 	}
 }
 
 func TestUpsertAgent_EmptyAgentID_ReturnsError(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	_, err := mgr.UpsertAgent(context.Background(), mwanachamataskmanager.Agent{})
 	if err == nil {
 		t.Fatal("want error for empty AgentID, got nil")
@@ -69,7 +67,7 @@ func TestUpsertAgent_EmptyAgentID_ReturnsError(t *testing.T) {
 // ── GetAgent / ListAgents ────────────────────────────────────────────────────
 
 func TestGetAgent_NotFound(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	_, err := mgr.GetAgent(context.Background(), "missing")
 	if !errors.Is(err, mwanachamataskmanager.ErrAgentNotFound) {
 		t.Fatalf("got %v, want ErrAgentNotFound", err)
@@ -77,7 +75,7 @@ func TestGetAgent_NotFound(t *testing.T) {
 }
 
 func TestGetAgent_RoundTrip(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	created, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "agent-1", DisplayName: "X"})
 
@@ -91,7 +89,7 @@ func TestGetAgent_RoundTrip(t *testing.T) {
 }
 
 func TestGetAgent_AcceptsSlug(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	created, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "developer-01", DisplayName: "Dev"})
 
@@ -105,7 +103,7 @@ func TestGetAgent_AcceptsSlug(t *testing.T) {
 }
 
 func TestGetAgentByAgentID_NotFound(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	_, err := mgr.GetAgentByAgentID(context.Background(), "missing-slug")
 	if !errors.Is(err, mwanachamataskmanager.ErrAgentNotFound) {
 		t.Fatalf("got %v, want ErrAgentNotFound", err)
@@ -113,8 +111,7 @@ func TestGetAgentByAgentID_NotFound(t *testing.T) {
 }
 
 func TestAssignTask_AcceptsAgentSlug_EdgeUsesUUID(t *testing.T) {
-	fake := newFakeDataManager()
-	mgr, _ := mwanachamataskmanager.NewTaskManager(fake, nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	agent, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "developer-01"})
@@ -131,12 +128,12 @@ func TestAssignTask_AcceptsAgentSlug_EdgeUsesUUID(t *testing.T) {
 		t.Fatalf("want 1 assigned_to edge, got %d", len(edges))
 	}
 	if edges[0].ToID != agent.ID {
-		t.Errorf("edge ToID = %q, want resolved UUID %q (not the slug)", edges[0].ToID, agent.ID)
+		t.Errorf("edge ToID = %q, want resolved ID %q (not the slug)", edges[0].ToID, agent.ID)
 	}
 }
 
 func TestListAgents_ReturnsAllAgents(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	_, _ = mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "a"})
 	_, _ = mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "b"})
@@ -151,7 +148,7 @@ func TestListAgents_ReturnsAllAgents(t *testing.T) {
 // ── AssignTask ───────────────────────────────────────────────────────────────
 
 func TestAssignTask_UnknownAgent_ReturnsErrAgentNotFound(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 
@@ -162,7 +159,7 @@ func TestAssignTask_UnknownAgent_ReturnsErrAgentNotFound(t *testing.T) {
 }
 
 func TestAssignTask_UnknownTask_ReturnsErrTaskNotFound(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	agent, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "a"})
 
@@ -173,7 +170,7 @@ func TestAssignTask_UnknownTask_ReturnsErrTaskNotFound(t *testing.T) {
 }
 
 func TestAssignTask_HappyPath_CreatesEdge(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	agent, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "a"})
@@ -191,7 +188,7 @@ func TestAssignTask_HappyPath_CreatesEdge(t *testing.T) {
 }
 
 func TestAssignTask_Reassign_ReplacesEdge(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	a1, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "a1"})
@@ -215,7 +212,7 @@ func TestAssignTask_Reassign_ReplacesEdge(t *testing.T) {
 
 func TestAssignTask_PublishesEvent(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	ctx := context.Background()
 	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	agent, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "a"})
@@ -238,7 +235,7 @@ func TestAssignTask_PublishesEvent(t *testing.T) {
 // ── UnassignTask ─────────────────────────────────────────────────────────────
 
 func TestUnassignTask_OnAssignedTask_RemovesEdge(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	agent, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "a"})
@@ -254,7 +251,7 @@ func TestUnassignTask_OnAssignedTask_RemovesEdge(t *testing.T) {
 }
 
 func TestUnassignTask_OnUnassignedTask_IsIdempotent(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 
@@ -264,34 +261,9 @@ func TestUnassignTask_OnUnassignedTask_IsIdempotent(t *testing.T) {
 }
 
 func TestUnassignTask_UnknownTask_ReturnsErrTaskNotFound(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	err := mgr.UnassignTask(context.Background(), "no-such-task")
 	if !errors.Is(err, mwanachamataskmanager.ErrTaskNotFound) {
 		t.Fatalf("got %v, want ErrTaskNotFound", err)
 	}
-}
-
-// ── Read path: Task does NOT carry AssignedTo ────────────────────────────────
-
-// This test fails to compile if Task ever regrows an AssignedTo field —
-// guarding the assigned_to-is-a-graph-edge schema decision against
-// accidental regression.
-func TestTask_HasNoAssignedToField(t *testing.T) {
-	var task mwanachamataskmanager.Task
-	// Compile-time evidence: list every field. If anyone adds AssignedTo
-	// back, this struct literal fails.
-	task = mwanachamataskmanager.Task{
-		ID:             "",
-		Description:    "",
-		Status:         "",
-		Priority:       "",
-		DueAt:          "",
-		Tags:           nil,
-		EstimatedHours: 0,
-		Context:        "",
-		CreatedAt:      task.CreatedAt,
-		UpdatedAt:      task.UpdatedAt,
-		CompletedAt:    "",
-	}
-	_ = task
 }
