@@ -215,12 +215,15 @@ func TestPostgres_ImportProject_EndToEnd(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	// depends_on entries are the short (prefix-stripped) id, not the full
+	// task_prefix-qualified name — runImport looks them up in idMap by
+	// shortKey, matching CodeValdWork's original import.go contract.
 	doc := `{
 		"project": "Postgres Import Smoke",
 		"task_prefix": "PGI-",
 		"tasks": [
 			{"name": "PGI-001", "title": "First", "tags": ["a"]},
-			{"name": "PGI-002", "title": "Second", "depends_on": ["PGI-001"], "tags": ["a", "b"]}
+			{"name": "PGI-002", "title": "Second", "depends_on": ["001"], "tags": ["a", "b"]}
 		]
 	}`
 
