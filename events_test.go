@@ -12,7 +12,7 @@ import (
 
 func TestCreateTask_PublishesTypedTaskCreatedPayload(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	created, _ := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{
 		Priority: mwanachamataskmanager.TaskPriorityHigh,
 	})
@@ -37,7 +37,7 @@ func TestCreateTask_PublishesTypedTaskCreatedPayload(t *testing.T) {
 
 func TestUpdateTask_NoStatusChange_PublishesUpdatedNotStatusChanged(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	created, _ := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 
 	created.Description = "patched"
@@ -60,7 +60,7 @@ func TestUpdateTask_NoStatusChange_PublishesUpdatedNotStatusChanged(t *testing.T
 
 func TestUpdateTask_StatusChange_FiresStatusChangedWithFromTo(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	created, _ := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 
 	created.Status = mwanachamataskmanager.TaskStatusInProgress
@@ -84,7 +84,7 @@ func TestUpdateTask_StatusChange_FiresStatusChangedWithFromTo(t *testing.T) {
 
 func TestUpdateTask_StatusChangeOnly_DoesNotFireUpdated(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	created, _ := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 
 	// Only the status field differs.
@@ -99,7 +99,7 @@ func TestUpdateTask_StatusChangeOnly_DoesNotFireUpdated(t *testing.T) {
 
 func TestAssignTask_Replacement_FiresAssignedOnce(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	ctx := context.Background()
 	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	a1, _ := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "a1"})
@@ -134,7 +134,7 @@ func TestAssignTask_Replacement_FiresAssignedOnce(t *testing.T) {
 
 func TestAssignTask_PayloadHydrated_IncludesTaskCodeAndTitle(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	ctx := context.Background()
 
 	task, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{
@@ -175,7 +175,7 @@ func TestAssignTask_PayloadHydrated_IncludesTaskCodeAndTitle(t *testing.T) {
 
 func TestCreateRelationship_PublishesTypedRelationshipCreatedPayload(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	ctx := context.Background()
 	a, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
@@ -209,7 +209,7 @@ func TestCreateRelationship_PublishesTypedRelationshipCreatedPayload(t *testing.
 // a status.changed event.
 func TestEventSequence_FullPhase2Flow_EmitsExactOrderedTopics(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	ctx := context.Background()
 
 	// Step 1 — create a Task.

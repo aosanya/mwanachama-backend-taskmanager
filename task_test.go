@@ -9,19 +9,10 @@ import (
 )
 
 // ── NewTaskManager ───────────────────────────────────────────────────────────
+// TestNewTaskManager_NilDB lives in testdb_test.go, alongside newTestManager.
 
-func TestNewTaskManager_NilDataManager(t *testing.T) {
-	_, err := mwanachamataskmanager.NewTaskManager(nil, nil)
-	if err == nil {
-		t.Fatal("expected error for nil data manager, got nil")
-	}
-}
-
-func TestNewTaskManager_ValidDataManager(t *testing.T) {
-	mgr, err := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+func TestNewTaskManager_ValidDB(t *testing.T) {
+	mgr := newTestManager(t)
 	if mgr == nil {
 		t.Fatal("expected non-nil TaskManager")
 	}
@@ -30,7 +21,7 @@ func TestNewTaskManager_ValidDataManager(t *testing.T) {
 // ── CreateTask ───────────────────────────────────────────────────────────────
 
 func TestCreateTask_Success(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	task, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -48,14 +39,10 @@ func TestCreateTask_Success(t *testing.T) {
 
 func TestCreateTask_PublishesEvent(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	if _, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{}); err != nil {
 		t.Fatal(err)
 	}
-	// No "|agencyID" suffix here — unlike the original's eventbus.Event,
-	// events.Publisher.Publish(ctx, topic, payload) carries no separate
-	// agency envelope, so recordingPublisher.events is topic-only (see
-	// fake_test.go).
 	if len(pub.events) != 1 || pub.events[0] != "task.created" {
 		t.Errorf("expected task.created event, got %v", pub.events)
 	}
@@ -64,7 +51,7 @@ func TestCreateTask_PublishesEvent(t *testing.T) {
 // ── GetTask ──────────────────────────────────────────────────────────────────
 
 func TestGetTask_NotFound(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	_, err := mgr.GetTask(context.Background(), "nonexistent")
 	if !errors.Is(err, mwanachamataskmanager.ErrTaskNotFound) {
 		t.Fatalf("want ErrTaskNotFound, got %v", err)
@@ -72,7 +59,7 @@ func TestGetTask_NotFound(t *testing.T) {
 }
 
 func TestGetTask_Found(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	created, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +76,7 @@ func TestGetTask_Found(t *testing.T) {
 // ── UpdateTask ───────────────────────────────────────────────────────────────
 
 func TestUpdateTask_NotFound(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	_, err := mgr.UpdateTask(context.Background(), mwanachamataskmanager.Task{
 		ID: "nonexistent", Status: mwanachamataskmanager.TaskStatusInProgress,
 	})
@@ -99,7 +86,7 @@ func TestUpdateTask_NotFound(t *testing.T) {
 }
 
 func TestUpdateTask_InvalidTransition_PendingToCompleted(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	created, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 	if err != nil {
 		t.Fatal(err)
@@ -112,7 +99,7 @@ func TestUpdateTask_InvalidTransition_PendingToCompleted(t *testing.T) {
 }
 
 func TestUpdateTask_ValidTransition_PendingToInProgress(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	created, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 	if err != nil {
 		t.Fatal(err)
@@ -129,7 +116,7 @@ func TestUpdateTask_ValidTransition_PendingToInProgress(t *testing.T) {
 
 func TestUpdateTask_ValidTransition_InProgressToCompleted(t *testing.T) {
 	pub := &recordingPublisher{}
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), pub)
+	mgr := newTestManagerWithPublisher(t, pub)
 	created, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 	if err != nil {
 		t.Fatal(err)
@@ -146,10 +133,6 @@ func TestUpdateTask_ValidTransition_InProgressToCompleted(t *testing.T) {
 	if updated.Status != mwanachamataskmanager.TaskStatusCompleted {
 		t.Errorf("want completed, got %s", updated.Status)
 	}
-	// created, status.changed (pending→in_progress), status.changed
-	// (in_progress→completed), completed. The terminal completed hook
-	// fires AFTER the matching status.changed event so subscribers see
-	// the transition before the terminal signal.
 	want := []string{
 		"task.created",
 		"task.status.changed",
@@ -167,7 +150,7 @@ func TestUpdateTask_ValidTransition_InProgressToCompleted(t *testing.T) {
 }
 
 func TestUpdateTask_InvalidTransition_CompletedToPending(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	created, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 	if err != nil {
 		t.Fatal(err)
@@ -190,7 +173,7 @@ func TestUpdateTask_InvalidTransition_CompletedToPending(t *testing.T) {
 // ── DeleteTask ───────────────────────────────────────────────────────────────
 
 func TestDeleteTask_NotFound(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	err := mgr.DeleteTask(context.Background(), "nonexistent")
 	if !errors.Is(err, mwanachamataskmanager.ErrTaskNotFound) {
 		t.Fatalf("want ErrTaskNotFound, got %v", err)
@@ -198,7 +181,7 @@ func TestDeleteTask_NotFound(t *testing.T) {
 }
 
 func TestDeleteTask_Success(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	created, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
 	if err != nil {
 		t.Fatal(err)
@@ -215,7 +198,7 @@ func TestDeleteTask_Success(t *testing.T) {
 // ── ListTasks ────────────────────────────────────────────────────────────────
 
 func TestListTasks_Empty(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	tasks, err := mgr.ListTasks(context.Background(), mwanachamataskmanager.TaskFilter{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -226,7 +209,7 @@ func TestListTasks_Empty(t *testing.T) {
 }
 
 func TestListTasks_FilterByStatus(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	var ids []string
 	for range 3 {
 		created, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{})
@@ -266,7 +249,7 @@ func TestListTasks_FilterByStatus(t *testing.T) {
 }
 
 func TestListTasks_ReturnsAllTasks(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	if _, err := mgr.CreateTask(context.Background(), mwanachamataskmanager.Task{}); err != nil {
 		t.Fatal(err)
 	}

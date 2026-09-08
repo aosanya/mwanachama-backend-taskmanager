@@ -51,7 +51,7 @@ func cancelTask(t *testing.T, mgr mwanachamataskmanager.TaskManager, task mwanac
 }
 
 func TestUpdateTask_Blocked_PendingBlockerPreventsStart(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	a, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
@@ -71,7 +71,7 @@ func TestUpdateTask_Blocked_PendingBlockerPreventsStart(t *testing.T) {
 }
 
 func TestUpdateTask_Blocked_CompletedBlockerOpensGate(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	a, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
@@ -84,7 +84,7 @@ func TestUpdateTask_Blocked_CompletedBlockerOpensGate(t *testing.T) {
 }
 
 func TestUpdateTask_Blocked_CancelledBlockerOpensGate(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	a, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
@@ -97,7 +97,7 @@ func TestUpdateTask_Blocked_CancelledBlockerOpensGate(t *testing.T) {
 }
 
 func TestUpdateTask_Blocked_MultipleBlockers_OnlyNonTerminalReported(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	a1, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	a2, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
@@ -121,7 +121,7 @@ func TestUpdateTask_Blocked_MultipleBlockers_OnlyNonTerminalReported(t *testing.
 }
 
 func TestUpdateTask_Blocked_PendingToCancelledBypassesGate(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	a, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
@@ -135,7 +135,7 @@ func TestUpdateTask_Blocked_PendingToCancelledBypassesGate(t *testing.T) {
 }
 
 func TestUpdateTask_Blocked_DependsOnIsNotGated(t *testing.T) {
-	mgr, _ := mwanachamataskmanager.NewTaskManager(newFakeDataManager(), nil)
+	mgr := newTestManager(t)
 	ctx := context.Background()
 	a, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
 	b, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{})
