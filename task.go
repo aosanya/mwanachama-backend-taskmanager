@@ -1,25 +1,3 @@
-// Package mwanachamataskmanager provides task lifecycle management for
-// mwanachama-frontend-kazi. It exposes [TaskManager] — the single interface for
-// creating, reading, updating, deleting, and listing tasks assigned to
-// agents.
-//
-// Storage is delegated to a [github.com/aosanya/mwanachama-backend-shared/entitygraph.DataManager],
-// so Tasks live in the same single-tenant graph alongside every other domain
-// entity type. Construct a Postgres-backed DataManager and pass it to
-// [NewTaskManager].
-//
-// Implementation is split across focused files:
-//   - models.go               — domain types
-//   - relationship.go         — Relationship/Direction types + the edge engine
-//   - task_impl_task.go       — CreateTask, GetTask, UpdateTask, DeleteTask, ListTasks
-//   - import.go               — ImportProject + async job infrastructure
-//   - task_impl_converters.go — entity↔domain converters
-//   - project.go              — Project CRUD + membership edges
-//   - assignment.go           — AssignTask / UnassignTask
-//   - agent.go                — UpsertAgent, GetAgent, ListAgents
-//   - workflow_run*.go        — WorkflowRun subsystem + rollback
-//
-// Ported from github.com/aosanya/CodeValdWork's task.go.
 package mwanachamataskmanager
 
 import (
@@ -27,34 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
+	"gorm.io/gorm"
+
 	"github.com/aosanya/mwanachama-backend-shared/events"
 )
-
-// taskTypeID is the TypeDefinition.Name used for Task entities in the schema.
-const taskTypeID = "Task"
-
-// projectTypeID is the TypeDefinition.Name used for Project entities.
-const projectTypeID = "Project"
-
-// agentTypeID is the TypeDefinition.Name used for Agent entities.
-const agentTypeID = "Agent"
-
-// tagTypeID is the TypeDefinition.Name used for Tag entities.
-const tagTypeID = "Tag"
-
-// taskTodoTypeID is the TypeDefinition.Name used for TaskTodo entities.
-const taskTodoTypeID = "TaskTodo"
-
-// workflowRunTypeID is the TypeDefinition.Name used for WorkflowRun entities —
-// the anchor that names every Task / TaskTodo in a single orchestrated run.
-const workflowRunTypeID = "WorkflowRun"
-
-// deliverableTypeID is the TypeDefinition.Name used for Deliverable entities.
-const deliverableTypeID = "Deliverable"
-
-// acceptanceCriteriaTypeID is the TypeDefinition.Name used for AcceptanceCriteria entities.
-const acceptanceCriteriaTypeID = "AcceptanceCriteria"
 
 // TaskManager is the primary interface for task lifecycle management.
 // Implementations must be safe for concurrent use.
@@ -110,8 +64,8 @@ type TaskManager interface {
 	// and capability are updated; agent_id is immutable.
 	UpsertAgent(ctx context.Context, agent Agent) (Agent, error)
 
-	// GetAgent retrieves a single Agent by either its entity UUID or its
-	// AgentID slug (e.g. "developer-01"). UUID lookup is tried first; on
+	// GetAgent retrieves a single Agent by either its entity ID or its
+	// AgentID slug (e.g. "developer-01"). ID lookup is tried first; on
 	// NotFound it falls back to a slug match. Returns [ErrAgentNotFound] if
 	// neither form resolves.
 	GetAgent(ctx context.Context, idOrSlug string) (Agent, error)
@@ -299,13 +253,11 @@ type TaskManager interface {
 
 	// ListWorkflowRuns returns every WorkflowRun, newest first. When name is
 	// non-empty the result is filtered to runs whose Name matches exactly
-	// (at most one row). Used by the frontend list view and by QA test
-	// scripts that correlate a run by a caller-supplied label.
+	// (at most one row).
 	ListWorkflowRuns(ctx context.Context, name string) ([]WorkflowRun, error)
 
-	// LinkTaskToRun writes the `started_task` edge from runID to taskID
-	// (and relies on the schema-declared inverse `part_of_run` for reverse
-	// lookups). Idempotent — re-linking is a no-op.
+	// LinkTaskToRun writes the `started_task` edge from runID to taskID.
+	// Idempotent — re-linking is a no-op.
 	LinkTaskToRun(ctx context.Context, runID, taskID string) error
 
 	// LinkTodoToRun writes the `started_todo` edge from runID to todoID.
@@ -334,6 +286,10 @@ type TaskManager interface {
 	//  4. On success: transitions run → rolled_back; publishes work.run.rolled_back.
 	//     On partial failure: transitions run → rollback_failed; publishes
 	//     work.run.rollback_failed. Operator can re-trigger after remediation.
+	//
+	// Steps 1-3 run inside a single database transaction — a crash or error
+	// partway through leaves the run at its pre-rollback status rather than a
+	// partially-compensated one.
 	//
 	// Returns [ErrWorkflowRunNotFound] when the run does not exist,
 	// [ErrRollbackConflict] when already rolling_back,
@@ -431,42 +387,23 @@ type TaskManager interface {
 	WriteAcceptanceCriteriaResult(ctx context.Context, criteriaID, result, notes string) error
 }
 
-// WorkSchemaManager is a type alias for [entitygraph.SchemaManager].
-// Used to seed [DefaultWorkSchema] on startup.
-type WorkSchemaManager = entitygraph.SchemaManager
-
 // Publisher is a type alias for [events.Publisher] — the mwanachama-backend-shared
 // package that unifies the publish contract across this project's services.
 type Publisher = events.Publisher
 
-// taskManager is the concrete implementation of [TaskManager]. Declared here
-// (unlike the original, where it sits beside [NewTaskManager]) because Go
-// requires the receiver type to exist for every "func (m *taskManager) Foo"
-// method across the package, regardless of whether *taskManager yet
-// implements the full TaskManager interface.
-// dataManager is entitygraph.DataManager plus the relationship methods this
-// package needs — CreateRelationship/DeleteRelationship/ListRelationships
-// are no longer part of the shared interface (see its doc comment), since
-// each consumer knows its own fixed set of relationship labels.
-type dataManager interface {
-	entitygraph.DataManager
-	CreateRelationship(ctx context.Context, req entitygraph.CreateRelationshipRequest) (entitygraph.Relationship, error)
-	DeleteRelationship(ctx context.Context, relationshipID string) error
-	ListRelationships(ctx context.Context, filter entitygraph.RelationshipFilter) ([]entitygraph.Relationship, error)
-}
-
+// taskManager is the concrete implementation of [TaskManager].
 type taskManager struct {
-	dm        dataManager
+	db        *gorm.DB
+	tables    TableNames
 	publisher events.Publisher // optional; nil = skip event publishing
 }
 
-// NewTaskManager constructs a [TaskManager] backed by the given
-// [entitygraph.DataManager].
-// pub may be nil — events are skipped when no publisher is set.
-// Returns an error if dm is nil.
-func NewTaskManager(dm dataManager, pub events.Publisher) (TaskManager, error) {
-	if dm == nil {
-		return nil, fmt.Errorf("NewTaskManager: data manager must not be nil")
+// NewTaskManager constructs a [TaskManager] backed by db, scoped to the
+// tables named by t. pub may be nil — events are skipped when no publisher
+// is set. Returns an error if db is nil.
+func NewTaskManager(db *gorm.DB, t TableNames, pub events.Publisher) (TaskManager, error) {
+	if db == nil {
+		return nil, fmt.Errorf("NewTaskManager: db must not be nil")
 	}
-	return &taskManager{dm: dm, publisher: pub}, nil
+	return &taskManager{db: db, tables: t, publisher: pub}, nil
 }

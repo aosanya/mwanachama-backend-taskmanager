@@ -39,6 +39,12 @@ type TaskRow struct {
 	BlockerNote       string
 	DirectionHistory  string
 	ParentTaskID      string `gorm:"index"`
+
+	// Deleted marks a soft-deleted task, matching entitygraph.DataManager's
+	// DeleteEntity semantics (always soft-delete, regardless of entity
+	// type). Not exposed on models.Task — GetTask/ListTasks filter it out
+	// the same way the pre-GORM implementation never surfaced it either.
+	Deleted bool `gorm:"index"`
 }
 
 func (r *TaskRow) BeforeCreate(_ *gorm.DB) error {

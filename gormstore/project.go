@@ -17,6 +17,9 @@ type ProjectRow struct {
 	TaskPrefix  string
 	CreatedAt   string
 	UpdatedAt   string
+
+	// Deleted marks a soft-deleted project — see TaskRow.Deleted's doc.
+	Deleted bool `gorm:"index"`
 }
 
 func (r *ProjectRow) BeforeCreate(_ *gorm.DB) error {

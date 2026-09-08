@@ -24,6 +24,10 @@ type TaskTodoRow struct {
 	CreatedAt      string
 	UpdatedAt      string
 	WorkflowRunID  string `gorm:"index"`
+
+	// Deleted marks a soft-deleted todo — see TaskRow.Deleted's doc. Set by
+	// DeleteWorkflowRunArtifacts's rollback cleanup.
+	Deleted bool `gorm:"index"`
 }
 
 func (r *TaskTodoRow) BeforeCreate(_ *gorm.DB) error {
