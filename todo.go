@@ -96,3 +96,21 @@ func (m *taskManager) UpdateTaskTodoStatus(ctx context.Context, todoID string, s
 	}
 	return m.GetTaskTodo(ctx, todoID)
 }
+
+// ListTaskTodos returns all non-deleted TaskTodos, optionally filtered by
+// workflowRunID. When workflowRunID is empty, all todos are returned.
+func (m *taskManager) ListTaskTodos(ctx context.Context, workflowRunID string) ([]TaskTodo, error) {
+	q := m.db.WithContext(ctx).Table(m.tables.TaskTodos).Where("deleted = ?", false)
+	if workflowRunID != "" {
+		q = q.Where("workflow_run_id = ?", workflowRunID)
+	}
+	var rows []gormstore.TaskTodoRow
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("ListTaskTodos: %w", err)
+	}
+	out := make([]TaskTodo, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, gormstore.TaskTodoFromRow(r))
+	}
+	return out, nil
+}

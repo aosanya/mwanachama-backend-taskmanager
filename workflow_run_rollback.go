@@ -8,29 +8,23 @@
 // DeleteWorkflowRunArtifacts is this package's own compensation leg: it
 // resets every Task anchored by the run ID to pending (clearing
 // workflow_run_id and completed_at, keeping all other task fields and
-// non-run edges intact), hard-deletes every TaskTodo anchored to the run,
-// and emits work.task.rolled_back per affected Task.
-//
-// Known gap: entitygraph.DataManager has no cross-call transaction
-// primitive (no WithTx/Transactor) — every DataManager method commits its
-// own internal transaction, and this package only ever touches
-// DataManager, never database/sql/pgx directly. So unlike the "real
-// Postgres transactions" goal in CLAUDE.md, DeleteWorkflowRunArtifacts
-// below is the same sequential, best-effort loop the Arango original had —
-// a crash mid-loop leaves partial state, same risk profile as before this
-// port. Closing that gap needs a new DataManager capability upstream in
-// mwanachama-backend-shared (e.g. WithTx(ctx, func(DataManager) error) error);
-// tracked as a follow-up, not solved here.
+// non-run edges intact — clearing workflow_run_id is also the started_task
+// edge's own removal, since that edge IS the column), and soft-deletes
+// every TaskTodo anchored to the run. Its guard check, every task reset, and
+// every todo delete run inside one [gorm.DB.Transaction] — the "known gap"
+// the pre-GORM implementation could not close (entitygraph.DataManager had
+// no cross-call transaction primitive) is closed here.
 package mwanachamataskmanager
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
-	"github.com/aosanya/mwanachama-backend-shared/entitygraph"
+	"gorm.io/gorm"
+
+	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
 )
 
 // RollbackWorkflowRun implements [TaskManager.RollbackWorkflowRun].
@@ -47,7 +41,8 @@ func (m *taskManager) RollbackWorkflowRun(ctx context.Context, runID, reason str
 		return WorkflowRun{}, fmt.Errorf("%w: %s → rolling_back", ErrInvalidRunStatusTransition, run.Status)
 	}
 
-	// Step 1 — acquire the rolling_back lock.
+	// Step 1 — acquire the rolling_back lock (durably committed; not part of
+	// step 3's transaction — see file doc).
 	rollingRun, err := m.UpdateWorkflowRunStatus(ctx, runID, WorkflowRunStatusRollingBack, reason)
 	if err != nil {
 		return WorkflowRun{}, fmt.Errorf("RollbackWorkflowRun: acquire: %w", err)
@@ -65,7 +60,6 @@ func (m *taskManager) RollbackWorkflowRun(ctx context.Context, runID, reason str
 		}
 		failedRun, ferr := m.UpdateWorkflowRunStatus(ctx, runID, WorkflowRunStatusRollbackFailed, rollbackErr.Error())
 		if ferr != nil {
-			slog.ErrorContext(ctx, "RollbackWorkflowRun: failed to set rollback_failed status", "run_id", runID, "err", ferr)
 			return rollingRun, rollbackErr
 		}
 		return failedRun, rollbackErr
@@ -80,124 +74,71 @@ func (m *taskManager) RollbackWorkflowRun(ctx context.Context, runID, reason str
 }
 
 // DeleteWorkflowRunArtifacts implements [TaskManager.DeleteWorkflowRunArtifacts].
-// Tasks are reset to pending (not deleted). TaskTodos are hard-deleted.
+// Tasks are reset to pending (not deleted). TaskTodos are soft-deleted.
 func (m *taskManager) DeleteWorkflowRunArtifacts(ctx context.Context, runID string) error {
 	if _, err := m.GetWorkflowRun(ctx, runID); err != nil {
 		return err
 	}
 
-	tasks, err := m.ListTasks(ctx, TaskFilter{WorkflowRunID: runID})
-	if err != nil {
-		return fmt.Errorf("DeleteWorkflowRunArtifacts: list tasks: %w", err)
-	}
-
-	// Guard: check for Tasks in this run that are depended on by Tasks in OTHER runs.
-	for _, task := range tasks {
-		inbound, err := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{
-			ToID: task.ID,
-			Name: RelLabelDependsOn,
-		})
-		if err != nil {
-			return fmt.Errorf("DeleteWorkflowRunArtifacts: list inbound deps for %s: %w", task.ID, err)
+	var resetTaskIDs []string
+	txErr := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var tasks []gormstore.TaskRow
+		if err := tx.Table(m.tables.Tasks).Where("workflow_run_id = ? AND deleted = ?", runID, false).Find(&tasks).Error; err != nil {
+			return fmt.Errorf("list tasks: %w", err)
 		}
-		for _, rel := range inbound {
-			fromTask, err := m.GetTask(ctx, rel.FromID)
-			if err != nil {
-				continue // missing task — not a blocker
+
+		// Guard: check for Tasks in this run that are depended on by Tasks in OTHER runs.
+		for _, task := range tasks {
+			var inbound []gormstore.TaskDependencyRow
+			if err := tx.Table(m.tables.TaskDependencies).Where("to_task_id = ?", task.ID).Find(&inbound).Error; err != nil {
+				return fmt.Errorf("list inbound deps for %s: %w", task.ID, err)
 			}
-			if fromTask.WorkflowRunID != "" && fromTask.WorkflowRunID != runID {
-				return fmt.Errorf("%w: task %s is depended on by task %s (run %s)",
-					ErrForeignRunDependency, task.ID, fromTask.ID, fromTask.WorkflowRunID)
+			for _, rel := range inbound {
+				var fromTask gormstore.TaskRow
+				if err := tx.Table(m.tables.Tasks).Where("id = ?", rel.FromTaskID).First(&fromTask).Error; err != nil {
+					continue // missing task — not a blocker
+				}
+				if fromTask.WorkflowRunID != "" && fromTask.WorkflowRunID != runID {
+					return fmt.Errorf("%w: task %s is depended on by task %s (run %s)",
+						ErrForeignRunDependency, task.ID, fromTask.ID, fromTask.WorkflowRunID)
+				}
 			}
 		}
-	}
 
-	// Reset Tasks: status → pending, clear workflow_run_id + completed_at, remove started_task edge.
-	// All other task fields and edges (member_of, has_tag, blocks, depends_on) are preserved.
-	//
-	// The reset properties are passed directly to UpdateEntity rather than
-	// re-serialising via taskToProperties: the latter omits completed_at
-	// when its Go value is empty (see task_impl_converters.go), so an
-	// in-place taskToProperties(task) after task.CompletedAt = "" would
-	// silently keep the stale completed_at in storage.
-	now := time.Now().UTC().Format(time.RFC3339)
-	for _, task := range tasks {
-		m.removeStartedTaskEdge(ctx, task.ID)
-		if _, err := m.dm.UpdateEntity(ctx, task.ID, entitygraph.UpdateEntityRequest{
-			Properties: map[string]any{
+		// Reset Tasks: status → pending, clear workflow_run_id + completed_at.
+		// All other task fields and edges (member_of, has_tag, blocks,
+		// depends_on) are preserved. Clearing workflow_run_id is itself the
+		// started_task edge's removal — see file doc.
+		now := time.Now().UTC().Format(time.RFC3339)
+		for _, task := range tasks {
+			if err := tx.Table(m.tables.Tasks).Where("id = ?", task.ID).Updates(map[string]any{
 				"status":          string(TaskStatusPending),
 				"workflow_run_id": "",
 				"completed_at":    "",
 				"updated_at":      now,
-			},
-		}); err != nil {
-			slog.ErrorContext(ctx, "DeleteWorkflowRunArtifacts: reset task", "task_id", task.ID, "err", err)
+			}).Error; err != nil {
+				return fmt.Errorf("reset task %s: %w", task.ID, err)
+			}
+			resetTaskIDs = append(resetTaskIDs, task.ID)
 		}
-		m.publishTaskRolledBack(ctx, task.ID, runID)
+
+		// Soft-delete TaskTodos anchored to this run (ephemeral decomposition
+		// artifacts) — deleting the row also drops its has_todo/started_todo/
+		// todo_assigned_to columns, so no separate edge cleanup is needed.
+		if err := tx.Table(m.tables.TaskTodos).Where("workflow_run_id = ? AND deleted = ?", runID, false).
+			UpdateColumn("deleted", true).Error; err != nil {
+			return fmt.Errorf("delete todos: %w", err)
+		}
+		return nil
+	})
+	if txErr != nil {
+		return fmt.Errorf("DeleteWorkflowRunArtifacts: %w", txErr)
 	}
 
-	// Delete TaskTodos anchored to this run (ephemeral decomposition artifacts).
-	todos, err := m.ListTaskTodos(ctx, runID)
-	if err != nil {
-		return fmt.Errorf("DeleteWorkflowRunArtifacts: list todos: %w", err)
+	for _, taskID := range resetTaskIDs {
+		m.publishTaskRolledBack(ctx, taskID, runID)
 	}
-	for _, todo := range todos {
-		m.deleteEntityEdges(ctx, todo.ID)
-		if err := m.dm.DeleteEntity(ctx, todo.ID); err != nil {
-			slog.ErrorContext(ctx, "DeleteWorkflowRunArtifacts: delete todo", "todo_id", todo.ID, "err", err)
-		}
-	}
-
 	return nil
-}
-
-// removeStartedTaskEdge removes all inbound started_task edges pointing to taskID.
-// There is normally exactly one (from the owning run), but we remove all to stay clean on re-invocation.
-func (m *taskManager) removeStartedTaskEdge(ctx context.Context, taskID string) {
-	rels, err := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{
-		ToID: taskID,
-		Name: RelLabelStartedTask,
-	})
-	if err != nil {
-		slog.ErrorContext(ctx, "removeStartedTaskEdge: list", "task_id", taskID, "err", err)
-		return
-	}
-	for _, rel := range rels {
-		if err := m.dm.DeleteRelationship(ctx, rel.ID); err != nil {
-			slog.ErrorContext(ctx, "removeStartedTaskEdge: delete", "rel_id", rel.ID, "err", err)
-		}
-	}
-}
-
-// deleteEntityEdges removes all incident (from + to) relationships for an entity.
-// Errors are logged but do not abort — a missing edge on a to-be-deleted entity is harmless.
-func (m *taskManager) deleteEntityEdges(ctx context.Context, entityID string) {
-	fromRels, _ := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{FromID: entityID})
-	toRels, _ := m.dm.ListRelationships(ctx, entitygraph.RelationshipFilter{ToID: entityID})
-	for _, rel := range append(fromRels, toRels...) {
-		if err := m.dm.DeleteRelationship(ctx, rel.ID); err != nil {
-			slog.ErrorContext(ctx, "deleteEntityEdges: delete relationship", "rel_id", rel.ID, "err", err)
-		}
-	}
-}
-
-// ListTaskTodos returns all TaskTodos, optionally filtered by
-// workflowRunID. When workflowRunID is empty all todos are returned.
-func (m *taskManager) ListTaskTodos(ctx context.Context, workflowRunID string) ([]TaskTodo, error) {
-	entities, err := m.dm.ListEntities(ctx, entitygraph.EntityFilter{
-		TypeID: taskTodoTypeID,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("ListTaskTodos: %w", err)
-	}
-	var out []TaskTodo
-	for _, e := range entities {
-		todo := taskTodoFromEntity(e)
-		if workflowRunID == "" || todo.WorkflowRunID == workflowRunID {
-			out = append(out, todo)
-		}
-	}
-	return out, nil
 }
 
 // publishTaskRolledBack emits work.task.rolled_back for observability after a Task is rolled back.
