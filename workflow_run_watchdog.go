@@ -46,7 +46,7 @@ func (m *taskManager) ListWorkflowRunsStepStaleSince(ctx context.Context, cutoff
 		Where("(paused_at = '' OR paused_at IS NULL)").
 		Where("current_step_id <> ''").
 		Where("current_step_started_at <> '' AND current_step_started_at < ?", cutoffStr).
-		Find(&rows).Error
+		Limit(maxListPage).Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}

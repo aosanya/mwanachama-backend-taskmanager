@@ -105,7 +105,7 @@ func (m *taskManager) ListTaskTodos(ctx context.Context, workflowRunID string) (
 		q = q.Where("workflow_run_id = ?", workflowRunID)
 	}
 	var rows []gormstore.TaskTodoRow
-	if err := q.Find(&rows).Error; err != nil {
+	if err := q.Limit(maxListPage).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("ListTaskTodos: %w", err)
 	}
 	out := make([]TaskTodo, 0, len(rows))
