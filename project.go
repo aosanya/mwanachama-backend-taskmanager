@@ -163,6 +163,9 @@ func (m *taskManager) ListProjectsForTask(ctx context.Context, taskID string) ([
 	if err != nil {
 		return nil, fmt.Errorf("ListProjectsForTask: traverse: %w", err)
 	}
+	if len(edges) > maxListPage {
+		edges = edges[:maxListPage]
+	}
 	out := make([]Project, 0, len(edges))
 	for _, e := range edges {
 		p, err := m.GetProject(ctx, e.ToID)

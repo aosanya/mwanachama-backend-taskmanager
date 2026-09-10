@@ -180,7 +180,7 @@ func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task,
 	}
 
 	var rows []gormstore.TaskRow
-	if err := q.Find(&rows).Error; err != nil {
+	if err := q.Limit(maxListPage).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("ListTasks: %w", err)
 	}
 
