@@ -103,7 +103,7 @@ func (m *taskManager) ListWorkflowRuns(ctx context.Context, name string) ([]Work
 		q = q.Where("name = ?", name)
 	}
 	var rows []gormstore.WorkflowRunRow
-	if err := q.Find(&rows).Error; err != nil {
+	if err := q.Order("created_at DESC").Limit(maxListPage).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("ListWorkflowRuns: %w", err)
 	}
 	out := make([]WorkflowRun, 0, len(rows))

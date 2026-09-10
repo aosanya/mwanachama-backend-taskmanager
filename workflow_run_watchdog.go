@@ -22,7 +22,7 @@ func (m *taskManager) ListWorkflowRunsStaleSince(ctx context.Context, cutoff tim
 		Where("(paused_at = '' OR paused_at IS NULL)").
 		Where("timeout_published = ?", false).
 		Where("last_event_at <> '' AND last_event_at < ?", cutoffStr).
-		Find(&rows).Error
+		Limit(maxListPage).Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}
