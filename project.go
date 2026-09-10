@@ -106,7 +106,7 @@ func (m *taskManager) DeleteProject(ctx context.Context, projectID string) error
 // ListProjects returns all non-deleted Projects.
 func (m *taskManager) ListProjects(ctx context.Context) ([]Project, error) {
 	var rows []gormstore.ProjectRow
-	if err := m.db.WithContext(ctx).Table(m.tables.Projects).Where("deleted = ?", false).Find(&rows).Error; err != nil {
+	if err := m.db.WithContext(ctx).Table(m.tables.Projects).Where("deleted = ?", false).Limit(maxListPage).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("ListProjects: %w", err)
 	}
 	out := make([]Project, 0, len(rows))
@@ -139,6 +139,9 @@ func (m *taskManager) ListTasksInProject(ctx context.Context, projectID string) 
 	edges, err := m.TraverseRelationships(ctx, projectID, RelLabelMemberOf, DirectionInbound)
 	if err != nil {
 		return nil, fmt.Errorf("ListTasksInProject: traverse: %w", err)
+	}
+	if len(edges) > maxListPage {
+		edges = edges[:maxListPage]
 	}
 	out := make([]Task, 0, len(edges))
 	for _, e := range edges {

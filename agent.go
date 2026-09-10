@@ -83,7 +83,7 @@ func (m *taskManager) GetAgentByAgentID(ctx context.Context, agentIDSlug string)
 // ListAgents returns all Agents.
 func (m *taskManager) ListAgents(ctx context.Context) ([]Agent, error) {
 	var rows []gormstore.AgentRow
-	if err := m.db.WithContext(ctx).Table(m.tables.Agents).Find(&rows).Error; err != nil {
+	if err := m.db.WithContext(ctx).Table(m.tables.Agents).Limit(maxListPage).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("ListAgents: %w", err)
 	}
 	out := make([]Agent, 0, len(rows))

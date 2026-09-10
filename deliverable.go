@@ -15,7 +15,7 @@ import (
 // has_deliverable (i.e. whose ParentID equals taskID).
 func (m *taskManager) ListDeliverablesForTask(ctx context.Context, taskID string) ([]Deliverable, error) {
 	var rows []gormstore.DeliverableRow
-	if err := m.db.WithContext(ctx).Table(m.tables.Deliverables).Where("parent_id = ?", taskID).Find(&rows).Error; err != nil {
+	if err := m.db.WithContext(ctx).Table(m.tables.Deliverables).Where("parent_id = ?", taskID).Limit(maxListPage).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("ListDeliverablesForTask: %w", err)
 	}
 	out := make([]Deliverable, 0, len(rows))
@@ -29,7 +29,7 @@ func (m *taskManager) ListDeliverablesForTask(ctx context.Context, taskID string
 // to taskID via has_acceptance_criteria (i.e. whose ParentID equals taskID).
 func (m *taskManager) ListAcceptanceCriteriaForTask(ctx context.Context, taskID string) ([]AcceptanceCriteria, error) {
 	var rows []gormstore.AcceptanceCriteriaRow
-	if err := m.db.WithContext(ctx).Table(m.tables.AcceptanceCriteria).Where("parent_id = ?", taskID).Find(&rows).Error; err != nil {
+	if err := m.db.WithContext(ctx).Table(m.tables.AcceptanceCriteria).Where("parent_id = ?", taskID).Limit(maxListPage).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("ListAcceptanceCriteriaForTask: %w", err)
 	}
 	out := make([]AcceptanceCriteria, 0, len(rows))
