@@ -10,6 +10,7 @@ import (
 // TaskTodoRow is the GORM row for a [models.TaskTodo].
 type TaskTodoRow struct {
 	ID             string `gorm:"primaryKey"`
+	Code           string `gorm:"uniqueIndex"`
 	Title          string
 	Description    string
 	Instructions   string
@@ -40,6 +41,7 @@ func (r *TaskTodoRow) BeforeCreate(_ *gorm.DB) error {
 func TaskTodoToRow(t models.TaskTodo) TaskTodoRow {
 	return TaskTodoRow{
 		ID:             t.ID,
+		Code:           t.Code,
 		Title:          t.Title,
 		Description:    t.Description,
 		Instructions:   t.Instructions,
@@ -60,6 +62,7 @@ func TaskTodoToRow(t models.TaskTodo) TaskTodoRow {
 func TaskTodoFromRow(r TaskTodoRow) models.TaskTodo {
 	return models.TaskTodo{
 		ID:             r.ID,
+		Code:           r.Code,
 		Title:          r.Title,
 		Description:    r.Description,
 		Instructions:   r.Instructions,

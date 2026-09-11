@@ -10,6 +10,7 @@ import (
 // key UpsertEntity's original find-or-create relied on.
 type TagRow struct {
 	ID          string `gorm:"primaryKey"`
+	Code        string `gorm:"uniqueIndex"`
 	Name        string `gorm:"uniqueIndex"`
 	Color       string
 	Description string
@@ -27,6 +28,7 @@ func (r *TagRow) BeforeCreate(_ *gorm.DB) error {
 func TagToRow(t models.Tag) TagRow {
 	return TagRow{
 		ID:          t.ID,
+		Code:        t.Code,
 		Name:        t.Name,
 		Color:       t.Color,
 		Description: t.Description,
@@ -38,6 +40,7 @@ func TagToRow(t models.Tag) TagRow {
 func TagFromRow(r TagRow) models.Tag {
 	return models.Tag{
 		ID:          r.ID,
+		Code:        r.Code,
 		Name:        r.Name,
 		Color:       r.Color,
 		Description: r.Description,

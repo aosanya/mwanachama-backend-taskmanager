@@ -11,6 +11,7 @@ import (
 // indexed column, no FK constraint.
 type AcceptanceCriteriaRow struct {
 	ID            string `gorm:"primaryKey"`
+	Code          string `gorm:"uniqueIndex"`
 	Title         string
 	Description   string
 	ParentID      string `gorm:"index"`
@@ -32,6 +33,7 @@ func (r *AcceptanceCriteriaRow) BeforeCreate(_ *gorm.DB) error {
 func AcceptanceCriteriaToRow(a models.AcceptanceCriteria) AcceptanceCriteriaRow {
 	return AcceptanceCriteriaRow{
 		ID:            a.ID,
+		Code:          a.Code,
 		Title:         a.Title,
 		Description:   a.Description,
 		ParentID:      a.ParentID,
@@ -47,6 +49,7 @@ func AcceptanceCriteriaToRow(a models.AcceptanceCriteria) AcceptanceCriteriaRow 
 func AcceptanceCriteriaFromRow(r AcceptanceCriteriaRow) models.AcceptanceCriteria {
 	return models.AcceptanceCriteria{
 		ID:            r.ID,
+		Code:          r.Code,
 		Title:         r.Title,
 		Description:   r.Description,
 		ParentID:      r.ParentID,

@@ -7,6 +7,10 @@ package models
 type AcceptanceCriteria struct {
 	ID string `json:"id"`
 
+	// Code is a stable, human-readable identifier (e.g. "AC-1") minted once
+	// at creation. It never changes, even when Title is later edited.
+	Code string `json:"code"`
+
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
 

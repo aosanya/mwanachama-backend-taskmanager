@@ -6,6 +6,10 @@ package models
 type Deliverable struct {
 	ID string `json:"id"`
 
+	// Code is a stable, human-readable identifier (e.g. "D-1") minted once
+	// at creation. It never changes, even when Title is later edited.
+	Code string `json:"code"`
+
 	Title           string `json:"title"`
 	Description     string `json:"description,omitempty"`
 	DeliverableType string `json:"deliverable_type,omitempty"`

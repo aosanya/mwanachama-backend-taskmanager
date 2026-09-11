@@ -234,7 +234,8 @@ func (m *taskManager) setTaskTags(ctx context.Context, taskID string, tagNames [
 }
 
 // upsertTagByName finds or creates a Tag row by its unique Name and returns
-// its ID.
+// its ID. A newly created row is minted a Code inside the same transaction
+// as its insert; an existing row's Code is never touched.
 func (m *taskManager) upsertTagByName(ctx context.Context, name string) (string, error) {
 	var row gormstore.TagRow
 	err := m.db.WithContext(ctx).Table(m.tables.Tags).Where("name = ?", name).First(&row).Error
@@ -245,14 +246,21 @@ func (m *taskManager) upsertTagByName(ctx context.Context, name string) (string,
 		return "", err
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	row = gormstore.TagToRow(Tag{Name: name, CreatedAt: now, UpdatedAt: now})
-	if err := m.db.WithContext(ctx).Table(m.tables.Tags).Create(&row).Error; err != nil {
+	txErr := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		code, err := gormstore.NextCode(ctx, tx, m.tables.CodeSequences, "tag", "TG")
+		if err != nil {
+			return err
+		}
+		row = gormstore.TagToRow(Tag{Name: name, Code: code, CreatedAt: now, UpdatedAt: now})
+		return tx.Table(m.tables.Tags).Create(&row).Error
+	})
+	if txErr != nil {
 		// Lost the race against a concurrent upsert of the same name — re-read.
 		var existing gormstore.TagRow
 		if reErr := m.db.WithContext(ctx).Table(m.tables.Tags).Where("name = ?", name).First(&existing).Error; reErr == nil {
 			return existing.ID, nil
 		}
-		return "", err
+		return "", txErr
 	}
 	return row.ID, nil
 }

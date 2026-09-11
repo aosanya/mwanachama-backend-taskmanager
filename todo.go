@@ -16,6 +16,9 @@ import (
 // call [DispatchTaskTodo] once their predecessors complete. Todos with no
 // dependencies start as [TodoStatusPending]; callers should call
 // [DispatchTaskTodo] immediately after creation.
+//
+// A Code is minted for the new row inside the same transaction as its
+// insert.
 func (m *taskManager) CreateTaskTodo(ctx context.Context, todo TaskTodo) (TaskTodo, error) {
 	if todo.Title == "" || todo.Instructions == "" || todo.ParentTaskID == "" {
 		return TaskTodo{}, fmt.Errorf("%w: title, instructions, and parent_task_id are required", ErrInvalidTask)
@@ -30,8 +33,16 @@ func (m *taskManager) CreateTaskTodo(ctx context.Context, todo TaskTodo) (TaskTo
 	todo.UpdatedAt = now
 
 	row := gormstore.TaskTodoToRow(todo)
-	if err := m.db.WithContext(ctx).Table(m.tables.TaskTodos).Create(&row).Error; err != nil {
-		return TaskTodo{}, fmt.Errorf("CreateTaskTodo: %w", err)
+	txErr := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		code, err := gormstore.NextCode(ctx, tx, m.tables.CodeSequences, "task_todo", "TD")
+		if err != nil {
+			return err
+		}
+		row.Code = code
+		return tx.Table(m.tables.TaskTodos).Create(&row).Error
+	})
+	if txErr != nil {
+		return TaskTodo{}, fmt.Errorf("CreateTaskTodo: %w", txErr)
 	}
 	return gormstore.TaskTodoFromRow(row), nil
 }

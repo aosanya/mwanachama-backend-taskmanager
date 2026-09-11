@@ -5,6 +5,10 @@ package models
 type Tag struct {
 	ID string `json:"id"`
 
+	// Code is a stable, human-readable identifier (e.g. "TG-1") minted once
+	// at creation. It never changes, even when Name is later edited.
+	Code string `json:"code"`
+
 	// Name is the unique label text (e.g. "setup", "auth"). Required.
 	Name string `json:"name"`
 

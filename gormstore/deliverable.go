@@ -11,6 +11,7 @@ import (
 // FK constraint.
 type DeliverableRow struct {
 	ID              string `gorm:"primaryKey"`
+	Code            string `gorm:"uniqueIndex"`
 	Title           string
 	Description     string
 	DeliverableType string
@@ -31,6 +32,7 @@ func (r *DeliverableRow) BeforeCreate(_ *gorm.DB) error {
 func DeliverableToRow(d models.Deliverable) DeliverableRow {
 	return DeliverableRow{
 		ID:              d.ID,
+		Code:            d.Code,
 		Title:           d.Title,
 		Description:     d.Description,
 		DeliverableType: d.DeliverableType,
@@ -45,6 +47,7 @@ func DeliverableToRow(d models.Deliverable) DeliverableRow {
 func DeliverableFromRow(r DeliverableRow) models.Deliverable {
 	return models.Deliverable{
 		ID:              r.ID,
+		Code:            r.Code,
 		Title:           r.Title,
 		Description:     r.Description,
 		DeliverableType: r.DeliverableType,

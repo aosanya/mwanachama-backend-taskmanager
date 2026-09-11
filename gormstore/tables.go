@@ -18,6 +18,7 @@ type TableNames struct {
 	TaskDependencies       string
 	TaskProjectMemberships string
 	TaskTags               string
+	CodeSequences          string
 }
 
 // DefaultTableNames builds the conventional table set for one mounted
@@ -37,6 +38,7 @@ func DefaultTableNames(instance string) TableNames {
 		TaskDependencies:       instance + "_task_dependencies",
 		TaskProjectMemberships: instance + "_task_project_memberships",
 		TaskTags:               instance + "_task_tags",
+		CodeSequences:          instance + "_code_sequences",
 	}
 }
 
@@ -59,9 +61,30 @@ func Migrate(db *gorm.DB, t TableNames) error {
 		{t.TaskDependencies, &TaskDependencyRow{}},
 		{t.TaskProjectMemberships, &TaskProjectMembershipRow{}},
 		{t.TaskTags, &TaskTagRow{}},
+		{t.CodeSequences, &CodeSequenceRow{}},
 	}
 	for _, m := range migrations {
 		if err := db.Table(m.table).AutoMigrate(m.model); err != nil {
+			return err
+		}
+	}
+
+	// Backfill Code onto any pre-existing rows (from before Code existed, or
+	// inserted by a path that predates this package's own code-minting —
+	// e.g. a one-off backfill tool) for every entity type that carries a
+	// stable business Code. Idempotent — a no-op once every row is coded.
+	codeBackfills := []struct {
+		table      string
+		entityType string
+		prefix     string
+	}{
+		{t.Deliverables, "deliverable", "D"},
+		{t.AcceptanceCriteria, "acceptance_criteria", "AC"},
+		{t.Tags, "tag", "TG"},
+		{t.TaskTodos, "task_todo", "TD"},
+	}
+	for _, b := range codeBackfills {
+		if err := BackfillCodes(db, b.table, t.CodeSequences, b.entityType, b.prefix); err != nil {
 			return err
 		}
 	}
