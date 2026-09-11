@@ -160,4 +160,8 @@ type TaskFilter struct {
 	Status        TaskStatus
 	Priority      TaskPriority
 	WorkflowRunID string
+
+	// Limit caps the number of tasks returned, up to maxListPage. 0 (or
+	// anything above maxListPage) falls back to maxListPage.
+	Limit int
 }

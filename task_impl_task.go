@@ -179,8 +179,12 @@ func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task,
 		q = q.Where("workflow_run_id = ?", filter.WorkflowRunID)
 	}
 
+	limit := filter.Limit
+	if limit <= 0 || limit > maxListPage {
+		limit = maxListPage
+	}
 	var rows []gormstore.TaskRow
-	if err := q.Limit(maxListPage).Find(&rows).Error; err != nil {
+	if err := q.Limit(limit).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("ListTasks: %w", err)
 	}
 
