@@ -51,21 +51,11 @@ func wk12JSON(t *testing.T, v map[string]any) *bytes.Reader {
 	return bytes.NewReader(b)
 }
 
-// Pins board row W12: PUT /workflow-runs/{runID}/last-event-at writes the
-// caller-supplied "timestamp" string straight into the last_event_at column
-// with no parsing or validation (workflow_run.go's TouchWorkflowRunLastEventAt
-// calls UpdateColumn("last_event_at", ts) directly). The watchdog's
-// ListWorkflowRunsStaleSince compares this column against a cutoff via a
-// plain lexicographic string comparison (last_event_at < cutoffStr) that
-// only produces a chronologically-correct result when the stored value is
-// itself a valid, zero-padded RFC3339 string. A caller who touches a run
-// with any string that sorts lexicographically greater than every future
-// RFC3339 cutoff (e.g. one starting with a letter) makes that run
-// permanently invisible to the stale-run watchdog, regardless of how long
-// it has actually gone quiet — a real evasion of the AI-failure-recovery
-// mechanism this column exists to drive (see this repo's CLAUDE.md on
-// WorkflowRun's watchdog).
-func TestWorkflowRun_TouchLastEventAtWithGarbageStringEvadesStaleWatchdog(t *testing.T) {
+// TestWorkflowRun_TouchLastEventAtRejectsGarbageString covers board row W12:
+// a non-RFC 3339 timestamp is refused (400) and leaves the run visible to the
+// stale-run watchdog, whose last_event_at comparison is a string ordering that
+// only holds for canonical timestamps.
+func TestWorkflowRun_TouchLastEventAtRejectsGarbageString(t *testing.T) {
 	tm := wk12Manager(t)
 	m := wk12Mux(tm)
 
@@ -106,13 +96,11 @@ func TestWorkflowRun_TouchLastEventAtWithGarbageStringEvadesStaleWatchdog(t *tes
 
 	touchRec := httptest.NewRecorder()
 	m.ServeHTTP(touchRec, httptest.NewRequest("PUT", "/workflow-runs/"+evasive.ID+"/last-event-at", wk12JSON(t, map[string]any{"timestamp": "zzzz-not-a-real-timestamp"})))
-	if touchRec.Code != http.StatusNoContent {
-		t.Fatalf("touch last-event-at with garbage string: got %d, body %s — if this now rejects invalid input, W12 may be fixed; update this test", touchRec.Code, touchRec.Body.String())
+	if touchRec.Code != http.StatusBadRequest {
+		t.Fatalf("touch last-event-at with garbage string: got %d, body %s, want 400", touchRec.Code, touchRec.Body.String())
 	}
 
-	// BUG (W12): the far-future cutoff query no longer reports the evasive
-	// run as stale, even though its real last event was seconds ago and
-	// every plausible reading of "has this run gone quiet" says yes.
+	// The refused touch must leave the run visible to the watchdog.
 	staleAfterTouch := httptest.NewRecorder()
 	m.ServeHTTP(staleAfterTouch, httptest.NewRequest("GET", "/workflow-runs/stale?cutoff=9999-01-01T00:00:00Z", nil))
 	if staleAfterTouch.Code != http.StatusOK {
@@ -122,19 +110,14 @@ func TestWorkflowRun_TouchLastEventAtWithGarbageStringEvadesStaleWatchdog(t *tes
 	if err := json.Unmarshal(staleAfterTouch.Body.Bytes(), &afterTouchRuns); err != nil {
 		t.Fatalf("decode after-touch stale list: %v", err)
 	}
-	// W12 pin: the evasive run is INVISIBLE to the watchdog query despite
-	// being the more obviously-stale of the two runs. This assertion is
-	// expected to start FAILING once W12 is fixed (TouchWorkflowRunLastEventAt
-	// should reject a non-RFC3339 timestamp, or the watchdog query should
-	// stop relying on lexicographic string comparison) — that failure is
-	// the signal to update this test to assert the evasive run IS found,
-	// or that the touch itself was refused.
-	for _, r := range afterTouchRuns {
-		if r["id"] == evasive.ID {
-			t.Fatalf("W12 pin violated: evasive run unexpectedly appeared in the stale list: %s", staleAfterTouch.Body.String())
-		}
+	if len(afterTouchRuns) != 2 {
+		t.Fatalf("want both runs reported stale after the refused touch, got %s", staleAfterTouch.Body.String())
 	}
-	if len(afterTouchRuns) != 1 || afterTouchRuns[0]["name"] != "w12-baseline" {
-		t.Fatalf("W12 pin: want only the untouched baseline run reported stale, got %s", staleAfterTouch.Body.String())
+
+	// A valid non-UTC timestamp is accepted and stored canonically.
+	ok := httptest.NewRecorder()
+	m.ServeHTTP(ok, httptest.NewRequest("PUT", "/workflow-runs/"+evasive.ID+"/last-event-at", wk12JSON(t, map[string]any{"timestamp": "2026-01-01T10:00:00+02:00"})))
+	if ok.Code != http.StatusNoContent {
+		t.Fatalf("touch with a valid RFC 3339 timestamp: got %d, body %s", ok.Code, ok.Body.String())
 	}
 }

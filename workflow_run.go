@@ -350,7 +350,14 @@ func (m *taskManager) publishRunStatusEvent(ctx context.Context, run WorkflowRun
 // TouchWorkflowRunLastEventAt bumps last_event_at to ts for the given run.
 // Best-effort: returns nil on NotFound (the run may have been deleted or
 // rolled back concurrently with the event that triggered this call).
+// ts must parse as RFC 3339 and is stored as canonical UTC, since the
+// stale-run watchdog compares last_event_at as a string; anything else
+// returns [ErrInvalidTask].
 func (m *taskManager) TouchWorkflowRunLastEventAt(ctx context.Context, runID, ts string) error {
+	parsed, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		return fmt.Errorf("%w: last_event_at must be an RFC 3339 timestamp", ErrInvalidTask)
+	}
 	return m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).Where("id = ?", runID).
-		UpdateColumn("last_event_at", ts).Error
+		UpdateColumn("last_event_at", parsed.UTC().Format(time.RFC3339)).Error
 }

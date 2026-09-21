@@ -14,8 +14,9 @@ type Relationship struct {
 	FromID string
 	ToID   string
 
-	// Properties are caller-supplied edge metadata.
-	Properties map[string]any
+	// Properties are caller-supplied edge metadata. Omitted when unset so a
+	// schema-validated consumer (MCP output) never sees a null object.
+	Properties map[string]any `json:"Properties,omitempty"`
 
 	CreatedAt string
 }

@@ -321,9 +321,25 @@ func validateImportDoc(document string) error {
 	if len(doc.Tasks) == 0 {
 		return fmt.Errorf("%w: \"tasks\" array must not be empty", ErrInvalidImport)
 	}
+	shortKeys := make(map[string]string, len(doc.Tasks))
 	for i, t := range doc.Tasks {
 		if t.Name == "" {
 			return fmt.Errorf("%w: task[%d] missing \"name\"", ErrInvalidImport, i)
+		}
+		shortKey := strings.TrimPrefix(t.Name, doc.TaskPrefix)
+		if first, dup := shortKeys[shortKey]; dup {
+			return fmt.Errorf("%w: tasks %q and %q both resolve to reference %q", ErrInvalidImport, first, t.Name, shortKey)
+		}
+		shortKeys[shortKey] = t.Name
+	}
+	// depends_on resolves through the same short keys runImport wires edges
+	// with, so an unresolvable one is rejected here — before any project or
+	// task is created — rather than silently dropped.
+	for _, t := range doc.Tasks {
+		for _, dep := range t.DependsOn {
+			if _, ok := shortKeys[dep]; !ok {
+				return fmt.Errorf("%w: task %q depends_on unknown reference %q", ErrInvalidImport, t.Name, dep)
+			}
 		}
 	}
 	return nil
