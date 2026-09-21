@@ -177,11 +177,9 @@ type TaskCompletedPayload struct {
 	WorkflowRunID string `json:"workflow_run_id,omitempty"`
 }
 
-// TaskFailedBy identifies the agent and work plan responsible for a task failure.
+// TaskFailedBy identifies the agent responsible for a task failure.
 type TaskFailedBy struct {
-	AgentID      string
-	WorkPlanID   string
-	WorkPlanCode string
+	AgentID string
 }
 
 // TaskFailedPayload is the Publish payload for [TopicTaskFailed].

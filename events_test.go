@@ -2,6 +2,8 @@ package mwanachamataskmanager_test
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
@@ -319,3 +321,15 @@ func TestEventSequence_FullPhase2Flow_EmitsExactOrderedTopics(t *testing.T) {
 // doc comment — it only ever fed the dropped Cross registrar, and its
 // schema-derived half has no replacement now that mwanachama-backend-shared's
 // schema package dropped TopicsFromSchema). Nothing here to guard.
+
+// W13: the WorkPlan concept was decommissioned in mwanachama-backend-agency
+// (AG30), so a failure payload must not carry its id or code.
+func TestTaskFailedPayload_HasNoWorkPlanFields(t *testing.T) {
+	b, err := json.Marshal(mwanachamataskmanager.TaskFailedPayload{TaskID: "t1", Reason: "run_timeout"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(b), "WorkPlan") {
+		t.Fatalf("payload still carries WorkPlan fields: %s", b)
+	}
+}
