@@ -20,6 +20,7 @@ import (
 // A Code is minted for the new row inside the same transaction as its
 // insert.
 func (m *taskManager) CreateTaskTodo(ctx context.Context, todo TaskTodo) (TaskTodo, error) {
+	todo.ID = "" // server-minted; a caller-supplied id is never honoured
 	if todo.Title == "" || todo.Instructions == "" || todo.ParentTaskID == "" {
 		return TaskTodo{}, fmt.Errorf("%w: title, instructions, and parent_task_id are required", ErrInvalidTask)
 	}

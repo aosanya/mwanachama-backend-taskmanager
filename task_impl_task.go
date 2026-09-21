@@ -21,6 +21,7 @@ import (
 // [TaskManager.AssignTask]'s chain-through behaviour). The edge write is
 // best-effort: a failure is logged but does not roll back the task creation.
 func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
+	task.ID = "" // server-minted; a caller-supplied id is never honoured
 	now := time.Now().UTC().Format(time.RFC3339)
 	task.Status = TaskStatusPending
 	task.CreatedAt = now

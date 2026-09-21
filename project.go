@@ -20,6 +20,7 @@ func toSlug(name string) string {
 
 // CreateProject creates a new Project row.
 func (m *taskManager) CreateProject(ctx context.Context, p Project) (Project, error) {
+	p.ID = "" // server-minted; a caller-supplied id is never honoured
 	if p.Name == "" {
 		return Project{}, fmt.Errorf("%w: Project.Name is required", ErrInvalidTask)
 	}

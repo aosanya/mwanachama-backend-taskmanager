@@ -54,16 +54,10 @@ func wk11Post(t *testing.T, m *http.ServeMux, path string, body map[string]any) 
 	return rec
 }
 
-// Pins board row W11: CreateTask never clears a caller-supplied Task.ID
-// before building the row (task_impl_task.go's CreateTask), and
-// TaskRow.BeforeCreate only mints a UUID when the ID is already empty
-// (gormstore/task.go), so a POST /tasks body naming its own "id" gets that
-// exact id back instead of a server-minted one.
-//
-// Once W11 is fixed (CreateTask clearing task.ID before use, the same fix
-// mwanachama-backend-agency's AG21 applied to its own Create<Type> methods),
-// this assertion flips: got.ID must NOT equal the caller-supplied value.
-func TestCreateTask_PinsCallerSuppliedIDIsHonored(t *testing.T) {
+// Board row W11: CreateTask clears a caller-supplied Task.ID (as the other
+// Create<Type> paths do), so a POST /tasks body naming its own "id" gets a
+// server-minted one back.
+func TestCreateTask_IgnoresCallerSuppliedID(t *testing.T) {
 	tm := wk11Manager(t)
 	m := wk11Mux(tm)
 
@@ -76,21 +70,14 @@ func TestCreateTask_PinsCallerSuppliedIDIsHonored(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if out.ID != wanted {
-		t.Fatalf("W11 appears fixed: CreateTask no longer honors a caller-supplied id (got %q) — update this pin to assert the new server-minted-id behavior instead", out.ID)
+	if out.ID == wanted {
+		t.Fatalf("a caller-supplied id was honoured (got %q) — the server must mint its own", out.ID)
 	}
 }
 
-// Pins board row W11's second half: re-POSTing the same caller-chosen id
-// hits TaskRow's primary-key unique constraint, which CreateTask does not
-// translate to the existing ErrTaskAlreadyExists sentinel (writeTaskErr
-// already has a 409 arm for it) — so the caller sees an opaque 500 instead
-// of a clean 409 Conflict.
-//
-// Once fixed, this assertion flips: the second POST should return 409, not
-// 500 (either because ID spoofing is closed and both calls mint distinct
-// ids, or because a genuine collision is mapped to ErrTaskAlreadyExists).
-func TestCreateTask_PinsDuplicateCallerSuppliedIDReturns500NotConflict(t *testing.T) {
+// Board row W11's second half: with the id server-owned, re-POSTing the same
+// body mints a second distinct row instead of colliding on the primary key.
+func TestCreateTask_DuplicateCallerSuppliedIDMintsDistinctIDs(t *testing.T) {
 	tm := wk11Manager(t)
 	m := wk11Mux(tm)
 
@@ -100,14 +87,23 @@ func TestCreateTask_PinsDuplicateCallerSuppliedIDReturns500NotConflict(t *testin
 		t.Fatalf("first create: got %d, body %s", first.Code, first.Body.String())
 	}
 	second := wk11Post(t, m, "/tasks", map[string]any{"id": id, "title": "second"})
-	if second.Code != http.StatusInternalServerError {
-		t.Fatalf("W11 appears fixed: duplicate id now returns %d (body %s), not the unmapped 500 this pin expects — update it to assert 409 instead", second.Code, second.Body.String())
+	if second.Code != http.StatusCreated {
+		t.Fatalf("second create: got %d, body %s", second.Code, second.Body.String())
+	}
+	var a, b mwanachamataskmanager.Task
+	if err := json.Unmarshal(first.Body.Bytes(), &a); err != nil {
+		t.Fatalf("decode first: %v", err)
+	}
+	if err := json.Unmarshal(second.Body.Bytes(), &b); err != nil {
+		t.Fatalf("decode second: %v", err)
+	}
+	if a.ID == id || b.ID == id || a.ID == b.ID {
+		t.Fatalf("expected two distinct server-minted ids, got %q and %q", a.ID, b.ID)
 	}
 }
 
-// Pins board row W11 on CreateProject — same defect, same file's Create
-// path (project.go's CreateProject never clears p.ID either).
-func TestCreateProject_PinsCallerSuppliedIDIsHonored(t *testing.T) {
+// Board row W11 on CreateProject.
+func TestCreateProject_IgnoresCallerSuppliedID(t *testing.T) {
 	tm := wk11Manager(t)
 	m := wk11Mux(tm)
 
@@ -120,15 +116,13 @@ func TestCreateProject_PinsCallerSuppliedIDIsHonored(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if out.ID != wanted {
-		t.Fatalf("W11 appears fixed for CreateProject (got %q) — update this pin", out.ID)
+	if out.ID == wanted {
+		t.Fatalf("a caller-supplied id was honoured (got %q) — the server must mint its own", out.ID)
 	}
 }
 
-// Pins board row W11 on CreateTaskTodo — third and last Create path sharing
-// the same "never clears .ID before building the row" gap (todo.go's
-// CreateTaskTodo).
-func TestCreateTaskTodo_PinsCallerSuppliedIDIsHonored(t *testing.T) {
+// Board row W11 on CreateTaskTodo.
+func TestCreateTaskTodo_IgnoresCallerSuppliedID(t *testing.T) {
 	tm := wk11Manager(t)
 	m := wk11Mux(tm)
 
@@ -149,7 +143,7 @@ func TestCreateTaskTodo_PinsCallerSuppliedIDIsHonored(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if out.ID != wanted {
-		t.Fatalf("W11 appears fixed for CreateTaskTodo (got %q) — update this pin", out.ID)
+	if out.ID == wanted {
+		t.Fatalf("a caller-supplied id was honoured (got %q) — the server must mint its own", out.ID)
 	}
 }
