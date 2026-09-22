@@ -73,7 +73,7 @@ func w21RaceMux(tm mwanachamataskmanager.TaskManager) *http.ServeMux {
 // written-into-deleted count here should drop to 0 and this test should be
 // rewritten to assert exactly that.
 func TestPinsW21_UpdateTaskTodoStatusCanWriteIntoAnAlreadyDeletedRow(t *testing.T) {
-	const iterations = 200
+	const iterations = 500
 	bothSucceeded := 0
 	writtenIntoDeletedRow := 0
 
@@ -104,6 +104,12 @@ func TestPinsW21_UpdateTaskTodoStatusCanWriteIntoAnAlreadyDeletedRow(t *testing.
 		var wg sync.WaitGroup
 		var updateStatus, deleteStatus int
 		var updateErr, deleteErr error
+		// start is a release barrier: both requests are built and ready
+		// before either fires, so the two goroutines hit the single sqlite
+		// connection (SetMaxOpenConns(1) above) as close to simultaneously
+		// as the Go scheduler allows, rather than one lagging behind the
+		// other by however long it took to construct its own request.
+		start := make(chan struct{})
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
@@ -111,6 +117,7 @@ func TestPinsW21_UpdateTaskTodoStatusCanWriteIntoAnAlreadyDeletedRow(t *testing.
 			_ = json.NewEncoder(&buf).Encode(map[string]any{"status": "completed"})
 			req, _ := http.NewRequest(http.MethodPut, fmt.Sprintf("%s/todos/%s/status", srv.URL, todo.ID), &buf)
 			req.Header.Set("Content-Type", "application/json")
+			<-start
 			resp, err := client.Do(req)
 			if err != nil {
 				updateErr = err
@@ -122,6 +129,7 @@ func TestPinsW21_UpdateTaskTodoStatusCanWriteIntoAnAlreadyDeletedRow(t *testing.
 		go func() {
 			defer wg.Done()
 			req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/workflow-runs/%s/artifacts", srv.URL, run.ID), nil)
+			<-start
 			resp, err := client.Do(req)
 			if err != nil {
 				deleteErr = err
@@ -130,6 +138,7 @@ func TestPinsW21_UpdateTaskTodoStatusCanWriteIntoAnAlreadyDeletedRow(t *testing.
 			defer resp.Body.Close()
 			deleteStatus = resp.StatusCode
 		}()
+		close(start)
 		wg.Wait()
 		if updateErr != nil {
 			t.Fatalf("update Do: %v", updateErr)
