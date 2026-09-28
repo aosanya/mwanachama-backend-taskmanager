@@ -91,6 +91,35 @@ for a mount that resolves its manager per request —
   [routes.md](documentation/2.%20design/routes.md) — read it before assuming
   an address is what it was.
 
+## Behaviours to preserve
+
+Closed 2026-09-28 (W14, W15, W19–W22); each has a mutation-checked test, and
+the reasoning is in
+[documentation/2. design/concurrency-and-sequence.md](documentation/2.%20design/concurrency-and-sequence.md).
+
+- **A write re-checks what its read assumed.** `UpdateTask`,
+  `UpdateProject` and `UpdateTaskTodoStatus` all carry
+  `AND deleted = false` in the write's own `WHERE` and report not-found on
+  0 rows affected. Reading through a getter that filters deleted rows is not
+  enough — the delete lands in the gap.
+- **The code counter is advanced by the database**, never read-modify-written
+  in Go: insert-on-conflict-do-nothing, `next_number = next_number + 1`, then
+  read back what this caller claimed. Writing first is what stops SQLite
+  deadlocking on a read-to-write upgrade.
+- **The failure budget is charged under a compare-and-swap** on the counter
+  the call read, retried on a loss. Charging one child twice stays a no-op.
+- **A rollback has one entry point.** Compensation
+  (`DeleteWorkflowRunArtifacts`) requires the run to be in `rolling_back`;
+  the three rollback states are refused by the public status setter and
+  reached only through `RollbackWorkflowRun`'s unexported `setRunStatus`.
+  `CanTransitionTo` is untouched on purpose — it says which transitions are
+  legal, not who may ask for one.
+
+A race test that passes both before and after a fix is not a regression
+guard: W19's and W20's original pins counted a legitimate
+update-then-delete ordering alongside the defect. All three soft-delete
+guards force the interleave with a GORM callback instead of racing for it.
+
 ## Porting notes
 
 - `task.go`'s `TaskManager` interface and `models.go`'s domain types (Task,
