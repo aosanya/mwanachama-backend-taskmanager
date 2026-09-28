@@ -2,6 +2,7 @@ package routes_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -14,8 +15,8 @@ import (
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
-// TestPinsW21_UpdateTaskTodoStatusCanWriteIntoAnAlreadyDeletedRow pins a
-// board row (W21), widening W19/W20/assetmanager-A14's TOCTOU shape onto
+// TestW21_UpdateTaskTodoStatusRefusesAnAlreadyDeletedRow guards board row
+// W21, fixed 2026-09-28. It widened W19/W20/assetmanager-A14's TOCTOU shape onto
 // TaskTodo — a widening lead W20's own note left unchased, on a mistaken
 // premise: W20 assumed TaskTodo's only delete path
 // (DeleteWorkflowRunArtifacts) is a hard delete, so a racing
@@ -25,7 +26,10 @@ import (
 // (`UpdateColumn("deleted", true)`) — the row survives, so `todo.go`'s
 // `UpdateTaskTodoStatus` (its own `Updates` call has no `deleted` guard,
 // identical to W19's `UpdateTask`/W20's `UpdateProject`) can and does write
-// into it after the row is marked deleted.
+// into it after the row was marked deleted. Its write now carries
+// `AND deleted = false` and reports ErrTaskTodoNotFound when that matches no
+// row, so the update is refused rather than landing on a row no read would
+// ever return.
 //
 // The interleave is forced rather than raced. Firing two concurrent HTTP
 // requests reproduced this at roughly one iteration in a hundred, which
@@ -36,12 +40,9 @@ import (
 // UpdateTaskTodoStatus's own read and its own write — the same window two
 // racing callers hit by luck.
 //
-// Once W21 is fixed (the same CAS shape as W19/W20/A14: guard the status
-// Update's WHERE clause with `AND deleted = ?` / `false`, check
-// RowsAffected, return ErrTaskTodoNotFound on 0 rows affected), the write
-// below will affect no rows, the persisted status will still read "pending",
-// and this test should be rewritten to assert exactly that.
-func TestPinsW21_UpdateTaskTodoStatusCanWriteIntoAnAlreadyDeletedRow(t *testing.T) {
+// This asserted the broken behaviour until the fix; it now asserts that the
+// write affects no rows and the persisted status still reads "pending".
+func TestW21_UpdateTaskTodoStatusRefusesAnAlreadyDeletedRow(t *testing.T) {
 	dsn := fmt.Sprintf("file:w21pin%d?mode=memory&cache=shared", time.Now().UnixNano())
 
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
@@ -107,7 +108,9 @@ func TestPinsW21_UpdateTaskTodoStatusCanWriteIntoAnAlreadyDeletedRow(t *testing.
 	if !deleted {
 		t.Fatal("the forced soft delete never fired, so nothing was interleaved")
 	}
-	t.Logf("UpdateTaskTodoStatus returned: %v", updErr)
+	if !errors.Is(updErr, mwanachamataskmanager.ErrTaskTodoNotFound) {
+		t.Errorf("UpdateTaskTodoStatus returned %v, want ErrTaskTodoNotFound", updErr)
+	}
 
 	var row struct {
 		Status  string
@@ -122,8 +125,8 @@ func TestPinsW21_UpdateTaskTodoStatusCanWriteIntoAnAlreadyDeletedRow(t *testing.
 	if !row.Deleted {
 		t.Fatal("precondition: the row should have been soft-deleted mid-call")
 	}
-	if row.Status != string(mwanachamataskmanager.TodoStatusCompleted) {
-		t.Fatalf("status = %q, want %q — the racing update no longer lands on a deleted row, so W21 looks fixed and this pin should be rewritten to assert the guard",
-			row.Status, mwanachamataskmanager.TodoStatusCompleted)
+	if row.Status != string(mwanachamataskmanager.TodoStatusPending) {
+		t.Errorf("status = %q, want %q — the racing update landed on an already-deleted row",
+			row.Status, mwanachamataskmanager.TodoStatusPending)
 	}
 }

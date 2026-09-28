@@ -43,7 +43,7 @@ func (m *taskManager) RollbackWorkflowRun(ctx context.Context, runID, reason str
 
 	// Step 1 — acquire the rolling_back lock (durably committed; not part of
 	// step 3's transaction — see file doc).
-	rollingRun, err := m.UpdateWorkflowRunStatus(ctx, runID, WorkflowRunStatusRollingBack, reason)
+	rollingRun, err := m.setRunStatus(ctx, runID, WorkflowRunStatusRollingBack, reason)
 	if err != nil {
 		return WorkflowRun{}, fmt.Errorf("RollbackWorkflowRun: acquire: %w", err)
 	}
@@ -58,7 +58,7 @@ func (m *taskManager) RollbackWorkflowRun(ctx context.Context, runID, reason str
 		} else {
 			rollbackErr = fmt.Errorf("delete artifacts: %w", err)
 		}
-		failedRun, ferr := m.UpdateWorkflowRunStatus(ctx, runID, WorkflowRunStatusRollbackFailed, rollbackErr.Error())
+		failedRun, ferr := m.setRunStatus(ctx, runID, WorkflowRunStatusRollbackFailed, rollbackErr.Error())
 		if ferr != nil {
 			return rollingRun, rollbackErr
 		}
@@ -66,7 +66,7 @@ func (m *taskManager) RollbackWorkflowRun(ctx context.Context, runID, reason str
 	}
 
 	// Step 4 — finalize.
-	finalRun, err := m.UpdateWorkflowRunStatus(ctx, runID, WorkflowRunStatusRolledBack, reason)
+	finalRun, err := m.setRunStatus(ctx, runID, WorkflowRunStatusRolledBack, reason)
 	if err != nil {
 		return WorkflowRun{}, fmt.Errorf("RollbackWorkflowRun: finalize: %w", err)
 	}
@@ -76,8 +76,16 @@ func (m *taskManager) RollbackWorkflowRun(ctx context.Context, runID, reason str
 // DeleteWorkflowRunArtifacts implements [TaskManager.DeleteWorkflowRunArtifacts].
 // Tasks are reset to pending (not deleted). TaskTodos are soft-deleted.
 func (m *taskManager) DeleteWorkflowRunArtifacts(ctx context.Context, runID string) error {
-	if _, err := m.GetWorkflowRun(ctx, runID); err != nil {
+	run, err := m.GetWorkflowRun(ctx, runID)
+	if err != nil {
 		return err
+	}
+	// Compensation is step 3 of a rollback, and a run not in rolling_back is
+	// not being rolled back. Without this, the artifacts of a live run could
+	// be wiped while its own status still reported it running.
+	if run.Status != WorkflowRunStatusRollingBack {
+		return fmt.Errorf("%w: run %s is %s, and artifacts are compensated only while rolling_back",
+			ErrRollbackNotInProgress, runID, run.Status)
 	}
 
 	var resetTaskIDs []string

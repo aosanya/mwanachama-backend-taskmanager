@@ -1,33 +1,31 @@
 package routes_test
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"sync"
 	"testing"
-
-	"github.com/aosanya/mwanachama-backend-shared/spec"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
+	"github.com/aosanya/mwanachama-backend-shared/spec"
+
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
-	"github.com/aosanya/mwanachama-backend-taskmanager/routes"
 )
 
-// w19RaceManagerAndDB mirrors this package's other race-test managers (see
-// w15's own wk15Manager) but also hands back the underlying *gorm.DB and
-// table names, so the test can peek at persisted row state (deleted plus a
-// content field together) that no TaskManager method exposes — GetTask/
-// ListTasks both filter deleted=false, so a deleted row's current content
-// is otherwise unobservable through the public API.
-func w19RaceManagerAndDB(t *testing.T, prefix string) (mwanachamataskmanager.TaskManager, *gorm.DB, testTables) {
+// W19, W20 and W21 all force the interleave rather than racing for it:
+// a callback soft-deletes the row from a second connection just before the
+// method's own UPDATE lands. Racing real requests reproduced at roughly one
+// iteration in a hundred for W21, and for W19 and W20 could not be told apart
+// from a benign update-then-delete ordering at all. The defect is not
+// probabilistic; only the scheduling that exposes it is.
+func w19Setup(t *testing.T) (mwanachamataskmanager.TaskManager, *gorm.DB, testTables, string) {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	dsn := fmt.Sprintf("file:w19pin%d?mode=memory&cache=shared", time.Now().UnixNano())
+
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("gorm.Open: %v", err)
 	}
@@ -35,123 +33,127 @@ func w19RaceManagerAndDB(t *testing.T, prefix string) (mwanachamataskmanager.Tas
 	if err != nil {
 		t.Fatalf("db.DB: %v", err)
 	}
-	sqlDB.SetMaxOpenConns(1)
-	workSpec, tables := specForInstance(t, "../spec/examples/work.taskmanager.json", prefix)
+	sqlDB.SetMaxOpenConns(2)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	workSpec, tables := specForInstance(t, "../spec/examples/work.taskmanager.json", "w19pin")
 	if err := spec.Migrate(db, workSpec); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	mgr, err := mwanachamataskmanager.NewTaskManager(db, workSpec, nil)
+	tm, err := mwanachamataskmanager.NewTaskManager(db, workSpec, nil)
 	if err != nil {
 		t.Fatalf("NewTaskManager: %v", err)
 	}
-	return mgr, db, tables
+	return tm, db, tables, dsn
 }
 
-func w19RaceMux(tm mwanachamataskmanager.TaskManager) *http.ServeMux {
-	m := http.NewServeMux()
-	for _, rt := range routes.Routes(tm) {
-		m.Handle(rt.Pattern(""), rt.Handler)
+// TestW19_UpdateTaskRefusesAnAlreadyDeletedRow guards board row W19, fixed
+// 2026-09-28. task_impl_task.go's UpdateTask read the current row through
+// GetTask (`WHERE id = ? AND deleted = false`) and then wrote through a bare
+// `Where("id = ?")`, so a DeleteTask landing in the gap was invisible to the
+// write, which applied the caller's new Title and returned 200. The write now
+// carries `AND deleted = false` and reports ErrTaskNotFound when that matches
+// no row.
+//
+// This replaced a 200-iteration race that could not distinguish the defect
+// from a legitimate update-then-delete ordering — it reported ~73/200
+// "written into a deleted row" even after the fix, because the final state of
+// both is the same. The interleave is forced instead, so the assertion is
+// about the defect rather than about scheduling.
+func TestW19_UpdateTaskRefusesAnAlreadyDeletedRow(t *testing.T) {
+	tm, db, tables, dsn := w19Setup(t)
+	ctx := context.Background()
+
+	task, err := tm.CreateTask(ctx, mwanachamataskmanager.Task{Title: "original", Description: "as written"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
 	}
-	return m
+
+	side, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("side gorm.Open: %v", err)
+	}
+
+	deleted := false
+	err = db.Callback().Update().Before("gorm:update").Register("w19:delete_between_read_and_write",
+		func(tx *gorm.DB) {
+			if deleted || tx.Statement.Table != tables.Tasks {
+				return
+			}
+			deleted = true
+			if err := side.Exec("UPDATE "+tables.Tasks+" SET deleted = 1 WHERE id = ?", task.ID).Error; err != nil {
+				t.Errorf("forced soft delete: %v", err)
+			}
+		})
+	if err != nil {
+		t.Fatalf("register callback: %v", err)
+	}
+
+	task.Title = "raced-update"
+	_, updErr := tm.UpdateTask(ctx, task)
+	if !deleted {
+		t.Fatal("the forced soft delete never fired, so nothing was interleaved")
+	}
+	if !errors.Is(updErr, mwanachamataskmanager.ErrTaskNotFound) {
+		t.Errorf("UpdateTask returned %v, want ErrTaskNotFound", updErr)
+	}
+
+	var row struct {
+		Title   string
+		Deleted bool
+	}
+	if err := side.Table(tables.Tasks).Select("title, deleted").
+		Where("id = ?", task.ID).Scan(&row).Error; err != nil {
+		t.Fatalf("raw select: %v", err)
+	}
+	if !row.Deleted {
+		t.Fatal("precondition: the row should have been soft-deleted mid-call")
+	}
+	if row.Title != "original" {
+		t.Errorf("title = %q, want %q — the racing update landed on an already-deleted row", row.Title, "original")
+	}
 }
 
-// TestPinsW19_UpdateTaskCanWriteIntoAnAlreadyDeletedRow pins board row W19:
-// task_impl_task.go's UpdateTask reads the current row through GetTask
-// (`WHERE id = ? AND deleted = false`) but writes through a bare
-// `Save(&row).Where("id = ?", task.ID)` with no `deleted` guard at all — a
-// DeleteTask that lands in the gap between UpdateTask's own read and its
-// own write is invisible to the write: the update still applies its new
-// Title/Status/etc to the now-deleted row, and UpdateTask returns 200 with
-// no error, even though the row is (and stays) soft deleted.
-//
-// Driven through the real `routes.Routes(tm)` mux behind `httptest.
-// NewServer`, with two real *http.Client requests fired concurrently — PUT
-// {taskID} racing DELETE {taskID} — repeated across 200 fresh tasks so the
-// test does not depend on hitting one particular interleaving. This is the
-// identical shape as `mwanachama-backend-assetmanager`'s board row A14
-// (`UpdateAsset`/`UpdateLocation` racing their own Delete counterparts,
-// found the same session) — the same loophole class (a soft-delete flag
-// one write path checks and another ignores) reproduced in a second repo.
-//
-// Once W19 is fixed (e.g. `Where("id = ? AND deleted = ?", task.ID,
-// false).Save(&row)` or an explicit `Updates` with that same WHERE,
-// checking RowsAffected and returning ErrTaskNotFound on 0 rows affected —
-// the same compare-and-swap shape A14 and mwanachama-backend-git's
-// `advanceBranchHead` already use), the deleted count here should drop to
-// 0 and this test should be rewritten to assert exactly that.
-func TestPinsW19_UpdateTaskCanWriteIntoAnAlreadyDeletedRow(t *testing.T) {
-	const iterations = 200
-	bothSucceeded := 0
-	writtenIntoDeletedRow := 0
+// An ordinary update, with nothing deleting underneath it, still writes.
+func TestW19_UpdateTaskStillWritesWhenNothingDeletesUnderneath(t *testing.T) {
+	tm, _, _, _ := w19Setup(t)
+	ctx := context.Background()
 
-	for i := 0; i < iterations; i++ {
-		tm, db, tables := w19RaceManagerAndDB(t, fmt.Sprintf("w19race%d", i))
-		srv := httptest.NewServer(w19RaceMux(tm))
-		client := srv.Client()
-
-		task, err := tm.CreateTask(context.Background(), mwanachamataskmanager.Task{Title: "original"})
-		if err != nil {
-			t.Fatalf("CreateTask: %v", err)
-		}
-
-		var wg sync.WaitGroup
-		var updateStatus, deleteStatus int
-		var updateErr, deleteErr error
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			var buf bytes.Buffer
-			_ = json.NewEncoder(&buf).Encode(map[string]any{"id": task.ID, "title": "raced-update", "status": "pending"})
-			req, _ := http.NewRequest(http.MethodPut, fmt.Sprintf("%s/tasks/%s", srv.URL, task.ID), &buf)
-			req.Header.Set("Content-Type", "application/json")
-			resp, err := client.Do(req)
-			if err != nil {
-				updateErr = err
-				return
-			}
-			defer resp.Body.Close()
-			updateStatus = resp.StatusCode
-		}()
-		go func() {
-			defer wg.Done()
-			req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/tasks/%s", srv.URL, task.ID), nil)
-			resp, err := client.Do(req)
-			if err != nil {
-				deleteErr = err
-				return
-			}
-			defer resp.Body.Close()
-			deleteStatus = resp.StatusCode
-		}()
-		wg.Wait()
-		if updateErr != nil {
-			t.Fatalf("update Do: %v", updateErr)
-		}
-		if deleteErr != nil {
-			t.Fatalf("delete Do: %v", deleteErr)
-		}
-
-		if updateStatus == http.StatusOK && (deleteStatus == http.StatusNoContent || deleteStatus == http.StatusOK) {
-			bothSucceeded++
-			var row struct {
-				Title   string
-				Deleted bool
-			}
-			if err := db.Table(tables.Tasks).Select("title, deleted").Where("id = ?", task.ID).Scan(&row).Error; err != nil {
-				t.Fatalf("raw select: %v", err)
-			}
-			if row.Deleted && row.Title == "raced-update" {
-				writtenIntoDeletedRow++
-			}
-		}
-
-		srv.Close()
+	task, err := tm.CreateTask(ctx, mwanachamataskmanager.Task{Title: "original"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
 	}
+	task.Title = "edited"
+	updated, err := tm.UpdateTask(ctx, task)
+	if err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+	if updated.Title != "edited" {
+		t.Errorf("title = %q, want edited", updated.Title)
+	}
+	read, err := tm.GetTask(ctx, task.ID)
+	if err != nil {
+		t.Fatalf("GetTask: %v", err)
+	}
+	if read.Title != "edited" {
+		t.Errorf("persisted title = %q, want edited", read.Title)
+	}
+}
 
-	t.Logf("UpdateTask returned 200 concurrently with DeleteTask succeeding: %d/%d iterations", bothSucceeded, iterations)
-	t.Logf("of those, the persisted row ended up deleted=true with the racing update's Title silently applied anyway: %d/%d", writtenIntoDeletedRow, bothSucceeded)
+// Updating a task that was already deleted before the call is refused too.
+func TestW19_UpdateTaskRefusesADeletedTaskOutright(t *testing.T) {
+	tm, _, _, _ := w19Setup(t)
+	ctx := context.Background()
 
-	if writtenIntoDeletedRow == 0 {
-		t.Fatalf("expected at least one iteration where a soft-deleted Task row still absorbed a racing update (race not reproduced across %d iterations — current broken behavior no longer confirmed)", iterations)
+	task, err := tm.CreateTask(ctx, mwanachamataskmanager.Task{Title: "original"})
+	if err != nil {
+		t.Fatalf("CreateTask: %v", err)
+	}
+	if err := tm.DeleteTask(ctx, task.ID); err != nil {
+		t.Fatalf("DeleteTask: %v", err)
+	}
+	task.Title = "edited"
+	if _, err := tm.UpdateTask(ctx, task); !errors.Is(err, mwanachamataskmanager.ErrTaskNotFound) {
+		t.Errorf("err = %v, want ErrTaskNotFound", err)
 	}
 }

@@ -28,12 +28,22 @@ func newTestManager(t *testing.T) mwanachamataskmanager.TaskManager {
 // the default nil (events skipped).
 func newTestManagerWithPublisher(t *testing.T, pub mwanachamataskmanager.Publisher) mwanachamataskmanager.TaskManager {
 	t.Helper()
+	mgr, _, _ := newTestManagerWithDB(t, pub)
+	return mgr
+}
+
+// newTestManagerWithDB is [newTestManagerWithPublisher] with the database and
+// its table names handed back too, for a test that has to read or write a row
+// the manager's own API deliberately will not — a run left in rolling_back by
+// a rollback that never finished, for one.
+func newTestManagerWithDB(t *testing.T, pub mwanachamataskmanager.Publisher) (mwanachamataskmanager.TaskManager, *gorm.DB, testTables) {
+	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("gorm.Open: %v", err)
 	}
 
-	workSpec, _ := specForInstance(t, "spec/examples/work.taskmanager.json", "test")
+	workSpec, tables := specForInstance(t, "spec/examples/work.taskmanager.json", "test")
 	if err := spec.Migrate(db, workSpec); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
@@ -42,7 +52,7 @@ func newTestManagerWithPublisher(t *testing.T, pub mwanachamataskmanager.Publish
 	if err != nil {
 		t.Fatalf("NewTaskManager: %v", err)
 	}
-	return mgr
+	return mgr, db, tables
 }
 
 func TestNewTaskManager_NilDB(t *testing.T) {

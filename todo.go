@@ -104,9 +104,13 @@ func (m *taskManager) UpdateTaskTodoStatus(ctx context.Context, todoID string, s
 		return TaskTodo{}, err
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	if err := m.store.Query(ctx, roleTaskTodo).Where("id = ?", todoID).
-		Updates(map[string]any{"status": string(status), "updated_at": now}).Error; err != nil {
-		return TaskTodo{}, fmt.Errorf("UpdateTaskTodoStatus: %w", err)
+	res := m.store.Query(ctx, roleTaskTodo).Where("id = ? AND deleted = ?", todoID, false).
+		Updates(map[string]any{"status": string(status), "updated_at": now})
+	if res.Error != nil {
+		return TaskTodo{}, fmt.Errorf("UpdateTaskTodoStatus: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return TaskTodo{}, ErrTaskTodoNotFound
 	}
 	return m.GetTaskTodo(ctx, todoID)
 }

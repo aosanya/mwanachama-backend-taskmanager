@@ -43,18 +43,17 @@ func wk15Manager(t *testing.T, prefix string) mwanachamataskmanager.TaskManager 
 	return mgr
 }
 
-// TestIncrementFailureBudget_PinsConcurrentDistinctChildIDsLoseUpdates pins
-// board row W15: workflow_run_failure_budget.go's IncrementFailureBudget is
-// documented as atomic but is a plain read-modify-write with no CAS guard.
-// Five concurrent increments with five DISTINCT child_run_ids (a legitimate
-// case, not a repeat of the same id) should all land — the final counter
-// should read 5. It does not: this test asserts the CURRENT broken
-// behavior (fewer than 5 survive, consistently 1 in local runs). Once W15's
-// fix (a CAS-guarded UPDATE or a wrapping transaction) lands, this
-// assertion must be changed to require finalUsed == n and the len(counted)
-// == n check strengthened to require every childRunID present, not just
-// the count.
-func TestIncrementFailureBudget_PinsConcurrentDistinctChildIDsLoseUpdates(t *testing.T) {
+// TestIncrementFailureBudget_ConcurrentDistinctChildIDsAllLand guards board
+// row W15, fixed 2026-09-28. IncrementFailureBudget was documented as atomic
+// but was a plain read-modify-write: five concurrent charges with five
+// DISTINCT child_run_ids (a legitimate case, not a repeat of one id) left the
+// counter reading 1, because every increment past the first to commit
+// clobbered the prior write. It now writes under a compare-and-swap on the
+// counter it read and goes round again when it loses, so all five land.
+//
+// This asserted the broken behaviour until the fix; it now asserts the fixed
+// one, and every child id has to be present rather than just the count.
+func TestIncrementFailureBudget_ConcurrentDistinctChildIDsAllLand(t *testing.T) {
 	tm := wk15Manager(t, "wk15")
 	mux := wk14Mux(tm)
 	srv := httptest.NewServer(mux)
@@ -100,14 +99,56 @@ func TestIncrementFailureBudget_PinsConcurrentDistinctChildIDsLoseUpdates(t *tes
 	usedF, _ := final["failure_pipelines_used"].(float64)
 	counted, _ := final["counted_child_run_ids"].([]any)
 
-	// PINS THE BUG: with a correct CAS/transactional guard this would be
-	// n (5). Today it is consistently 1 — every increment past the first
-	// to commit clobbers the prior write instead of building on it.
-	if int(usedF) >= n {
-		t.Fatalf("W15 appears fixed: failure_pipelines_used=%d, want < %d to pin the known lost-update race — update this test's assertion to require == %d and remove this pin", int(usedF), n, n)
+	if int(usedF) != n {
+		t.Errorf("failure_pipelines_used = %d, want %d — a concurrent charge was lost", int(usedF), n)
 	}
-	if len(counted) >= n {
-		t.Fatalf("W15 appears fixed: counted_child_run_ids has %d entries, want < %d to pin the known lost-update race — update this test's assertion to require == %d and remove this pin", len(counted), n, n)
+	if len(counted) != n {
+		t.Errorf("counted_child_run_ids has %d entries, want %d: %v", len(counted), n, counted)
 	}
-	t.Logf("pinned lost-update race: failure_pipelines_used=%d counted_child_run_ids=%v (want %d once W15 is fixed)", int(usedF), counted, n)
+	seen := map[string]bool{}
+	for _, c := range counted {
+		if id, ok := c.(string); ok {
+			seen[id] = true
+		}
+	}
+	for i := 0; i < n; i++ {
+		if id := fmt.Sprintf("child-%d", i); !seen[id] {
+			t.Errorf("%s was charged but is not in counted_child_run_ids: %v", id, counted)
+		}
+	}
+}
+
+// Charging the same child twice stays a no-op — the idempotency the counter
+// already had, which the compare-and-swap must not have cost it.
+func TestIncrementFailureBudget_ChargingOneChildTwiceCountsItOnce(t *testing.T) {
+	tm := wk15Manager(t, "wk15idem")
+	mux := wk14Mux(tm)
+
+	rootResp := wk14Do(t, mux, "POST", "/workflow-runs", wk14JSON(t, map[string]any{"name": "root"}))
+	var root map[string]any
+	if err := json.Unmarshal(rootResp.Body.Bytes(), &root); err != nil {
+		t.Fatalf("unmarshal root: %v", err)
+	}
+	rootID, _ := root["id"].(string)
+	if setResp := wk14Do(t, mux, "PUT", "/workflow-runs/"+rootID+"/failure-budget",
+		wk14JSON(t, map[string]any{"budget": 10})); setResp.Code != 200 {
+		t.Fatalf("SetFailureBudget: got %d, body %s", setResp.Code, setResp.Body.String())
+	}
+
+	for i := 0; i < 3; i++ {
+		resp := wk14Do(t, mux, "POST", "/workflow-runs/"+rootID+"/failure-budget/increment",
+			wk14JSON(t, map[string]any{"child_run_id": "the-same-child"}))
+		if resp.Code != 200 {
+			t.Fatalf("charge %d: got %d, body %s", i, resp.Code, resp.Body.String())
+		}
+	}
+
+	getResp := wk14Do(t, mux, "GET", "/workflow-runs/"+rootID, nil)
+	var final map[string]any
+	if err := json.Unmarshal(getResp.Body.Bytes(), &final); err != nil {
+		t.Fatalf("unmarshal final: %v", err)
+	}
+	if usedF, _ := final["failure_pipelines_used"].(float64); int(usedF) != 1 {
+		t.Errorf("failure_pipelines_used = %d, want 1 after charging one child three times", int(usedF))
+	}
 }

@@ -46,40 +46,54 @@ func (m *taskManager) SetFailureBudget(ctx context.Context, runID string, budget
 // The returned `exhausted` flag is true iff `used > budget` after the
 // increment.
 func (m *taskManager) IncrementFailureBudget(ctx context.Context, rootRunID, childRunID string) (used, budget int, exhausted bool, err error) {
-	run, getErr := m.GetWorkflowRun(ctx, rootRunID)
-	if getErr != nil {
-		return 0, 0, false, getErr
-	}
-	if run.ParentWorkflowRunID != "" {
-		return 0, 0, false, fmt.Errorf("%w: run %s has parent %s", ErrNotRootWorkflowRun, rootRunID, run.ParentWorkflowRunID)
-	}
+	for attempt := 0; attempt < maxBudgetAttempts; attempt++ {
+		run, getErr := m.GetWorkflowRun(ctx, rootRunID)
+		if getErr != nil {
+			return 0, 0, false, getErr
+		}
+		if run.ParentWorkflowRunID != "" {
+			return 0, 0, false, fmt.Errorf("%w: run %s has parent %s", ErrNotRootWorkflowRun, rootRunID, run.ParentWorkflowRunID)
+		}
 
-	for _, id := range run.CountedChildRunIDs {
-		if id == childRunID {
-			return run.FailurePipelinesUsed, run.FailurePipelineBudget, exhaustedAt(run.FailurePipelinesUsed, run.FailurePipelineBudget), nil
+		for _, id := range run.CountedChildRunIDs {
+			if id == childRunID {
+				return run.FailurePipelinesUsed, run.FailurePipelineBudget, exhaustedAt(run.FailurePipelinesUsed, run.FailurePipelineBudget), nil
+			}
+		}
+
+		newUsed := run.FailurePipelinesUsed + 1
+		newCounted := append(append([]string(nil), run.CountedChildRunIDs...), childRunID)
+		countedJSON, marshalErr := json.Marshal(newCounted)
+		if marshalErr != nil {
+			return 0, 0, false, fmt.Errorf("IncrementFailureBudget: %w", marshalErr)
+		}
+
+		// The counter this call read is part of the write's own condition, so
+		// a second caller that read the same value writes nothing and goes
+		// round again rather than overwriting the increment that landed
+		// first.
+		res := m.db.WithContext(ctx).Table(m.store.Table(roleWorkflowRun)).
+			Where("id = ? AND failure_pipelines_used = ?", rootRunID, run.FailurePipelinesUsed).
+			Updates(map[string]any{
+				"failure_pipelines_used": newUsed,
+				"counted_child_run_ids":  countedJSON,
+			})
+		if res.Error != nil {
+			return 0, 0, false, fmt.Errorf("IncrementFailureBudget: %w", res.Error)
+		}
+		if res.RowsAffected == 1 {
+			return newUsed, run.FailurePipelineBudget, exhaustedAt(newUsed, run.FailurePipelineBudget), nil
 		}
 	}
-
-	newUsed := run.FailurePipelinesUsed + 1
-	newCounted := append(append([]string(nil), run.CountedChildRunIDs...), childRunID)
-	countedJSON, err := json.Marshal(newCounted)
-	if err != nil {
-		return 0, 0, false, fmt.Errorf("IncrementFailureBudget: %w", err)
-	}
-
-	if updateErr := m.db.WithContext(ctx).Table(m.store.Table(roleWorkflowRun)).Where("id = ?", rootRunID).
-		Updates(map[string]any{
-			"failure_pipelines_used": newUsed,
-			"counted_child_run_ids":  countedJSON,
-		}).Error; updateErr != nil {
-		return 0, 0, false, fmt.Errorf("IncrementFailureBudget: %w", updateErr)
-	}
-	result, getErr := m.GetWorkflowRun(ctx, rootRunID)
-	if getErr != nil {
-		return 0, 0, false, fmt.Errorf("IncrementFailureBudget: reread: %w", getErr)
-	}
-	return result.FailurePipelinesUsed, result.FailurePipelineBudget, exhaustedAt(result.FailurePipelinesUsed, result.FailurePipelineBudget), nil
+	return 0, 0, false, fmt.Errorf("IncrementFailureBudget: the counter on run %s was overwritten by another caller %d times running",
+		rootRunID, maxBudgetAttempts)
 }
+
+// maxBudgetAttempts caps how many times a charge re-reads and retries after
+// losing the compare-and-swap. Every retry means another caller's increment
+// landed first, so the loop makes progress; the cap is what stops a pathological
+// stream of concurrent charges spinning forever.
+const maxBudgetAttempts = 16
 
 // exhaustedAt reports whether the post-increment counter exceeds the cap.
 // A zero budget means "unconfigured" — the gate is open until the budget

@@ -80,8 +80,12 @@ func (m *taskManager) UpdateProject(ctx context.Context, p Project) (Project, er
 	if err != nil {
 		return Project{}, fmt.Errorf("UpdateProject: %w", err)
 	}
-	if err := m.store.Query(ctx, roleProject).Where("id = ?", p.ID).Updates(row).Error; err != nil {
-		return Project{}, fmt.Errorf("UpdateProject: %w", err)
+	res := m.store.Query(ctx, roleProject).Where("id = ? AND deleted = ?", p.ID, false).Updates(row)
+	if res.Error != nil {
+		return Project{}, fmt.Errorf("UpdateProject: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return Project{}, ErrProjectNotFound
 	}
 	return p, nil
 }

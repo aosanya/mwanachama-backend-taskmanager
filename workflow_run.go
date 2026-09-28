@@ -258,6 +258,23 @@ func (m *taskManager) GetWorkflowRunClosure(ctx context.Context, runID string) (
 // Valid transitions are defined by [WorkflowRunStatus.CanTransitionTo]; any
 // other request returns [ErrInvalidRunStatusTransition].
 func (m *taskManager) UpdateWorkflowRunStatus(ctx context.Context, runID string, newStatus WorkflowRunStatus, reason string) (WorkflowRun, error) {
+	if rollbackOwned[newStatus] {
+		return WorkflowRun{}, fmt.Errorf("%w: %s is reached by rolling a run back, not by setting it", ErrInvalidRunStatusTransition, newStatus)
+	}
+	return m.setRunStatus(ctx, runID, newStatus, reason)
+}
+
+// rollbackOwned are the three states RollbackWorkflowRun drives a run
+// through. A caller setting one directly would be claiming a compensation
+// that never ran, so the public setter refuses them and only the coordinator
+// reaches setRunStatus with one.
+var rollbackOwned = map[WorkflowRunStatus]bool{
+	WorkflowRunStatusRollingBack:    true,
+	WorkflowRunStatusRolledBack:     true,
+	WorkflowRunStatusRollbackFailed: true,
+}
+
+func (m *taskManager) setRunStatus(ctx context.Context, runID string, newStatus WorkflowRunStatus, reason string) (WorkflowRun, error) {
 	run, err := m.GetWorkflowRun(ctx, runID)
 	if err != nil {
 		return WorkflowRun{}, err

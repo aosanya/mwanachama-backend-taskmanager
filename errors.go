@@ -96,6 +96,12 @@ var ErrImportJobNotCancellable = errors.New("import job is not cancellable")
 // rollback_failed before re-triggering.
 var ErrRollbackConflict = errors.New("workflow run rollback already in progress")
 
+// ErrRollbackNotInProgress is returned by
+// [TaskManager.DeleteWorkflowRunArtifacts] when the run is in any state but
+// rolling_back. Compensating the artifacts of a run nobody is rolling back
+// would leave its status reporting work that no longer exists.
+var ErrRollbackNotInProgress = errors.New("workflow run is not rolling back")
+
 // ErrForeignRunDependency is returned by [TaskManager.RollbackWorkflowRun]
 // when a Task inside the run closure has a depends_on edge pointing to a Task
 // that belongs to a different WorkflowRun. Deleting the Task would break the

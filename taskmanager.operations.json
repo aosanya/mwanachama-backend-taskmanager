@@ -505,6 +505,7 @@
     "ErrProjectAlreadyExists": 409,
     "ErrWorkflowRunNameExists": 409,
     "ErrRollbackConflict": 409,
+    "ErrRollbackNotInProgress": 409,
     "ErrFailureBudgetAlreadySet": 409,
     "ErrImportJobNotCancellable": 409,
     "ErrCannotCancelTerminalRun": 409,

@@ -109,9 +109,12 @@ func (m *taskManager) UpdateTask(ctx context.Context, task Task) (Task, error) {
 	if err != nil {
 		return Task{}, fmt.Errorf("UpdateTask: %w", err)
 	}
-	if err := m.store.Query(ctx, roleTask).Where("id = ?", task.ID).
-		Updates(row).Error; err != nil {
-		return Task{}, fmt.Errorf("UpdateTask: %w", err)
+	res := m.store.Query(ctx, roleTask).Where("id = ? AND deleted = ?", task.ID, false).Updates(row)
+	if res.Error != nil {
+		return Task{}, fmt.Errorf("UpdateTask: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return Task{}, ErrTaskNotFound
 	}
 	if err := m.setTaskTags(ctx, task.ID, task.Tags); err != nil {
 		log.Printf("mwanachamataskmanager: UpdateTask: setTaskTags task=%s: %v", task.ID, err)

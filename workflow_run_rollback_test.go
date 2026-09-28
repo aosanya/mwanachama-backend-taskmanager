@@ -16,6 +16,24 @@ func newManagerWithPublisher(t *testing.T) (mwanachamataskmanager.TaskManager, *
 	return newTestManagerWithPublisher(t, pub), pub
 }
 
+// rollBack drives an existing run to a status a rollback can start from and
+// then rolls it back. Compensation is step 3 of that sequence and is no
+// longer reachable on its own, so a test asserting what compensation does
+// asks for the whole rollback.
+func rollBack(t *testing.T, mgr mwanachamataskmanager.TaskManager, runID, reason string) (mwanachamataskmanager.WorkflowRun, error) {
+	t.Helper()
+	ctx := context.Background()
+	for _, s := range []mwanachamataskmanager.WorkflowRunStatus{
+		mwanachamataskmanager.WorkflowRunStatusInProgress,
+		mwanachamataskmanager.WorkflowRunStatusFailed,
+	} {
+		if _, err := mgr.UpdateWorkflowRunStatus(ctx, runID, s, ""); err != nil {
+			t.Fatalf("UpdateWorkflowRunStatus → %s: %v", s, err)
+		}
+	}
+	return mgr.RollbackWorkflowRun(ctx, runID, reason)
+}
+
 func createRunAtStatus(t *testing.T, mgr mwanachamataskmanager.TaskManager, target mwanachamataskmanager.WorkflowRunStatus) mwanachamataskmanager.WorkflowRun {
 	t.Helper()
 	ctx := context.Background()
@@ -89,14 +107,18 @@ func TestRollbackWorkflowRun_PendingRun_ReturnsInvalidTransition(t *testing.T) {
 	}
 }
 
+// A run is only ever found in rolling_back if a previous rollback stopped
+// part-way — nothing in the API can put it there, which is what W14 closed.
+// The row is written directly here to stand in for that crash.
 func TestRollbackWorkflowRun_AlreadyRollingBack_ReturnsConflict(t *testing.T) {
 	ctx := context.Background()
-	mgr, _ := newManagerWithPublisher(t)
+	pub := &recordingPublisher{}
+	mgr, db, tables := newTestManagerWithDB(t, pub)
 	run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusFailed)
 
-	// Manually put the run into rolling_back.
-	if _, err := mgr.UpdateWorkflowRunStatus(ctx, run.ID, mwanachamataskmanager.WorkflowRunStatusRollingBack, ""); err != nil {
-		t.Fatalf("UpdateWorkflowRunStatus: %v", err)
+	if err := db.Table(tables.WorkflowRuns).Where("id = ?", run.ID).
+		UpdateColumn("status", string(mwanachamataskmanager.WorkflowRunStatusRollingBack)).Error; err != nil {
+		t.Fatalf("simulate an unfinished rollback: %v", err)
 	}
 
 	_, err := mgr.RollbackWorkflowRun(ctx, run.ID, "")
@@ -136,8 +158,8 @@ func TestDeleteWorkflowRunArtifacts_ResetsTasksToPendingAndEmitsEvents(t *testin
 		t.Fatalf("LinkTaskToRun: %v", err)
 	}
 
-	if err := mgr.DeleteWorkflowRunArtifacts(ctx, run.ID); err != nil {
-		t.Fatalf("DeleteWorkflowRunArtifacts: %v", err)
+	if _, err := rollBack(t, mgr, run.ID, ""); err != nil {
+		t.Fatalf("RollbackWorkflowRun: %v", err)
 	}
 
 	// Task must still exist, reset to pending with workflow_run_id cleared.
@@ -196,8 +218,8 @@ func TestDeleteWorkflowRunArtifacts_ClearsStaleCompletedAt(t *testing.T) {
 	staleCompletedAt := task.CompletedAt
 
 	// Now roll back. The task should reset to pending AND completed_at MUST be cleared.
-	if err := mgr.DeleteWorkflowRunArtifacts(ctx, run.ID); err != nil {
-		t.Fatalf("DeleteWorkflowRunArtifacts: %v", err)
+	if _, err := rollBack(t, mgr, run.ID, ""); err != nil {
+		t.Fatalf("RollbackWorkflowRun: %v", err)
 	}
 
 	after, err := mgr.GetTask(ctx, task.ID)
@@ -253,8 +275,8 @@ func TestDeleteWorkflowRunArtifacts_DeletesTaskTodosForRun(t *testing.T) {
 		t.Fatalf("CreateTaskTodo other: %v", err)
 	}
 
-	if err := mgr.DeleteWorkflowRunArtifacts(ctx, run.ID); err != nil {
-		t.Fatalf("DeleteWorkflowRunArtifacts: %v", err)
+	if _, err := rollBack(t, mgr, run.ID, ""); err != nil {
+		t.Fatalf("RollbackWorkflowRun: %v", err)
 	}
 
 	// mineA / mineB must be gone.
@@ -278,8 +300,8 @@ func TestDeleteWorkflowRunArtifacts_NoArtifacts_IsNoOp(t *testing.T) {
 		t.Fatalf("CreateWorkflowRun: %v", err)
 	}
 
-	if err := mgr.DeleteWorkflowRunArtifacts(ctx, run.ID); err != nil {
-		t.Errorf("DeleteWorkflowRunArtifacts on empty run: %v", err)
+	if _, err := rollBack(t, mgr, run.ID, ""); err != nil {
+		t.Errorf("RollbackWorkflowRun on an empty run: %v", err)
 	}
 }
 
@@ -303,9 +325,95 @@ func TestDeleteWorkflowRunArtifacts_ForeignRunDependency_ReturnsError(t *testing
 		t.Fatalf("CreateRelationship: %v", err)
 	}
 
-	err := mgr.DeleteWorkflowRunArtifacts(ctx, runA.ID)
+	rolled, err := rollBack(t, mgr, runA.ID, "")
 	if !errors.Is(err, mwanachamataskmanager.ErrForeignRunDependency) {
 		t.Errorf("err = %v, want ErrForeignRunDependency", err)
+	}
+	// The refusal leaves the run saying so rather than claiming it rolled back.
+	if rolled.Status != mwanachamataskmanager.WorkflowRunStatusRollbackFailed {
+		t.Errorf("status = %s, want rollback_failed", rolled.Status)
+	}
+	// Run A's task keeps its anchor, because nothing was compensated.
+	after, err := mgr.GetTask(ctx, taskA.ID)
+	if err != nil {
+		t.Fatalf("GetTask: %v", err)
+	}
+	if after.WorkflowRunID != runA.ID {
+		t.Errorf("task.WorkflowRunID = %q, want it still anchored to run A", after.WorkflowRunID)
+	}
+}
+
+// W14: compensation is step 3 of a rollback, so it is refused on a run
+// nobody is rolling back. Without this a live run's tasks could be reset and
+// its todos soft-deleted while the run itself still reported in_progress.
+func TestDeleteWorkflowRunArtifacts_RefusedWhenTheRunIsNotRollingBack(t *testing.T) {
+	ctx := context.Background()
+	mgr, _ := newManagerWithPublisher(t)
+
+	for _, status := range []mwanachamataskmanager.WorkflowRunStatus{
+		mwanachamataskmanager.WorkflowRunStatusPending,
+		mwanachamataskmanager.WorkflowRunStatusInProgress,
+		mwanachamataskmanager.WorkflowRunStatusFailed,
+		mwanachamataskmanager.WorkflowRunStatusCompleted,
+	} {
+		run := createRunAtStatus(t, mgr, status)
+		task, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "live", WorkflowRunID: run.ID})
+		if err != nil {
+			t.Fatalf("CreateTask: %v", err)
+		}
+
+		if err := mgr.DeleteWorkflowRunArtifacts(ctx, run.ID); !errors.Is(err, mwanachamataskmanager.ErrRollbackNotInProgress) {
+			t.Errorf("%s: err = %v, want ErrRollbackNotInProgress", status, err)
+		}
+		after, err := mgr.GetTask(ctx, task.ID)
+		if err != nil {
+			t.Fatalf("%s: GetTask: %v", status, err)
+		}
+		if after.WorkflowRunID != run.ID {
+			t.Errorf("%s: the refused call still reset the task's anchor to %q", status, after.WorkflowRunID)
+		}
+	}
+}
+
+// W14: the three states a rollback drives a run through are the
+// coordinator's. A caller reaching rolled_back directly would be claiming a
+// compensation that never ran.
+func TestUpdateWorkflowRunStatus_RefusesTheRollbackStates(t *testing.T) {
+	ctx := context.Background()
+	mgr, _ := newManagerWithPublisher(t)
+
+	for _, status := range []mwanachamataskmanager.WorkflowRunStatus{
+		mwanachamataskmanager.WorkflowRunStatusRollingBack,
+		mwanachamataskmanager.WorkflowRunStatusRolledBack,
+		mwanachamataskmanager.WorkflowRunStatusRollbackFailed,
+	} {
+		run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusFailed)
+		if _, err := mgr.UpdateWorkflowRunStatus(ctx, run.ID, status, ""); !errors.Is(err, mwanachamataskmanager.ErrInvalidRunStatusTransition) {
+			t.Errorf("setting %s: err = %v, want ErrInvalidRunStatusTransition", status, err)
+		}
+		after, err := mgr.GetWorkflowRun(ctx, run.ID)
+		if err != nil {
+			t.Fatalf("GetWorkflowRun: %v", err)
+		}
+		if after.Status != mwanachamataskmanager.WorkflowRunStatusFailed {
+			t.Errorf("setting %s moved the run to %s anyway", status, after.Status)
+		}
+	}
+}
+
+// The coordinator still reaches all three, which is what makes the refusal a
+// gate rather than a wall.
+func TestRollbackWorkflowRun_ReachesRolledBackThroughTheCoordinator(t *testing.T) {
+	ctx := context.Background()
+	mgr, _ := newManagerWithPublisher(t)
+	run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusFailed)
+
+	rolled, err := mgr.RollbackWorkflowRun(ctx, run.ID, "done")
+	if err != nil {
+		t.Fatalf("RollbackWorkflowRun: %v", err)
+	}
+	if rolled.Status != mwanachamataskmanager.WorkflowRunStatusRolledBack {
+		t.Errorf("status = %s, want rolled_back", rolled.Status)
 	}
 }
 

@@ -32,6 +32,7 @@ var sentinels = map[string]error{
 	"ErrProjectAlreadyExists":       mwanachamataskmanager.ErrProjectAlreadyExists,
 	"ErrWorkflowRunNameExists":      mwanachamataskmanager.ErrWorkflowRunNameExists,
 	"ErrRollbackConflict":           mwanachamataskmanager.ErrRollbackConflict,
+	"ErrRollbackNotInProgress":      mwanachamataskmanager.ErrRollbackNotInProgress,
 	"ErrFailureBudgetAlreadySet":    mwanachamataskmanager.ErrFailureBudgetAlreadySet,
 	"ErrImportJobNotCancellable":    mwanachamataskmanager.ErrImportJobNotCancellable,
 	"ErrCannotCancelTerminalRun":    mwanachamataskmanager.ErrCannotCancelTerminalRun,

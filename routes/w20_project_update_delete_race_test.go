@@ -1,113 +1,150 @@
 package routes_test
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"sync"
 	"testing"
+	"time"
+
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+
+	"github.com/aosanya/mwanachama-backend-shared/spec"
 
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
-// TestPinsW20_UpdateProjectCanWriteIntoAnAlreadyDeletedRow pins board row
-// W20: project.go's UpdateProject reads the current row through GetProject
-// (`WHERE id = ? AND deleted = false`) but writes through a bare
-// `Where("id = ?", p.ID).Save(&row)` with no `deleted` guard — the exact
-// same shape as W19 (UpdateTask) and mwanachama-backend-assetmanager's A14
-// (UpdateAsset/UpdateLocation), found while widening from those two. A
-// DeleteProject that lands in the gap between UpdateProject's own read and
-// its own write is invisible to the write: the update still applies its new
-// Name to the now-deleted row, and UpdateProject returns 200 with no error,
-// even though the row is (and stays) soft deleted.
+func w20Setup(t *testing.T) (mwanachamataskmanager.TaskManager, *gorm.DB, testTables, string) {
+	t.Helper()
+	dsn := fmt.Sprintf("file:w20pin%d?mode=memory&cache=shared", time.Now().UnixNano())
+
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("gorm.Open: %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("db.DB: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(2)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	workSpec, tables := specForInstance(t, "../spec/examples/work.taskmanager.json", "w20pin")
+	if err := spec.Migrate(db, workSpec); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+	tm, err := mwanachamataskmanager.NewTaskManager(db, workSpec, nil)
+	if err != nil {
+		t.Fatalf("NewTaskManager: %v", err)
+	}
+	return tm, db, tables, dsn
+}
+
+// TestW20_UpdateProjectRefusesAnAlreadyDeletedRow guards board row W20, fixed
+// 2026-09-28 — the same TOCTOU shape as W19 and W21, on project.go's
+// UpdateProject, which read through GetProject (`deleted = false`) and then
+// wrote through a bare `Where("id = ?")`. Its write now carries
+// `AND deleted = false` and reports ErrProjectNotFound when that matches no
+// row.
 //
-// Driven through the real `routes.Routes(tm)` mux behind `httptest.
-// NewServer`, with two real *http.Client requests fired concurrently — PUT
-// {projectID} racing DELETE {projectID} — repeated across 200 fresh
-// projects so the test does not depend on hitting one particular
-// interleaving.
-//
-// Once W20 is fixed (the same CAS shape as W19/A14 — an `UPDATE ... WHERE
-// id = ? AND deleted = false`, checking RowsAffected and returning
-// ErrProjectNotFound on 0 rows affected), the written-into-deleted count
-// here should drop to 0 and this test should be rewritten to assert exactly
-// that.
-func TestPinsW20_UpdateProjectCanWriteIntoAnAlreadyDeletedRow(t *testing.T) {
-	const iterations = 200
-	bothSucceeded := 0
-	writtenIntoDeletedRow := 0
+// Like W19's, this replaced a 200-iteration race whose final state could not
+// be told apart from a legitimate update-then-delete ordering. See
+// w19_task_update_delete_race_test.go for why the interleave is forced.
+func TestW20_UpdateProjectRefusesAnAlreadyDeletedRow(t *testing.T) {
+	tm, db, tables, dsn := w20Setup(t)
+	ctx := context.Background()
 
-	for i := 0; i < iterations; i++ {
-		tm, db, tables := w19RaceManagerAndDB(t, fmt.Sprintf("w20race%d", i))
-		srv := httptest.NewServer(w19RaceMux(tm))
-		client := srv.Client()
-
-		p, err := tm.CreateProject(context.Background(), mwanachamataskmanager.Project{Name: "original"})
-		if err != nil {
-			t.Fatalf("CreateProject: %v", err)
-		}
-
-		var wg sync.WaitGroup
-		var updateStatus, deleteStatus int
-		var updateErr, deleteErr error
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			var buf bytes.Buffer
-			_ = json.NewEncoder(&buf).Encode(map[string]any{"id": p.ID, "name": "raced-update"})
-			req, _ := http.NewRequest(http.MethodPut, fmt.Sprintf("%s/projects/%s", srv.URL, p.ID), &buf)
-			req.Header.Set("Content-Type", "application/json")
-			resp, err := client.Do(req)
-			if err != nil {
-				updateErr = err
-				return
-			}
-			defer resp.Body.Close()
-			updateStatus = resp.StatusCode
-		}()
-		go func() {
-			defer wg.Done()
-			req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/projects/%s", srv.URL, p.ID), nil)
-			resp, err := client.Do(req)
-			if err != nil {
-				deleteErr = err
-				return
-			}
-			defer resp.Body.Close()
-			deleteStatus = resp.StatusCode
-		}()
-		wg.Wait()
-		if updateErr != nil {
-			t.Fatalf("update Do: %v", updateErr)
-		}
-		if deleteErr != nil {
-			t.Fatalf("delete Do: %v", deleteErr)
-		}
-
-		if updateStatus == http.StatusOK && (deleteStatus == http.StatusNoContent || deleteStatus == http.StatusOK) {
-			bothSucceeded++
-			var row struct {
-				Name    string
-				Deleted bool
-			}
-			if err := db.Table(tables.Projects).Select("name, deleted").Where("id = ?", p.ID).Scan(&row).Error; err != nil {
-				t.Fatalf("raw select: %v", err)
-			}
-			if row.Deleted && row.Name == "raced-update" {
-				writtenIntoDeletedRow++
-			}
-		}
-
-		srv.Close()
+	project, err := tm.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Original"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
 	}
 
-	t.Logf("UpdateProject returned 200 concurrently with DeleteProject succeeding: %d/%d iterations", bothSucceeded, iterations)
-	t.Logf("of those, the persisted row ended up deleted=true with the racing update's Name silently applied anyway: %d/%d", writtenIntoDeletedRow, bothSucceeded)
+	side, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("side gorm.Open: %v", err)
+	}
 
-	if writtenIntoDeletedRow == 0 {
-		t.Fatalf("expected at least one iteration where a soft-deleted Project row still absorbed a racing update (race not reproduced across %d iterations — current broken behavior no longer confirmed)", iterations)
+	deleted := false
+	err = db.Callback().Update().Before("gorm:update").Register("w20:delete_between_read_and_write",
+		func(tx *gorm.DB) {
+			if deleted || tx.Statement.Table != tables.Projects {
+				return
+			}
+			deleted = true
+			if err := side.Exec("UPDATE "+tables.Projects+" SET deleted = 1 WHERE id = ?", project.ID).Error; err != nil {
+				t.Errorf("forced soft delete: %v", err)
+			}
+		})
+	if err != nil {
+		t.Fatalf("register callback: %v", err)
+	}
+
+	project.Name = "raced-update"
+	_, updErr := tm.UpdateProject(ctx, project)
+	if !deleted {
+		t.Fatal("the forced soft delete never fired, so nothing was interleaved")
+	}
+	if !errors.Is(updErr, mwanachamataskmanager.ErrProjectNotFound) {
+		t.Errorf("UpdateProject returned %v, want ErrProjectNotFound", updErr)
+	}
+
+	var row struct {
+		Name    string
+		Deleted bool
+	}
+	if err := side.Table(tables.Projects).Select("name, deleted").
+		Where("id = ?", project.ID).Scan(&row).Error; err != nil {
+		t.Fatalf("raw select: %v", err)
+	}
+	if !row.Deleted {
+		t.Fatal("precondition: the row should have been soft-deleted mid-call")
+	}
+	if row.Name != "Original" {
+		t.Errorf("name = %q, want %q — the racing update landed on an already-deleted row", row.Name, "Original")
+	}
+}
+
+// An ordinary update, with nothing deleting underneath it, still writes.
+func TestW20_UpdateProjectStillWritesWhenNothingDeletesUnderneath(t *testing.T) {
+	tm, _, _, _ := w20Setup(t)
+	ctx := context.Background()
+
+	project, err := tm.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Original"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	project.Name = "Edited"
+	updated, err := tm.UpdateProject(ctx, project)
+	if err != nil {
+		t.Fatalf("UpdateProject: %v", err)
+	}
+	if updated.Name != "Edited" {
+		t.Errorf("name = %q, want Edited", updated.Name)
+	}
+	read, err := tm.GetProject(ctx, project.ID)
+	if err != nil {
+		t.Fatalf("GetProject: %v", err)
+	}
+	if read.Name != "Edited" {
+		t.Errorf("persisted name = %q, want Edited", read.Name)
+	}
+}
+
+// Updating a project that was already deleted before the call is refused too.
+func TestW20_UpdateProjectRefusesADeletedProjectOutright(t *testing.T) {
+	tm, _, _, _ := w20Setup(t)
+	ctx := context.Background()
+
+	project, err := tm.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Original"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	if err := tm.DeleteProject(ctx, project.ID); err != nil {
+		t.Fatalf("DeleteProject: %v", err)
+	}
+	project.Name = "Edited"
+	if _, err := tm.UpdateProject(ctx, project); !errors.Is(err, mwanachamataskmanager.ErrProjectNotFound) {
+		t.Errorf("err = %v, want ErrProjectNotFound", err)
 	}
 }

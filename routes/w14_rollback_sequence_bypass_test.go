@@ -65,165 +65,172 @@ func wk14Do(t *testing.T, m *http.ServeMux, method, path string, body *bytes.Rea
 	return rec
 }
 
-// Pins board row W14, half 1: DELETE /workflow-runs/{runID}/artifacts is
-// registered as its own top-level route (routes/workflowrun_lifecycle.go)
-// and calls TaskManager.DeleteWorkflowRunArtifacts directly, which never
-// checks the run's own status (workflow_run_rollback.go's
-// DeleteWorkflowRunArtifacts only calls GetWorkflowRun to confirm the run
-// exists — no CanTransitionTo/status guard). So a caller can wipe a run's
-// Task/TaskTodo artifacts on a run that never entered rolling_back at all,
-// while the run's own status keeps reporting whatever it was — here,
-// in_progress — throughout. RollbackWorkflowRun's documented "4-step
-// compensation sequence" (rolling_back → cross-service → own artifacts →
-// rolled_back) is a convention only ONE caller (RollbackWorkflowRun itself)
-// follows; this route is an equally-privileged, independent entry point
-// into step 3 alone.
-func TestWorkflowRun_DeleteArtifactsBypassesRollbackStateMachine(t *testing.T) {
+// Guards board row W14, half 1, fixed 2026-09-28.
+// DELETE /workflow-runs/{runID}/artifacts is its own top-level route over
+// step 3 of the rollback sequence, and DeleteWorkflowRunArtifacts used to
+// check only that the run existed — so a caller could wipe a live run's
+// Task/TaskTodo artifacts while the run's own status kept reporting
+// in_progress throughout. Compensation now requires the run to be in
+// rolling_back, which only RollbackWorkflowRun puts it in.
+//
+// This asserted the bypass until the fix; it now asserts the refusal and
+// that the live run's artifacts are untouched by it.
+func TestWorkflowRun_DeleteArtifactsIsRefusedOnARunNobodyIsRollingBack(t *testing.T) {
 	tm := wk14Manager(t, "wk14a")
-	m := wk14Mux(tm)
+	mux := wk14Mux(tm)
 
-	createRun := wk14Do(t, m, "POST", "/workflow-runs", wk14JSON(t, map[string]any{"name": "w14-live-run"}))
-	if createRun.Code != http.StatusCreated {
-		t.Fatalf("create run: got %d, body %s", createRun.Code, createRun.Body.String())
+	runResp := wk14Do(t, mux, "POST", "/workflow-runs", wk14JSON(t, map[string]any{"name": "w14-live-run"}))
+	if runResp.Code != http.StatusCreated {
+		t.Fatalf("create run: got %d, body %s", runResp.Code, runResp.Body.String())
 	}
-	var run struct {
-		ID string `json:"id"`
+	var run map[string]any
+	if err := json.Unmarshal(runResp.Body.Bytes(), &run); err != nil {
+		t.Fatalf("unmarshal run: %v", err)
 	}
-	if err := json.Unmarshal(createRun.Body.Bytes(), &run); err != nil {
-		t.Fatalf("decode run: %v", err)
-	}
+	runID, _ := run["id"].(string)
 
-	if rec := wk14Do(t, m, "PUT", "/workflow-runs/"+run.ID+"/status", wk14JSON(t, map[string]any{"new_status": "in_progress"})); rec.Code != http.StatusOK {
-		t.Fatalf("run -> in_progress: got %d, body %s", rec.Code, rec.Body.String())
-	}
-
-	createTask := wk14Do(t, m, "POST", "/tasks", wk14JSON(t, map[string]any{"title": "w14 task"}))
-	if createTask.Code != http.StatusCreated {
-		t.Fatalf("create task: got %d, body %s", createTask.Code, createTask.Body.String())
-	}
-	var task struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(createTask.Body.Bytes(), &task); err != nil {
-		t.Fatalf("decode task: %v", err)
+	if r := wk14Do(t, mux, "PUT", "/workflow-runs/"+runID+"/status",
+		wk14JSON(t, map[string]any{"new_status": "in_progress"})); r.Code != http.StatusOK {
+		t.Fatalf("run -> in_progress: got %d, body %s", r.Code, r.Body.String())
 	}
 
-	if rec := wk14Do(t, m, "POST", "/workflow-runs/"+run.ID+"/tasks/"+task.ID+"/link", nil); rec.Code != http.StatusNoContent {
-		t.Fatalf("link task to run: got %d, body %s", rec.Code, rec.Body.String())
+	taskResp := wk14Do(t, mux, "POST", "/tasks", wk14JSON(t, map[string]any{
+		"title": "live work", "workflow_run_id": runID,
+	}))
+	if taskResp.Code != http.StatusCreated {
+		t.Fatalf("create task: got %d, body %s", taskResp.Code, taskResp.Body.String())
+	}
+	var task map[string]any
+	if err := json.Unmarshal(taskResp.Body.Bytes(), &task); err != nil {
+		t.Fatalf("unmarshal task: %v", err)
+	}
+	taskID, _ := task["id"].(string)
+
+	del := wk14Do(t, mux, "DELETE", "/workflow-runs/"+runID+"/artifacts", nil)
+	if del.Code != http.StatusConflict {
+		t.Errorf("DELETE artifacts on an in_progress run: got %d, body %s, want 409",
+			del.Code, del.Body.String())
 	}
 
-	// Sanity: the run is genuinely in_progress, never touched rolling_back.
-	before := wk14Do(t, m, "GET", "/workflow-runs/"+run.ID, nil)
-	var beforeBody map[string]any
-	json.Unmarshal(before.Body.Bytes(), &beforeBody)
-	if beforeBody["status"] != "in_progress" {
-		t.Fatalf("setup: run status = %v, want in_progress", beforeBody["status"])
+	// The refused call left the run's work exactly where it was.
+	tasksResp := wk14Do(t, mux, "GET", "/workflow-runs/"+runID+"/tasks", nil)
+	var stillLinked []map[string]any
+	if err := json.Unmarshal(tasksResp.Body.Bytes(), &stillLinked); err != nil {
+		t.Fatalf("unmarshal run tasks: %v", err)
+	}
+	if len(stillLinked) != 1 {
+		t.Errorf("the run holds %d task(s), want 1 — the refused call compensated anyway: %s",
+			len(stillLinked), tasksResp.Body.String())
 	}
 
-	// W14 pin: call DELETE artifacts directly, bypassing /rollback entirely.
-	deleteArtifacts := wk14Do(t, m, "DELETE", "/workflow-runs/"+run.ID+"/artifacts", nil)
-	if deleteArtifacts.Code != http.StatusNoContent {
-		t.Fatalf("W14 pin violated: DELETE artifacts on an in_progress run was refused (got %d, body %s) — if this route now requires rolling_back, W14 may be fixed; update this test",
-			deleteArtifacts.Code, deleteArtifacts.Body.String())
+	readResp := wk14Do(t, mux, "GET", "/tasks/"+taskID, nil)
+	var after map[string]any
+	if err := json.Unmarshal(readResp.Body.Bytes(), &after); err != nil {
+		t.Fatalf("unmarshal task: %v", err)
 	}
-
-	// The task WAS reset/unlinked — the destructive half of rollback ran.
-	afterTask := wk14Do(t, m, "GET", "/tasks/"+task.ID, nil)
-	var afterTaskBody map[string]any
-	json.Unmarshal(afterTask.Body.Bytes(), &afterTaskBody)
-	if afterTaskBody["status"] != "pending" {
-		t.Errorf("task status after DELETE artifacts = %v, want pending (reset)", afterTaskBody["status"])
+	if after["workflow_run_id"] != runID {
+		t.Errorf("task.workflow_run_id = %v, want it still anchored to the run", after["workflow_run_id"])
 	}
-	if wfid, ok := afterTaskBody["workflow_run_id"]; ok && wfid != "" {
-		t.Errorf("task.workflow_run_id after DELETE artifacts = %v, want cleared", wfid)
-	}
-	listAfter := wk14Do(t, m, "GET", "/workflow-runs/"+run.ID+"/tasks", nil)
-	var afterList []map[string]any
-	json.Unmarshal(listAfter.Body.Bytes(), &afterList)
-	if len(afterList) != 0 {
-		t.Errorf("ListTasksForRun after DELETE artifacts = %d tasks, want 0 (unlinked)", len(afterList))
-	}
-
-	// W14 pin: but the run's OWN status never moved — no rolling_back, no
-	// rolled_back, no run.* lifecycle event at all. The run still claims
-	// in_progress despite its artifacts having just been wiped out from
-	// under it.
-	after := wk14Do(t, m, "GET", "/workflow-runs/"+run.ID, nil)
-	var afterBody map[string]any
-	json.Unmarshal(after.Body.Bytes(), &afterBody)
-	if afterBody["status"] != "in_progress" {
-		t.Fatalf("W14 pin violated: run status after DELETE artifacts = %v, want still in_progress (unchanged) — if the route now transitions the run's status as a side effect, W14 may be fixed; update this test",
-			afterBody["status"])
+	if after["status"] != "pending" {
+		t.Errorf("task.status = %v, want pending (unchanged)", after["status"])
 	}
 }
 
-// Pins board row W14, half 2: PUT /workflow-runs/{runID}/status lets a
-// caller drive a run straight from rolling_back to the TERMINAL rolled_back
-// status (a transition [WorkflowRunStatus.CanTransitionTo] legally allows)
-// without ever calling DeleteWorkflowRunArtifacts — so a run can report
-// itself "rolled_back" (implying its artifacts were compensated) while its
-// linked Task was never reset and never unlinked. Combined with the first
-// half above, this shows RollbackWorkflowRun's compensation sequence
-// (workflow_run_rollback.go's own doc comment: "Sequence: rolling_back →
-// compensate cross-service artifacts → compensate own artifacts →
-// rolled_back") is enforced by NEITHER of the two routes its steps are
-// individually built from — only by RollbackWorkflowRun's own single Go
-// caller choosing to call them in order. Any other path to the same two
-// primitives — direct route calls, a retry script, an operator mistake —
-// can produce "rolled_back but artifacts intact" or "in_progress but
-// artifacts wiped" with no error and no warning.
-func TestWorkflowRun_ForcedStatusToRolledBackSkipsArtifactCleanup(t *testing.T) {
+// Guards board row W14, half 2, fixed 2026-09-28.
+// PUT /workflow-runs/{runID}/status is its own top-level route over step 4,
+// and rolling_back → rolled_back was a legal transition, so a caller could
+// drive a run to the terminal rolled_back status without any compensation
+// having run — leaving tasks still anchored to a run reporting itself undone.
+// The three states a rollback drives a run through are now the coordinator's,
+// and the public setter refuses all of them.
+func TestWorkflowRun_StatusRouteRefusesTheRollbackStates(t *testing.T) {
 	tm := wk14Manager(t, "wk14b")
-	m := wk14Mux(tm)
+	mux := wk14Mux(tm)
 
-	createRun := wk14Do(t, m, "POST", "/workflow-runs", wk14JSON(t, map[string]any{"name": "w14-force-run"}))
-	var run struct {
-		ID string `json:"id"`
+	runResp := wk14Do(t, mux, "POST", "/workflow-runs", wk14JSON(t, map[string]any{"name": "w14-forced-run"}))
+	if runResp.Code != http.StatusCreated {
+		t.Fatalf("create run: got %d, body %s", runResp.Code, runResp.Body.String())
 	}
-	json.Unmarshal(createRun.Body.Bytes(), &run)
+	var run map[string]any
+	if err := json.Unmarshal(runResp.Body.Bytes(), &run); err != nil {
+		t.Fatalf("unmarshal run: %v", err)
+	}
+	runID, _ := run["id"].(string)
 
-	wk14Do(t, m, "PUT", "/workflow-runs/"+run.ID+"/status", wk14JSON(t, map[string]any{"new_status": "in_progress"}))
-
-	createTask := wk14Do(t, m, "POST", "/tasks", wk14JSON(t, map[string]any{"title": "w14b task"}))
-	var task struct {
-		ID string `json:"id"`
-	}
-	json.Unmarshal(createTask.Body.Bytes(), &task)
-	if rec := wk14Do(t, m, "POST", "/workflow-runs/"+run.ID+"/tasks/"+task.ID+"/link", nil); rec.Code != http.StatusNoContent {
-		t.Fatalf("link task to run: got %d, body %s", rec.Code, rec.Body.String())
-	}
-
-	if rec := wk14Do(t, m, "PUT", "/workflow-runs/"+run.ID+"/status", wk14JSON(t, map[string]any{"new_status": "failed"})); rec.Code != http.StatusOK {
-		t.Fatalf("run -> failed: got %d, body %s", rec.Code, rec.Body.String())
-	}
-	// Simulate RollbackWorkflowRun's step 1 (acquire the lock) having
-	// committed, then the caller going straight for step 4 without ever
-	// invoking DeleteWorkflowRunArtifacts (step 3) — e.g. a crash-recovery
-	// script that only knows how to "finish" a stuck rolling_back run.
-	if rec := wk14Do(t, m, "PUT", "/workflow-runs/"+run.ID+"/status", wk14JSON(t, map[string]any{"new_status": "rolling_back"})); rec.Code != http.StatusOK {
-		t.Fatalf("run -> rolling_back: got %d, body %s", rec.Code, rec.Body.String())
+	for _, s := range []string{"in_progress", "failed"} {
+		if r := wk14Do(t, mux, "PUT", "/workflow-runs/"+runID+"/status",
+			wk14JSON(t, map[string]any{"new_status": s})); r.Code != http.StatusOK {
+			t.Fatalf("run -> %s: got %d, body %s", s, r.Code, r.Body.String())
+		}
 	}
 
-	// W14 pin: force straight to rolled_back, skipping DeleteWorkflowRunArtifacts.
-	forceRolledBack := wk14Do(t, m, "PUT", "/workflow-runs/"+run.ID+"/status", wk14JSON(t, map[string]any{"new_status": "rolled_back"}))
-	if forceRolledBack.Code != http.StatusOK {
-		t.Fatalf("W14 pin violated: PUT status rolling_back -> rolled_back was refused (got %d, body %s) — if this transition is now blocked without artifact cleanup having run, W14 may be fixed; update this test",
-			forceRolledBack.Code, forceRolledBack.Body.String())
-	}
-	var forced map[string]any
-	json.Unmarshal(forceRolledBack.Body.Bytes(), &forced)
-	if forced["status"] != "rolled_back" {
-		t.Fatalf("run status after forced transition = %v, want rolled_back", forced["status"])
+	for _, s := range []string{"rolling_back", "rolled_back", "rollback_failed"} {
+		r := wk14Do(t, mux, "PUT", "/workflow-runs/"+runID+"/status",
+			wk14JSON(t, map[string]any{"new_status": s}))
+		if r.Code != http.StatusBadRequest {
+			t.Errorf("setting %s: got %d, body %s, want 400", s, r.Code, r.Body.String())
+		}
 	}
 
-	// W14 pin: the task was NEVER reset/unlinked — the run claims
-	// "rolled_back" (implying compensation happened) while its artifacts
-	// are untouched.
-	afterTask := wk14Do(t, m, "GET", "/tasks/"+task.ID, nil)
-	var afterTaskBody map[string]any
-	json.Unmarshal(afterTask.Body.Bytes(), &afterTaskBody)
-	if afterTaskBody["workflow_run_id"] != run.ID {
-		t.Fatalf("W14 pin violated: task.workflow_run_id after forced rolled_back = %v, want still %q (artifacts were NOT actually compensated) — if a status transition to rolled_back now triggers artifact cleanup as a side effect, W14 may be fixed; update this test",
-			afterTaskBody["workflow_run_id"], run.ID)
+	get := wk14Do(t, mux, "GET", "/workflow-runs/"+runID, nil)
+	var after map[string]any
+	if err := json.Unmarshal(get.Body.Bytes(), &after); err != nil {
+		t.Fatalf("unmarshal run: %v", err)
+	}
+	if after["status"] != "failed" {
+		t.Errorf("run status = %v, want failed — a refused set moved it anyway", after["status"])
+	}
+}
+
+// The sequence still runs end to end through its one entry point: the run
+// reaches rolled_back and its artifacts really were compensated.
+func TestWorkflowRun_RollbackCompensatesAndFinalizesTogether(t *testing.T) {
+	tm := wk14Manager(t, "wk14c")
+	mux := wk14Mux(tm)
+
+	runResp := wk14Do(t, mux, "POST", "/workflow-runs", wk14JSON(t, map[string]any{"name": "w14-whole-run"}))
+	var run map[string]any
+	if err := json.Unmarshal(runResp.Body.Bytes(), &run); err != nil {
+		t.Fatalf("unmarshal run: %v", err)
+	}
+	runID, _ := run["id"].(string)
+
+	for _, s := range []string{"in_progress", "failed"} {
+		if r := wk14Do(t, mux, "PUT", "/workflow-runs/"+runID+"/status",
+			wk14JSON(t, map[string]any{"new_status": s})); r.Code != http.StatusOK {
+			t.Fatalf("run -> %s: got %d, body %s", s, r.Code, r.Body.String())
+		}
+	}
+
+	taskResp := wk14Do(t, mux, "POST", "/tasks", wk14JSON(t, map[string]any{
+		"title": "work to undo", "workflow_run_id": runID,
+	}))
+	var task map[string]any
+	if err := json.Unmarshal(taskResp.Body.Bytes(), &task); err != nil {
+		t.Fatalf("unmarshal task: %v", err)
+	}
+	taskID, _ := task["id"].(string)
+
+	roll := wk14Do(t, mux, "POST", "/workflow-runs/"+runID+"/rollback",
+		wk14JSON(t, map[string]any{"reason": "undo it"}))
+	if roll.Code != http.StatusOK {
+		t.Fatalf("rollback: got %d, body %s", roll.Code, roll.Body.String())
+	}
+	var rolled map[string]any
+	if err := json.Unmarshal(roll.Body.Bytes(), &rolled); err != nil {
+		t.Fatalf("unmarshal rollback: %v", err)
+	}
+	if rolled["status"] != "rolled_back" {
+		t.Errorf("status = %v, want rolled_back", rolled["status"])
+	}
+
+	readResp := wk14Do(t, mux, "GET", "/tasks/"+taskID, nil)
+	var after map[string]any
+	if err := json.Unmarshal(readResp.Body.Bytes(), &after); err != nil {
+		t.Fatalf("unmarshal task: %v", err)
+	}
+	if after["workflow_run_id"] != "" && after["workflow_run_id"] != nil {
+		t.Errorf("task.workflow_run_id = %v, want cleared — the run says rolled_back, so its work must really be undone",
+			after["workflow_run_id"])
 	}
 }

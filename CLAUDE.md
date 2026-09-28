@@ -7,6 +7,11 @@ Guidance for Claude Code working in this repository.
 Postgres port of `CodeValdWork` for [mwanachama-frontend-kazi](../mwanachama-frontend-kazi).
 Module path `github.com/aosanya/mwanachama-backend-taskmanager`.
 
+Converted to the spec-driven shape on 2026-09-28 — `mwanachama-backend-catalog`'s
+format, on `mwanachama-backend-shared`'s `spec`/`specstore`/`dispatch`
+engine. See [documentation/2. design/declared-objects.md](documentation/2.%20design/declared-objects.md)
+and [documentation/2. design/routes.md](documentation/2.%20design/routes.md).
+
 Dropped from the original: `proto/`, `cmd/server`, `internal/server` (gRPC
 `TaskServiceServer` + the ~1150-line `TaskEventDispatcher` that drives
 AI-failure-recovery orchestration off inbound events), `internal/registrar`
@@ -16,6 +21,76 @@ dispatch events to. If the escalation/retry orchestration the dispatcher did
 is still needed, it has to be re-homed as in-process logic here or in the
 gateway, not assumed to exist.
 
+## Objects are declared, not written
+
+The tables come from a JSON spec, not from Go structs.
+
+- `taskmanager.blueprint.json` — **the module's fourteen objects, declared
+  once**. Embedded and reached through `Blueprint()`, `LoadSpec(path)` and
+  `ParseSpec(raw)`. Load a domain spec through those, never through
+  `spec.Load`, or its roled objects arrive with no fields.
+- `spec/examples/work.taskmanager.json` and `agency.taskmanager.json` — the
+  same module under two domains. `TestShippedExamplesCoexist` migrates both
+  into one database. The agency one is also the shipped domain: `SpecFor`
+  embeds it and swaps the instance.
+- `taskmanager.operations.json` — the route table, built by `dispatch`.
+
+**A domain names objects; it does not re-declare them.** Its spec supplies
+`instance`, the name and table each role lands in, its own indexes, and a
+default on a declared field — nothing else. Anything more is refused by name
+at load.
+
+**Adding a field means editing the blueprint and the Go type together.**
+`NewTaskManager` checks the spec and `carriers()` against each other and
+refuses to build if a declared column has no field to hold it, or a field no
+column to land in. `TestEveryExampleFitsTheTypes` runs that agreement against
+*every* spec under `spec/examples/`, not just the one a test happened to
+load.
+
+**A table is `<instance>_<module>_<object>`.** The module segment is not
+decoration: the agency module also declares a `work_item`, and without the
+segment a taskmanager instance named `wakala` and an agency instance of the
+same name both want `wakala_work_items` — a silent collision, not an error,
+because `AutoMigrate` adopts a table that already exists.
+
+**A column is found by field name, never by json tag** —
+`specstore.ColumnName` turns `SubmittedBy` into `submitted_by`. **Every
+declared column is written on every write**, because a map missing a key
+means "leave it alone" to an update.
+
+**A stored enum value outlives a rename**, so
+`TestVocabularyMatchesTheBlueprint` holds the constants Go compares against
+and the blueprint's declared `values` to each other in both directions.
+
+## Routes are declared too
+
+An address is an entry in `taskmanager.operations.json`; adding one is an
+edit to that file rather than a new Go function.
+[[feedback_routes_name_match_model]] still governs any repo that has not
+adopted the dispatcher.
+
+`AnonymousActions` is empty on purpose — a work board has no public half, so
+every route arrives gated and `TestNoRouteIsAnonymous` holds it there. This
+module has **no auth model**: a route still needs a capability gate wrapped
+around it by whatever mounts it.
+
+`Shape()` is the declared table with no handlers, in `Dispatch`'s own order,
+for a mount that resolves its manager per request —
+`mwanachama-wakala-api` gives each registered agency its own board that way.
+
+## What is superseded
+
+- **`gormstore/`** — deleted 2026-09-28. Root `tables.go` and its
+  `TableNames`/`DefaultTableNames` went with it;
+  `NewTaskManager(db, *spec.Spec, pub)` is the constructor now. No other
+  repo imported this one, so nothing needed a shim.
+- **`routes/`'s thirteen hand-written route builders** — deleted the same
+  day, along with `writeTaskErr` and the `relationshipJSON`/
+  `importResultJSON` wrappers.
+- Four addresses changed as a consequence. They are listed in
+  [routes.md](documentation/2.%20design/routes.md) — read it before assuming
+  an address is what it was.
+
 ## Porting notes
 
 - `task.go`'s `TaskManager` interface and `models.go`'s domain types (Task,
@@ -24,9 +99,9 @@ gateway, not assumed to exist.
   state machines (Task: 7 states incl. `blocked`/`awaiting-direction`/
   `split`; WorkflowRun: 9 states incl. `paused`/`cancelling`/`rolling_back`/
   `rollback_failed`) — these are pure Go, no storage dependency.
-- `schema.go`'s `DefaultWorkSchema()` ports onto `mwanachama-backend-shared`'s
-  type-definition shape; vertex uniqueness (e.g. Agent by `agent_id`, Tag by
-  `name`) must become real Postgres unique indexes.
+- `schema.go`'s `DefaultWorkSchema()` is now `taskmanager.blueprint.json`;
+  vertex uniqueness (Agent by `agent_id`, Tag by `name`) is a declared
+  `unique` index.
 - Straightforward CRUD/business-logic files (task, converters, project,
   assignment(+unblock), deliverable, relationship engine, todo, agent) only
   ever call `entitygraph.DataManager` — port with minimal churn.
@@ -44,6 +119,11 @@ gateway, not assumed to exist.
 
 ## Conventions
 
+- `go test ./...` (sqlite via `glebarez/sqlite`) is the expected way to
+  verify a change here — do not reach for a real Postgres. See
+  [[feedback_use_memory_backend_for_tests]]. `postgres_integration_test.go`
+  is `//go:build integration`, gated on `POSTGRES_URL`, and not part of it.
+- No Go file over 300 lines; split by responsibility.
 - Task status lives on
   [documentation/3. implementation/todo.md](documentation/3.%20implementation/todo.md).
 - Four-phase `documentation/` layout — see
