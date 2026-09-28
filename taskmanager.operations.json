@@ -459,7 +459,7 @@
       "title": "Mark run alive",
       "description": "Record that an event touched one run, which is what keeps the watchdog off it.",
       "args": [{"from": "path", "as": "runID", "description": "The run touched."},
-               {"from": "body", "as": "ts", "required": true, "description": "When it was touched, as an RFC 3339 string."}],
+               {"from": "body", "as": "timestamp", "required": true, "description": "When it was touched, as an RFC 3339 string."}],
       "returns": [{"body": true}]
     },
     "mark_timeout_published": {

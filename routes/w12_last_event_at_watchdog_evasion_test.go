@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/aosanya/mwanachama-backend-shared/spec"
@@ -70,7 +71,7 @@ func TestWorkflowRun_TouchLastEventAtRejectsGarbageString(t *testing.T) {
 	}
 
 	staleBaseline := httptest.NewRecorder()
-	m.ServeHTTP(staleBaseline, httptest.NewRequest("GET", "/workflow-runs/stale?cutoff=9999-01-01T00:00:00Z", nil))
+	m.ServeHTTP(staleBaseline, staleRequest("9999-01-01T00:00:00Z"))
 	if staleBaseline.Code != http.StatusOK {
 		t.Fatalf("list stale (baseline): got %d, body %s", staleBaseline.Code, staleBaseline.Body.String())
 	}
@@ -104,7 +105,7 @@ func TestWorkflowRun_TouchLastEventAtRejectsGarbageString(t *testing.T) {
 
 	// The refused touch must leave the run visible to the watchdog.
 	staleAfterTouch := httptest.NewRecorder()
-	m.ServeHTTP(staleAfterTouch, httptest.NewRequest("GET", "/workflow-runs/stale?cutoff=9999-01-01T00:00:00Z", nil))
+	m.ServeHTTP(staleAfterTouch, staleRequest("9999-01-01T00:00:00Z"))
 	if staleAfterTouch.Code != http.StatusOK {
 		t.Fatalf("list stale (after touch): got %d, body %s", staleAfterTouch.Code, staleAfterTouch.Body.String())
 	}
@@ -122,4 +123,11 @@ func TestWorkflowRun_TouchLastEventAtRejectsGarbageString(t *testing.T) {
 	if ok.Code != http.StatusNoContent {
 		t.Fatalf("touch with a valid RFC 3339 timestamp: got %d, body %s", ok.Code, ok.Body.String())
 	}
+}
+
+func staleRequest(cutoff string) *http.Request {
+	body := strings.NewReader(`{"cutoff":"` + cutoff + `"}`)
+	req := httptest.NewRequest("POST", "/workflow-runs/stale", body)
+	req.Header.Set("Content-Type", "application/json")
+	return req
 }

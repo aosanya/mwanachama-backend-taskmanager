@@ -2,6 +2,7 @@ package routes
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/aosanya/mwanachama-backend-shared/dispatch"
@@ -107,4 +108,26 @@ func OperatorRoutesWith(tm mwanachamataskmanager.TaskManager, authorize dispatch
 
 func OperatorRoutesFor(tm mwanachamataskmanager.TaskManager, m Mount) []Route {
 	return SplitFor(tm, m).Gated
+}
+
+// Shape is the declared route table without handlers, for a mount that
+// resolves its manager per request rather than holding one. Its order is
+// Dispatch's own, so Shape()[i] and Routes(tm)[i] are the same operation.
+func Shape() []Route {
+	s, err := operations()
+	if err != nil {
+		panic(fmt.Sprintf("taskmanager routes: %v", err))
+	}
+	names := make([]string, 0, len(s.Operations))
+	for name := range s.Operations {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	out := make([]Route, 0, len(names))
+	for _, name := range names {
+		op := s.Operations[name]
+		out = append(out, Route{Method: op.Method, Path: s.Base + op.Path, Action: op.Action})
+	}
+	return out
 }

@@ -15,11 +15,11 @@ func TestRelationship_UnsetPropertiesAreOmittedFromJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	if strings.Contains(string(b), "Properties") {
+	if strings.Contains(strings.ToLower(string(b)), "properties") {
 		t.Fatalf("unset Properties should be omitted, got %s", b)
 	}
 	b, _ = json.Marshal(mwanachamataskmanager.Relationship{Properties: map[string]any{"k": "v"}})
-	if !strings.Contains(string(b), `"Properties":{"k":"v"}`) {
+	if !strings.Contains(string(b), `"properties":{"k":"v"}`) {
 		t.Fatalf("set Properties should be kept, got %s", b)
 	}
 }

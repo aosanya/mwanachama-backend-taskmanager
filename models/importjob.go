@@ -3,16 +3,16 @@ package models
 // ImportResult is returned by TaskManager.ImportProject.
 type ImportResult struct {
 	// Project is the newly created Project.
-	Project Project
+	Project Project `json:"project"`
 
 	// Tasks are the Task entities created in document order.
-	Tasks []Task
+	Tasks []Task `json:"tasks"`
 
 	// DepsCreated is the number of depends_on edges written between tasks.
-	DepsCreated int
+	DepsCreated int `json:"deps_created"`
 
 	// TasksCreated is the number of Task entities created (len(Tasks)).
-	TasksCreated int
+	TasksCreated int `json:"tasks_created"`
 }
 
 const (
