@@ -11,13 +11,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/aosanya/mwanachama-backend-shared/specstore"
 	"sort"
 	"strings"
 	"time"
-
-	"gorm.io/gorm"
-
-	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
 )
 
 // runNameSuffixBytes is the number of random bytes that feed the
@@ -56,11 +53,11 @@ func (m *taskManager) CreateWorkflowRun(ctx context.Context, name, triggerEvent,
 		UpdatedAt:    now.Format(time.RFC3339),
 		LastEventAt:  now.Format(time.RFC3339),
 	}
-	row := gormstore.WorkflowRunToRow(run)
-	if err := m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).Create(&row).Error; err != nil {
+	run.ID = newSpecID()
+	if err := m.store.Insert(ctx, roleWorkflowRun, run); err != nil {
 		return WorkflowRun{}, fmt.Errorf("CreateWorkflowRun: %w", err)
 	}
-	return gormstore.WorkflowRunFromRow(row), nil
+	return run, nil
 }
 
 // generateRunName builds a deterministic-looking but collision-resistant
@@ -81,15 +78,15 @@ func generateRunName(now time.Time) string {
 
 // GetWorkflowRun reads a single WorkflowRun row.
 func (m *taskManager) GetWorkflowRun(ctx context.Context, runID string) (WorkflowRun, error) {
-	var row gormstore.WorkflowRunRow
-	err := m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).Where("id = ?", runID).First(&row).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return WorkflowRun{}, ErrWorkflowRunNotFound
+	var run WorkflowRun
+	q := m.store.Query(ctx, roleWorkflowRun).Where("id = ?", runID)
+	if err := m.store.Take(q, roleWorkflowRun, &run, ErrWorkflowRunNotFound); err != nil {
+		if errors.Is(err, ErrWorkflowRunNotFound) {
+			return WorkflowRun{}, err
 		}
 		return WorkflowRun{}, fmt.Errorf("GetWorkflowRun: %w", err)
 	}
-	return gormstore.WorkflowRunFromRow(row), nil
+	return run, nil
 }
 
 // ListWorkflowRuns returns every WorkflowRun, sorted newest first by
@@ -98,17 +95,13 @@ func (m *taskManager) GetWorkflowRun(ctx context.Context, runID string) (Workflo
 // When name is non-empty, the result is filtered to runs whose Name field
 // matches exactly — at most one row given Name's uniqueness.
 func (m *taskManager) ListWorkflowRuns(ctx context.Context, name string) ([]WorkflowRun, error) {
-	q := m.db.WithContext(ctx).Table(m.tables.WorkflowRuns)
+	q := m.store.Query(ctx, roleWorkflowRun)
 	if name != "" {
 		q = q.Where("name = ?", name)
 	}
-	var rows []gormstore.WorkflowRunRow
-	if err := q.Order("created_at DESC").Limit(maxListPage).Find(&rows).Error; err != nil {
+	out, err := specstore.List[WorkflowRun](m.store, q.Order("created_at DESC").Limit(maxListPage), roleWorkflowRun)
+	if err != nil {
 		return nil, fmt.Errorf("ListWorkflowRuns: %w", err)
-	}
-	out := make([]WorkflowRun, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, gormstore.WorkflowRunFromRow(r))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
 	return out, nil
@@ -120,15 +113,15 @@ func (m *taskManager) GetWorkflowRunByName(ctx context.Context, name string) (Wo
 	if name == "" {
 		return WorkflowRun{}, fmt.Errorf("%w: WorkflowRun.Name is required", ErrInvalidTask)
 	}
-	var row gormstore.WorkflowRunRow
-	err := m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).Where("name = ?", name).First(&row).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return WorkflowRun{}, ErrWorkflowRunNotFound
+	var run WorkflowRun
+	q := m.store.Query(ctx, roleWorkflowRun).Where("name = ?", name)
+	if err := m.store.Take(q, roleWorkflowRun, &run, ErrWorkflowRunNotFound); err != nil {
+		if errors.Is(err, ErrWorkflowRunNotFound) {
+			return WorkflowRun{}, err
 		}
 		return WorkflowRun{}, fmt.Errorf("GetWorkflowRunByName: %w", err)
 	}
-	return gormstore.WorkflowRunFromRow(row), nil
+	return run, nil
 }
 
 // LinkTaskToRun writes the started_task edge from the run to a task.
@@ -283,17 +276,23 @@ func (m *taskManager) UpdateWorkflowRunStatus(ctx context.Context, runID string,
 		run.CompletedAt = run.UpdatedAt
 	}
 
-	row := gormstore.WorkflowRunToRow(run)
 	if reason != "" {
-		row.FailureReason = reason
+		run.FailureReason = reason
 	}
-	if err := m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).Where("id = ?", runID).Save(&row).Error; err != nil {
+	if err := m.saveRun(ctx, run); err != nil {
 		return WorkflowRun{}, fmt.Errorf("UpdateWorkflowRunStatus: %w", err)
 	}
-	result := gormstore.WorkflowRunFromRow(row)
 
-	m.publishRunStatusEvent(ctx, result, now, reason)
-	return result, nil
+	m.publishRunStatusEvent(ctx, run, now, reason)
+	return run, nil
+}
+
+func (m *taskManager) saveRun(ctx context.Context, run WorkflowRun) error {
+	row, err := encode(m.store.Object(roleWorkflowRun), run)
+	if err != nil {
+		return err
+	}
+	return m.store.Query(ctx, roleWorkflowRun).Where("id = ?", run.ID).Updates(row).Error
 }
 
 // publishRunStatusEvent fires the appropriate work.run.* event after a status transition.
@@ -358,6 +357,6 @@ func (m *taskManager) TouchWorkflowRunLastEventAt(ctx context.Context, runID, ts
 	if err != nil {
 		return fmt.Errorf("%w: last_event_at must be an RFC 3339 timestamp", ErrInvalidTask)
 	}
-	return m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).Where("id = ?", runID).
+	return m.db.WithContext(ctx).Table(m.store.Table(roleWorkflowRun)).Where("id = ?", runID).
 		UpdateColumn("last_event_at", parsed.UTC().Format(time.RFC3339)).Error
 }

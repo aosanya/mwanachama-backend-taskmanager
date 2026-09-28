@@ -68,4 +68,6 @@ type TaskTodo struct {
 
 	// WorkflowRunID is inherited from the parent Task at creation time.
 	WorkflowRunID string `json:"workflow_run_id,omitempty"`
+
+	Deleted bool `json:"deleted"`
 }

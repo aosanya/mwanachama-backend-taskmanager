@@ -1,0 +1,91 @@
+{
+  "module": "taskmanager",
+  "domain": "work",
+  "instance": "kazi",
+  "objects": [
+    {
+      "role": "task",
+      "name": "task",
+      "table": "tasks",
+      "description": "One piece of engineering work an agent is asked to carry out end to end."
+    },
+    {
+      "role": "task_todo",
+      "name": "task_todo",
+      "table": "task_todos",
+      "description": "One ordered step a task was decomposed into by a planning run."
+    },
+    {
+      "role": "agent",
+      "name": "agent",
+      "table": "agents",
+      "description": "An AI agent that claims tasks, works them, and reports what it did."
+    },
+    {
+      "role": "project",
+      "name": "project",
+      "table": "projects",
+      "description": "A sprint, milestone or epic that related tasks are grouped under."
+    },
+    {
+      "role": "tag",
+      "name": "tag",
+      "table": "tags",
+      "description": "A free-form label such as setup or auth, attached to any number of tasks."
+    },
+    {
+      "role": "deliverable",
+      "name": "deliverable",
+      "table": "deliverables",
+      "description": "An artifact a task or one of its steps must produce before it counts as done."
+    },
+    {
+      "role": "acceptance_criteria",
+      "name": "acceptance_criteria",
+      "table": "acceptance_criteria",
+      "description": "A condition a reviewer checks before accepting the work a task produced."
+    },
+    {
+      "role": "workflow_run",
+      "name": "workflow_run",
+      "table": "workflow_runs",
+      "description": "One orchestrated execution, anchoring every task and step it produced."
+    },
+    {
+      "role": "import_job",
+      "name": "import_project_job",
+      "table": "import_project_jobs",
+      "description": "One asynchronous import of a project board and the tasks read out of it."
+    },
+    {
+      "role": "blocker",
+      "name": "task_block",
+      "table": "task_blocks",
+      "description": "A hard gate holding one task until another reaches a terminal status."
+    },
+    {
+      "role": "dependency",
+      "name": "task_dependency",
+      "table": "task_dependencies",
+      "description": "A soft ordering recording that one task follows another, with no gate."
+    },
+    {
+      "role": "membership",
+      "name": "task_project_membership",
+      "table": "task_project_memberships",
+      "description": "Records that one task is part of one project."
+    },
+    {
+      "role": "tagging",
+      "name": "task_tag",
+      "table": "task_tags",
+      "description": "Records that one label is attached to one task."
+    },
+    {
+      "role": "code_sequence",
+      "name": "code_sequence",
+      "table": "code_sequences",
+      "description": "The next number to mint for one kind of thing's stable code."
+    }
+  ]
+}

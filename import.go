@@ -25,9 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"gorm.io/gorm"
 
-	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
 )
 
 const (
@@ -132,15 +130,15 @@ func (m *taskManager) StartImportProject(ctx context.Context, document string) (
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	row := gormstore.ImportProjectJobToRow(ImportProjectJob{
+	job := ImportProjectJob{
+		ID:        newSpecID(),
 		Status:    importJobStatusPending,
 		CreatedAt: now,
 		UpdatedAt: now,
-	})
-	if err := m.db.WithContext(ctx).Table(m.tables.ImportProjectJobs).Create(&row).Error; err != nil {
+	}
+	if err := m.store.Insert(ctx, roleImportJob, job); err != nil {
 		return ImportProjectJob{}, fmt.Errorf("StartImportProject: create job: %w", err)
 	}
-	job := gormstore.ImportProjectJobFromRow(row)
 
 	jobCtx, cancel := context.WithCancel(context.Background())
 	entry := &importJobEntry{cancel: cancel}
@@ -155,15 +153,14 @@ func (m *taskManager) StartImportProject(ctx context.Context, document string) (
 
 // GetImportProjectStatus returns the current state of an async import job.
 func (m *taskManager) GetImportProjectStatus(ctx context.Context, jobID string) (ImportProjectJob, error) {
-	var row gormstore.ImportProjectJobRow
-	err := m.db.WithContext(ctx).Table(m.tables.ImportProjectJobs).Where("id = ?", jobID).First(&row).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ImportProjectJob{}, ErrImportJobNotFound
+	var job ImportProjectJob
+	q := m.store.Query(ctx, roleImportJob).Where("id = ?", jobID)
+	if err := m.store.Take(q, roleImportJob, &job, ErrImportJobNotFound); err != nil {
+		if errors.Is(err, ErrImportJobNotFound) {
+			return ImportProjectJob{}, err
 		}
 		return ImportProjectJob{}, fmt.Errorf("GetImportProjectStatus: %w", err)
 	}
-	job := gormstore.ImportProjectJobFromRow(row)
 
 	importJobsMu.Lock()
 	entry, ok := importJobs[jobID]
@@ -284,7 +281,7 @@ func (m *taskManager) runImport(ctx context.Context, jobID, document string, ent
 
 	entry.appendStep(fmt.Sprintf("Done: %d tasks, %d deps.", tasksCreated, depsCreated))
 	now := time.Now().UTC().Format(time.RFC3339)
-	_ = m.db.WithContext(context.Background()).Table(m.tables.ImportProjectJobs).Where("id = ?", jobID).
+	_ = m.store.Query(context.Background(), roleImportJob).Where("id = ?", jobID).
 		Updates(map[string]any{
 			"status":        importJobStatusCompleted,
 			"tasks_created": tasksCreated,
@@ -297,7 +294,7 @@ func (m *taskManager) runImport(ctx context.Context, jobID, document string, ent
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 func (m *taskManager) updateImportJobStatus(ctx context.Context, jobID, status, errMsg string) error {
-	return m.db.WithContext(ctx).Table(m.tables.ImportProjectJobs).Where("id = ?", jobID).
+	return m.store.Query(ctx, roleImportJob).Where("id = ?", jobID).
 		Updates(map[string]any{
 			"status":        status,
 			"error_message": errMsg,

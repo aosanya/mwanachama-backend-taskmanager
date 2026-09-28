@@ -24,7 +24,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
+	"github.com/aosanya/mwanachama-backend-shared/specstore"
 )
 
 // RollbackWorkflowRun implements [TaskManager.RollbackWorkflowRun].
@@ -82,21 +82,26 @@ func (m *taskManager) DeleteWorkflowRunArtifacts(ctx context.Context, runID stri
 
 	var resetTaskIDs []string
 	txErr := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var tasks []gormstore.TaskRow
-		if err := tx.Table(m.tables.Tasks).Where("workflow_run_id = ? AND deleted = ?", runID, false).Find(&tasks).Error; err != nil {
+		tasks, err := specstore.List[Task](m.store,
+			tx.Table(m.store.Table(roleTask)).Where("workflow_run_id = ? AND deleted = ?", runID, false),
+			roleTask)
+		if err != nil {
 			return fmt.Errorf("list tasks: %w", err)
 		}
 
 		// Guard: check for Tasks in this run that are depended on by Tasks in OTHER runs.
 		for _, task := range tasks {
-			var inbound []gormstore.TaskDependencyRow
-			if err := tx.Table(m.tables.TaskDependencies).Where("to_task_id = ?", task.ID).Find(&inbound).Error; err != nil {
+			inbound, err := specstore.List[Dependency](m.store,
+				tx.Table(m.store.Table(roleDependency)).Where("to_task_id = ?", task.ID),
+				roleDependency)
+			if err != nil {
 				return fmt.Errorf("list inbound deps for %s: %w", task.ID, err)
 			}
 			for _, rel := range inbound {
-				var fromTask gormstore.TaskRow
-				if err := tx.Table(m.tables.Tasks).Where("id = ?", rel.FromTaskID).First(&fromTask).Error; err != nil {
-					continue // missing task — not a blocker
+				var fromTask Task
+				fromQ := tx.Table(m.store.Table(roleTask)).Where("id = ?", rel.FromTaskID)
+				if err := m.store.Take(fromQ, roleTask, &fromTask, ErrTaskNotFound); err != nil {
+					continue
 				}
 				if fromTask.WorkflowRunID != "" && fromTask.WorkflowRunID != runID {
 					return fmt.Errorf("%w: task %s is depended on by task %s (run %s)",
@@ -111,7 +116,7 @@ func (m *taskManager) DeleteWorkflowRunArtifacts(ctx context.Context, runID stri
 		// started_task edge's removal — see file doc.
 		now := time.Now().UTC().Format(time.RFC3339)
 		for _, task := range tasks {
-			if err := tx.Table(m.tables.Tasks).Where("id = ?", task.ID).Updates(map[string]any{
+			if err := tx.Table(m.store.Table(roleTask)).Where("id = ?", task.ID).Updates(map[string]any{
 				"status":          string(TaskStatusPending),
 				"workflow_run_id": "",
 				"completed_at":    "",
@@ -125,7 +130,7 @@ func (m *taskManager) DeleteWorkflowRunArtifacts(ctx context.Context, runID stri
 		// Soft-delete TaskTodos anchored to this run (ephemeral decomposition
 		// artifacts) — deleting the row also drops its has_todo/started_todo/
 		// todo_assigned_to columns, so no separate edge cleanup is needed.
-		if err := tx.Table(m.tables.TaskTodos).Where("workflow_run_id = ? AND deleted = ?", runID, false).
+		if err := tx.Table(m.store.Table(roleTaskTodo)).Where("workflow_run_id = ? AND deleted = ?", runID, false).
 			UpdateColumn("deleted", true).Error; err != nil {
 			return fmt.Errorf("delete todos: %w", err)
 		}

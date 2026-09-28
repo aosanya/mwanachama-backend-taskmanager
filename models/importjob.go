@@ -15,6 +15,14 @@ type ImportResult struct {
 	TasksCreated int
 }
 
+const (
+	ImportJobStatusPending   = "pending"
+	ImportJobStatusRunning   = "running"
+	ImportJobStatusCompleted = "completed"
+	ImportJobStatusFailed    = "failed"
+	ImportJobStatusCancelled = "cancelled"
+)
+
 // ImportProjectJob tracks an async project-import operation started by
 // TaskManager.StartImportProject. Status transitions:
 //

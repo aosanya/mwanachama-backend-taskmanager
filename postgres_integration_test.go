@@ -12,6 +12,8 @@ import (
 	"context"
 	"os"
 	"testing"
+
+	"github.com/aosanya/mwanachama-backend-shared/spec"
 	"time"
 
 	gormpostgres "gorm.io/driver/postgres"
@@ -48,8 +50,8 @@ func newPostgresTaskManager(t *testing.T) (mwanachamataskmanager.TaskManager, *r
 
 	// A unique-enough prefix per test keeps concurrent -run invocations from
 	// colliding on the same physical tables.
-	tables := mwanachamataskmanager.DefaultTableNames("workit")
-	if err := mwanachamataskmanager.Migrate(db, tables); err != nil {
+	workSpec, tables := specForInstance(t, "spec/examples/work.taskmanager.json", "workit")
+	if err := spec.Migrate(db, workSpec); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
 	t.Cleanup(func() {
@@ -61,7 +63,7 @@ func newPostgresTaskManager(t *testing.T) (mwanachamataskmanager.TaskManager, *r
 	})
 
 	pub := &recordingPublisher{}
-	mgr, err := mwanachamataskmanager.NewTaskManager(db, tables, pub)
+	mgr, err := mwanachamataskmanager.NewTaskManager(db, workSpec, pub)
 	if err != nil {
 		t.Fatalf("NewTaskManager: %v", err)
 	}

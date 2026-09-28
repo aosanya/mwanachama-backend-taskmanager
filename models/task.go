@@ -152,6 +152,8 @@ type Task struct {
 	// ParentTaskID is the ID of the Task that was split to produce this one.
 	// Empty for root tasks.
 	ParentTaskID string `json:"parent_task_id,omitempty"`
+
+	Deleted bool `json:"deleted"`
 }
 
 // TaskFilter constrains the results returned by TaskManager.ListTasks.

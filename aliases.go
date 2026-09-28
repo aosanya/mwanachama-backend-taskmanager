@@ -24,6 +24,11 @@ type (
 	ImportProjectJob   = models.ImportProjectJob
 	Relationship       = models.Relationship
 	Direction          = models.Direction
+	Blocker            = models.Blocker
+	Dependency         = models.Dependency
+	Membership         = models.Membership
+	Tagging            = models.Tagging
+	CodeSequence       = models.CodeSequence
 )
 
 const (

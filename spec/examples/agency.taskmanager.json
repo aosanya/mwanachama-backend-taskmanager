@@ -1,0 +1,100 @@
+{
+  "module": "taskmanager",
+  "domain": "agency",
+  "instance": "wakala",
+  "objects": [
+    {
+      "role": "task",
+      "name": "work_item",
+      "table": "work_items",
+      "description": "One piece of work an agency's operator owes: the unit a role holder picks up and is answerable for.",
+      "indexes": [
+        {
+          "name": "objective",
+          "description": "Reads one objective's board, which is the agency's own front screen.",
+          "fields": [
+            "project_name"
+          ]
+        }
+      ]
+    },
+    {
+      "role": "task_todo",
+      "name": "step",
+      "table": "steps",
+      "description": "One ordered step a work item was broken into, small enough for a single role holder to finish in one sitting."
+    },
+    {
+      "role": "agent",
+      "name": "operator",
+      "table": "operators",
+      "description": "Whoever the agency hands work to — a person in a seat or a scheduled agent standing in for one."
+    },
+    {
+      "role": "project",
+      "name": "objective",
+      "table": "objectives",
+      "description": "What the agency is trying to achieve, and the container the work items serving it are grouped under."
+    },
+    {
+      "role": "tag",
+      "name": "label",
+      "table": "labels",
+      "description": "A free-form label the agency sorts its own work by, such as a sector or a customer."
+    },
+    {
+      "role": "deliverable",
+      "name": "output",
+      "table": "outputs",
+      "description": "What a work item has to hand over before the agency counts it as finished."
+    },
+    {
+      "role": "acceptance_criteria",
+      "name": "check",
+      "table": "checks",
+      "description": "A condition the agency verifies before accepting an output, written so anyone can check it the same way."
+    },
+    {
+      "role": "workflow_run",
+      "name": "workflow_run",
+      "table": "workflow_runs",
+      "description": "One pass of the agency's routine, anchoring every work item and step that pass produced."
+    },
+    {
+      "role": "import_job",
+      "name": "import_job",
+      "table": "import_jobs",
+      "description": "One asynchronous load of an objective and its work items out of a template."
+    },
+    {
+      "role": "blocker",
+      "name": "gate",
+      "table": "gates",
+      "description": "A hard hold keeping one work item shut until another is finished."
+    },
+    {
+      "role": "dependency",
+      "name": "precedence",
+      "table": "precedences",
+      "description": "A soft ordering recording that one work item follows another, with nothing enforced."
+    },
+    {
+      "role": "membership",
+      "name": "objective_membership",
+      "table": "objective_memberships",
+      "description": "Records that one work item serves one objective."
+    },
+    {
+      "role": "tagging",
+      "name": "labelling",
+      "table": "labellings",
+      "description": "Records that one label is attached to one work item."
+    },
+    {
+      "role": "code_sequence",
+      "name": "code_sequence",
+      "table": "code_sequences",
+      "description": "The next number to mint for one kind of thing's stable code."
+    }
+  ]
+}

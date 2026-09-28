@@ -7,36 +7,37 @@ import (
 	"context"
 	"testing"
 
+	"github.com/aosanya/mwanachama-backend-shared/spec"
+
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
-	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
 )
 
 // newTagTestManager is [newTestManager] but also returns the underlying
-// *gorm.DB and table names so tests can read raw gormstore.TagRow rows
+// *gorm.DB and table names so tests can read raw mwanachamataskmanager.Tag rows
 // directly — Tag has no public read-by-name accessor on [mwanachamataskmanager.TaskManager].
-func newTagTestManager(t *testing.T) (mwanachamataskmanager.TaskManager, *gorm.DB, mwanachamataskmanager.TableNames) {
+func newTagTestManager(t *testing.T) (mwanachamataskmanager.TaskManager, *gorm.DB, testTables) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("gorm.Open: %v", err)
 	}
-	tables := mwanachamataskmanager.DefaultTableNames("test")
-	if err := mwanachamataskmanager.Migrate(db, tables); err != nil {
+	workSpec, tables := specForInstance(t, "spec/examples/work.taskmanager.json", "test")
+	if err := spec.Migrate(db, workSpec); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	mgr, err := mwanachamataskmanager.NewTaskManager(db, tables, nil)
+	mgr, err := mwanachamataskmanager.NewTaskManager(db, workSpec, nil)
 	if err != nil {
 		t.Fatalf("NewTaskManager: %v", err)
 	}
 	return mgr, db, tables
 }
 
-func getTagRowByName(t *testing.T, db *gorm.DB, tables mwanachamataskmanager.TableNames, name string) gormstore.TagRow {
+func getTagRowByName(t *testing.T, db *gorm.DB, tables testTables, name string) mwanachamataskmanager.Tag {
 	t.Helper()
-	var row gormstore.TagRow
+	var row mwanachamataskmanager.Tag
 	if err := db.Table(tables.Tags).Where("name = ?", name).First(&row).Error; err != nil {
 		t.Fatalf("read tag %q: %v", name, err)
 	}

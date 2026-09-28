@@ -11,7 +11,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
+	"github.com/aosanya/mwanachama-backend-shared/specstore"
 )
 
 // CreateTask creates a Task row.
@@ -21,7 +21,7 @@ import (
 // [TaskManager.AssignTask]'s chain-through behaviour). The edge write is
 // best-effort: a failure is logged but does not roll back the task creation.
 func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
-	task.ID = "" // server-minted; a caller-supplied id is never honoured
+	task.ID = newSpecID()
 	now := time.Now().UTC().Format(time.RFC3339)
 	task.Status = TaskStatusPending
 	task.CreatedAt = now
@@ -31,12 +31,11 @@ func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
 	}
 	task.CompletedAt = ""
 
-	row := gormstore.TaskToRow(task)
-	if err := m.db.WithContext(ctx).Table(m.tables.Tasks).Create(&row).Error; err != nil {
+	if err := m.store.Insert(ctx, roleTask, task); err != nil {
 		return Task{}, fmt.Errorf("CreateTask: %w", err)
 	}
 
-	out := gormstore.TaskFromRow(row)
+	out := task
 	if task.WorkflowRunID != "" {
 		if err := m.LinkTaskToRun(ctx, task.WorkflowRunID, out.ID); err != nil {
 			log.Printf("mwanachamataskmanager: CreateTask: LinkTaskToRun run=%s task=%s: %v",
@@ -60,16 +59,14 @@ func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
 
 // GetTask reads a single Task row.
 func (m *taskManager) GetTask(ctx context.Context, taskID string) (Task, error) {
-	var row gormstore.TaskRow
-	err := m.db.WithContext(ctx).Table(m.tables.Tasks).
-		Where("id = ? AND deleted = ?", taskID, false).First(&row).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return Task{}, ErrTaskNotFound
+	var t Task
+	q := m.store.Query(ctx, roleTask).Where("id = ? AND deleted = ?", taskID, false)
+	if err := m.store.Take(q, roleTask, &t, ErrTaskNotFound); err != nil {
+		if errors.Is(err, ErrTaskNotFound) {
+			return Task{}, err
 		}
 		return Task{}, fmt.Errorf("GetTask: %w", err)
 	}
-	t := gormstore.TaskFromRow(row)
 	t.Tags = m.loadTagNames(ctx, t.ID)
 	return t, nil
 }
@@ -107,16 +104,20 @@ func (m *taskManager) UpdateTask(ctx context.Context, task Task) (Task, error) {
 		task.WorkflowRunID = current.WorkflowRunID
 	}
 
-	row := gormstore.TaskToRow(task)
-	if err := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("id = ?", task.ID).
-		Save(&row).Error; err != nil {
+	task.Deleted = false
+	row, err := encode(m.store.Object(roleTask), task)
+	if err != nil {
+		return Task{}, fmt.Errorf("UpdateTask: %w", err)
+	}
+	if err := m.store.Query(ctx, roleTask).Where("id = ?", task.ID).
+		Updates(row).Error; err != nil {
 		return Task{}, fmt.Errorf("UpdateTask: %w", err)
 	}
 	if err := m.setTaskTags(ctx, task.ID, task.Tags); err != nil {
 		log.Printf("mwanachamataskmanager: UpdateTask: setTaskTags task=%s: %v", task.ID, err)
 	}
 
-	out := gormstore.TaskFromRow(row)
+	out := task
 	out.Tags = m.loadTagNames(ctx, out.ID)
 
 	if out.WorkflowRunID != "" && current.WorkflowRunID == "" {
@@ -160,7 +161,7 @@ func (m *taskManager) DeleteTask(ctx context.Context, taskID string) error {
 	if _, err := m.GetTask(ctx, taskID); err != nil {
 		return err
 	}
-	if err := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("id = ?", taskID).
+	if err := m.store.Query(ctx, roleTask).Where("id = ?", taskID).
 		UpdateColumn("deleted", true).Error; err != nil {
 		return fmt.Errorf("DeleteTask: %w", err)
 	}
@@ -169,7 +170,7 @@ func (m *taskManager) DeleteTask(ctx context.Context, taskID string) error {
 
 // ListTasks returns all non-deleted Task rows that match the filter.
 func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task, error) {
-	q := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("deleted = ?", false)
+	q := m.store.Query(ctx, roleTask).Where("deleted = ?", false)
 	if filter.Status != "" {
 		q = q.Where("status = ?", string(filter.Status))
 	}
@@ -184,16 +185,12 @@ func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task,
 	if limit <= 0 || limit > maxListPage {
 		limit = maxListPage
 	}
-	var rows []gormstore.TaskRow
-	if err := q.Limit(limit).Find(&rows).Error; err != nil {
+	tasks, err := specstore.List[Task](m.store, q.Limit(limit), roleTask)
+	if err != nil {
 		return nil, fmt.Errorf("ListTasks: %w", err)
 	}
-
-	tasks := make([]Task, 0, len(rows))
-	for _, r := range rows {
-		t := gormstore.TaskFromRow(r)
-		t.Tags = m.loadTagNames(ctx, t.ID)
-		tasks = append(tasks, t)
+	for i := range tasks {
+		tasks[i].Tags = m.loadTagNames(ctx, tasks[i].ID)
 	}
 	return tasks, nil
 }
@@ -202,11 +199,12 @@ func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task,
 // Errors are silently swallowed — a missing or unreadable tag is omitted
 // rather than failing the parent call.
 func (m *taskManager) loadTagNames(ctx context.Context, taskID string) []string {
+	tagging, tags := m.store.Table(roleTagging), m.store.Table(roleTag)
 	var names []string
-	err := m.db.WithContext(ctx).Table(m.tables.TaskTags).
-		Joins("JOIN "+m.tables.Tags+" ON "+m.tables.Tags+".id = "+m.tables.TaskTags+".tag_id").
-		Where(m.tables.TaskTags+".task_id = ?", taskID).
-		Pluck(m.tables.Tags+".name", &names).Error
+	err := m.store.Query(ctx, roleTagging).
+		Joins("JOIN "+tags+" ON "+tags+".id = "+tagging+".tag_id").
+		Where(tagging+".task_id = ?", taskID).
+		Pluck(tags+".name", &names).Error
 	if err != nil {
 		return nil
 	}
@@ -216,7 +214,7 @@ func (m *taskManager) loadTagNames(ctx context.Context, taskID string) []string 
 // setTaskTags replaces taskID's has_tag edges with one per name in tagNames,
 // upserting each Tag by its unique Name.
 func (m *taskManager) setTaskTags(ctx context.Context, taskID string, tagNames []string) error {
-	if err := m.db.WithContext(ctx).Table(m.tables.TaskTags).Where("task_id = ?", taskID).Delete(nil).Error; err != nil {
+	if err := m.store.Query(ctx, roleTagging).Where("task_id = ?", taskID).Delete(nil).Error; err != nil {
 		return fmt.Errorf("setTaskTags: clear: %w", err)
 	}
 	for _, name := range tagNames {
@@ -238,32 +236,39 @@ func (m *taskManager) setTaskTags(ctx context.Context, taskID string, tagNames [
 // its ID. A newly created row is minted a Code inside the same transaction
 // as its insert; an existing row's Code is never touched.
 func (m *taskManager) upsertTagByName(ctx context.Context, name string) (string, error) {
-	var row gormstore.TagRow
-	err := m.db.WithContext(ctx).Table(m.tables.Tags).Where("name = ?", name).First(&row).Error
+	var found Tag
+	q := m.store.Query(ctx, roleTag).Where("name = ?", name)
+	err := m.store.Take(q, roleTag, &found, ErrTagNotFound)
 	if err == nil {
-		return row.ID, nil
+		return found.ID, nil
 	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
+	if !errors.Is(err, ErrTagNotFound) {
 		return "", err
 	}
+
 	now := time.Now().UTC().Format(time.RFC3339)
+	tag := Tag{ID: newSpecID(), Name: name, CreatedAt: now, UpdatedAt: now}
 	txErr := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		code, err := gormstore.NextCode(ctx, tx, m.tables.CodeSequences, "tag", "TG")
+		code, err := m.nextCode(ctx, tx, "tag", "TG")
 		if err != nil {
 			return err
 		}
-		row = gormstore.TagToRow(Tag{Name: name, Code: code, CreatedAt: now, UpdatedAt: now})
-		return tx.Table(m.tables.Tags).Create(&row).Error
+		tag.Code = code
+		row, err := encode(m.store.Object(roleTag), tag)
+		if err != nil {
+			return err
+		}
+		return tx.Table(m.store.Table(roleTag)).Create(row).Error
 	})
 	if txErr != nil {
-		// Lost the race against a concurrent upsert of the same name — re-read.
-		var existing gormstore.TagRow
-		if reErr := m.db.WithContext(ctx).Table(m.tables.Tags).Where("name = ?", name).First(&existing).Error; reErr == nil {
+		var existing Tag
+		reQ := m.store.Query(ctx, roleTag).Where("name = ?", name)
+		if reErr := m.store.Take(reQ, roleTag, &existing, ErrTagNotFound); reErr == nil {
 			return existing.ID, nil
 		}
 		return "", txErr
 	}
-	return row.ID, nil
+	return tag.ID, nil
 }
 
 // publish emits an event via the optional Publisher. A nil publisher is

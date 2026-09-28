@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/aosanya/mwanachama-backend-shared/spec"
+
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
@@ -30,11 +32,11 @@ func wk15Manager(t *testing.T, prefix string) mwanachamataskmanager.TaskManager 
 		t.Fatalf("db.DB: %v", err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	tables := mwanachamataskmanager.DefaultTableNames(prefix)
-	if err := mwanachamataskmanager.Migrate(db, tables); err != nil {
+	workSpec, _ := specForInstance(t, "../spec/examples/work.taskmanager.json", prefix)
+	if err := spec.Migrate(db, workSpec); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	mgr, err := mwanachamataskmanager.NewTaskManager(db, tables, nil)
+	mgr, err := mwanachamataskmanager.NewTaskManager(db, workSpec, nil)
 	if err != nil {
 		t.Fatalf("NewTaskManager: %v", err)
 	}

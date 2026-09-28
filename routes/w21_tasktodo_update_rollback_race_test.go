@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/aosanya/mwanachama-backend-shared/spec"
+
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
@@ -17,7 +19,7 @@ import (
 	"github.com/aosanya/mwanachama-backend-taskmanager/routes"
 )
 
-func w21RaceManagerAndDB(t *testing.T, prefix string) (mwanachamataskmanager.TaskManager, *gorm.DB, mwanachamataskmanager.TableNames) {
+func w21RaceManagerAndDB(t *testing.T, prefix string) (mwanachamataskmanager.TaskManager, *gorm.DB, testTables) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
@@ -28,11 +30,11 @@ func w21RaceManagerAndDB(t *testing.T, prefix string) (mwanachamataskmanager.Tas
 		t.Fatalf("db.DB: %v", err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	tables := mwanachamataskmanager.DefaultTableNames(prefix)
-	if err := mwanachamataskmanager.Migrate(db, tables); err != nil {
+	workSpec, tables := specForInstance(t, "../spec/examples/work.taskmanager.json", prefix)
+	if err := spec.Migrate(db, workSpec); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	mgr, err := mwanachamataskmanager.NewTaskManager(db, tables, nil)
+	mgr, err := mwanachamataskmanager.NewTaskManager(db, workSpec, nil)
 	if err != nil {
 		t.Fatalf("NewTaskManager: %v", err)
 	}

@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/aosanya/mwanachama-backend-shared/events"
+	"github.com/aosanya/mwanachama-backend-shared/spec"
 )
 
 // TaskManager is the primary interface for task lifecycle management.
@@ -399,16 +400,20 @@ type Publisher = events.Publisher
 // taskManager is the concrete implementation of [TaskManager].
 type taskManager struct {
 	db        *gorm.DB
-	tables    TableNames
-	publisher events.Publisher // optional; nil = skip event publishing
+	store     *store
+	publisher events.Publisher
 }
 
-// NewTaskManager constructs a [TaskManager] backed by db, scoped to the
-// tables named by t. pub may be nil — events are skipped when no publisher
-// is set. Returns an error if db is nil.
-func NewTaskManager(db *gorm.DB, t TableNames, pub events.Publisher) (TaskManager, error) {
+func NewTaskManager(db *gorm.DB, s *spec.Spec, pub events.Publisher) (TaskManager, error) {
 	if db == nil {
 		return nil, fmt.Errorf("NewTaskManager: db must not be nil")
 	}
-	return &taskManager{db: db, tables: t, publisher: pub}, nil
+	if s == nil {
+		return nil, fmt.Errorf("NewTaskManager: spec must not be nil")
+	}
+	st, err := newStore(db, s, carriers())
+	if err != nil {
+		return nil, fmt.Errorf("NewTaskManager: %w", err)
+	}
+	return &taskManager{db: db, store: st, publisher: pub}, nil
 }

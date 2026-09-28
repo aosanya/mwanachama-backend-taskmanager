@@ -177,6 +177,8 @@ type WorkflowRun struct {
 
 	// CurrentStepStartedAt is the RFC 3339 timestamp when CurrentStepID was set.
 	CurrentStepStartedAt string `json:"current_step_started_at,omitempty"`
+
+	FailureReason string `json:"failure_reason,omitempty"`
 }
 
 // WorkflowRunClosure is the full read returned by GetWorkflowRunClosure —

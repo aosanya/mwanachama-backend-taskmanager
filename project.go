@@ -7,9 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"gorm.io/gorm"
-
-	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
+	"github.com/aosanya/mwanachama-backend-shared/specstore"
 )
 
 // toSlug converts a project name to a URL-safe slug: lowercase with spaces
@@ -20,34 +18,32 @@ func toSlug(name string) string {
 
 // CreateProject creates a new Project row.
 func (m *taskManager) CreateProject(ctx context.Context, p Project) (Project, error) {
-	p.ID = "" // server-minted; a caller-supplied id is never honoured
 	if p.Name == "" {
 		return Project{}, fmt.Errorf("%w: Project.Name is required", ErrInvalidTask)
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
+	p.ID = newSpecID()
 	p.ProjectName = toSlug(p.Name)
 	p.CreatedAt = now
 	p.UpdatedAt = now
 
-	row := gormstore.ProjectToRow(p)
-	if err := m.db.WithContext(ctx).Table(m.tables.Projects).Create(&row).Error; err != nil {
+	if err := m.store.Insert(ctx, roleProject, p); err != nil {
 		return Project{}, fmt.Errorf("CreateProject: %w", err)
 	}
-	return gormstore.ProjectFromRow(row), nil
+	return p, nil
 }
 
 // GetProject reads a single Project by its ID.
 func (m *taskManager) GetProject(ctx context.Context, projectID string) (Project, error) {
-	var row gormstore.ProjectRow
-	err := m.db.WithContext(ctx).Table(m.tables.Projects).
-		Where("id = ? AND deleted = ?", projectID, false).First(&row).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return Project{}, ErrProjectNotFound
+	var p Project
+	q := m.store.Query(ctx, roleProject).Where("id = ? AND deleted = ?", projectID, false)
+	if err := m.store.Take(q, roleProject, &p, ErrProjectNotFound); err != nil {
+		if errors.Is(err, ErrProjectNotFound) {
+			return Project{}, err
 		}
 		return Project{}, fmt.Errorf("GetProject: %w", err)
 	}
-	return gormstore.ProjectFromRow(row), nil
+	return p, nil
 }
 
 // GetProjectByName retrieves a Project by its slug (project_name column).
@@ -56,16 +52,15 @@ func (m *taskManager) GetProject(ctx context.Context, projectID string) (Project
 // slug ("sharedfarms"), symmetric with [CreateProject].
 func (m *taskManager) GetProjectByName(ctx context.Context, projectName string) (Project, error) {
 	slug := toSlug(projectName)
-	var row gormstore.ProjectRow
-	err := m.db.WithContext(ctx).Table(m.tables.Projects).
-		Where("project_name = ? AND deleted = ?", slug, false).First(&row).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return Project{}, ErrProjectNotFound
+	var p Project
+	q := m.store.Query(ctx, roleProject).Where("project_name = ? AND deleted = ?", slug, false)
+	if err := m.store.Take(q, roleProject, &p, ErrProjectNotFound); err != nil {
+		if errors.Is(err, ErrProjectNotFound) {
+			return Project{}, err
 		}
 		return Project{}, fmt.Errorf("GetProjectByName: %w", err)
 	}
-	return gormstore.ProjectFromRow(row), nil
+	return p, nil
 }
 
 // UpdateProject patches the mutable fields of an existing Project.
@@ -79,12 +74,16 @@ func (m *taskManager) UpdateProject(ctx context.Context, p Project) (Project, er
 	}
 	p.CreatedAt = current.CreatedAt
 	p.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	p.Deleted = false
 
-	row := gormstore.ProjectToRow(p)
-	if err := m.db.WithContext(ctx).Table(m.tables.Projects).Where("id = ?", p.ID).Save(&row).Error; err != nil {
+	row, err := encode(m.store.Object(roleProject), p)
+	if err != nil {
 		return Project{}, fmt.Errorf("UpdateProject: %w", err)
 	}
-	return gormstore.ProjectFromRow(row), nil
+	if err := m.store.Query(ctx, roleProject).Where("id = ?", p.ID).Updates(row).Error; err != nil {
+		return Project{}, fmt.Errorf("UpdateProject: %w", err)
+	}
+	return p, nil
 }
 
 // DeleteProject soft-deletes the Project row AND removes every inbound
@@ -93,11 +92,11 @@ func (m *taskManager) DeleteProject(ctx context.Context, projectID string) error
 	if _, err := m.GetProject(ctx, projectID); err != nil {
 		return err
 	}
-	if err := m.db.WithContext(ctx).Table(m.tables.TaskProjectMemberships).
+	if err := m.store.Query(ctx, roleMembership).
 		Where("project_id = ?", projectID).Delete(nil).Error; err != nil {
 		return fmt.Errorf("DeleteProject: clear memberships: %w", err)
 	}
-	if err := m.db.WithContext(ctx).Table(m.tables.Projects).Where("id = ?", projectID).
+	if err := m.store.Query(ctx, roleProject).Where("id = ?", projectID).
 		UpdateColumn("deleted", true).Error; err != nil {
 		return fmt.Errorf("DeleteProject: %w", err)
 	}
@@ -106,13 +105,10 @@ func (m *taskManager) DeleteProject(ctx context.Context, projectID string) error
 
 // ListProjects returns all non-deleted Projects.
 func (m *taskManager) ListProjects(ctx context.Context) ([]Project, error) {
-	var rows []gormstore.ProjectRow
-	if err := m.db.WithContext(ctx).Table(m.tables.Projects).Where("deleted = ?", false).Limit(maxListPage).Find(&rows).Error; err != nil {
+	q := m.store.Query(ctx, roleProject).Where("deleted = ?", false).Limit(maxListPage)
+	out, err := specstore.List[Project](m.store, q, roleProject)
+	if err != nil {
 		return nil, fmt.Errorf("ListProjects: %w", err)
-	}
-	out := make([]Project, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, gormstore.ProjectFromRow(r))
 	}
 	return out, nil
 }

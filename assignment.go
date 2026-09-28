@@ -59,8 +59,8 @@ func (m *taskManager) AssignTask(ctx context.Context, taskID, agentID, workflowR
 		}
 	}
 
-	if err := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("id = ?", taskID).
-		UpdateColumn("assigned_agent_id", resolvedAgentID).Error; err != nil {
+	if err := m.store.Query(ctx, roleTask).Where("id = ?", taskID).
+		UpdateColumn("assigned_to", resolvedAgentID).Error; err != nil {
 		return fmt.Errorf("AssignTask: assign: %w", err)
 	}
 
@@ -103,7 +103,7 @@ func (m *taskManager) AssignTask(ctx context.Context, taskID, agentID, workflowR
 // touching other fields. Mirrors [setTaskStatus] for the chain-through
 // path in AssignTask.
 func (m *taskManager) setTaskWorkflowRunID(ctx context.Context, taskID, runID string) error {
-	res := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("id = ?", taskID).
+	res := m.store.Query(ctx, roleTask).Where("id = ?", taskID).
 		Updates(map[string]any{
 			"workflow_run_id": runID,
 			"updated_at":      time.Now().UTC().Format(time.RFC3339),
@@ -146,7 +146,7 @@ func (m *taskManager) findUnmetDependencies(ctx context.Context, taskID string) 
 // setTaskStatus updates only the status column, leaving every other field
 // untouched.
 func (m *taskManager) setTaskStatus(ctx context.Context, taskID string, status TaskStatus) error {
-	res := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("id = ?", taskID).
+	res := m.store.Query(ctx, roleTask).Where("id = ?", taskID).
 		Updates(map[string]any{
 			"status":     string(status),
 			"updated_at": time.Now().UTC().Format(time.RFC3339),
@@ -166,8 +166,8 @@ func (m *taskManager) UnassignTask(ctx context.Context, taskID string) error {
 	if _, err := m.GetTask(ctx, taskID); err != nil {
 		return err
 	}
-	if err := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("id = ?", taskID).
-		UpdateColumn("assigned_agent_id", "").Error; err != nil {
+	if err := m.store.Query(ctx, roleTask).Where("id = ?", taskID).
+		UpdateColumn("assigned_to", "").Error; err != nil {
 		return fmt.Errorf("UnassignTask: %w", err)
 	}
 	return nil

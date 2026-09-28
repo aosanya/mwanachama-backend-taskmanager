@@ -57,51 +57,51 @@ func (m *taskManager) relSpecs() map[string]relSpec {
 	return map[string]relSpec{
 		RelLabelAssignedTo: {
 			kind: relFieldOnFrom, fromNotFound: ErrTaskNotFound, toNotFound: ErrAgentNotFound,
-			fkTable: m.tables.Tasks, fkColumn: "assigned_agent_id",
+			fkTable: m.store.Table(roleTask), fkColumn: "assigned_to",
 		},
 		RelLabelSubtaskOf: {
 			kind: relFieldOnFrom, fromNotFound: ErrTaskNotFound, toNotFound: ErrTaskNotFound,
-			fkTable: m.tables.Tasks, fkColumn: "parent_task_id",
+			fkTable: m.store.Table(roleTask), fkColumn: "parent_task_id",
 		},
 		RelLabelTodoAssignedTo: {
 			kind: relFieldOnFrom, fromNotFound: ErrTaskTodoNotFound, toNotFound: ErrAgentNotFound,
-			fkTable: m.tables.TaskTodos, fkColumn: "agent_id",
+			fkTable: m.store.Table(roleTaskTodo), fkColumn: "agent_id",
 		},
 		RelLabelHasTodo: {
 			kind: relFieldOnTo, fromNotFound: ErrTaskNotFound, toNotFound: ErrTaskTodoNotFound,
-			fkTable: m.tables.TaskTodos, fkColumn: "parent_task_id",
+			fkTable: m.store.Table(roleTaskTodo), fkColumn: "parent_task_id",
 		},
 		RelLabelStartedTask: {
 			kind: relFieldOnTo, fromNotFound: ErrWorkflowRunNotFound, toNotFound: ErrTaskNotFound,
-			fkTable: m.tables.Tasks, fkColumn: "workflow_run_id",
+			fkTable: m.store.Table(roleTask), fkColumn: "workflow_run_id",
 		},
 		RelLabelStartedTodo: {
 			kind: relFieldOnTo, fromNotFound: ErrWorkflowRunNotFound, toNotFound: ErrTaskTodoNotFound,
-			fkTable: m.tables.TaskTodos, fkColumn: "workflow_run_id",
+			fkTable: m.store.Table(roleTaskTodo), fkColumn: "workflow_run_id",
 		},
 		RelLabelHasDeliverable: {
 			kind: relFieldOnTo, fromNotFound: ErrTaskNotFound, toNotFound: ErrDeliverableNotFound,
-			fkTable: m.tables.Deliverables, fkColumn: "parent_id",
+			fkTable: m.store.Table(roleDeliverable), fkColumn: "parent_id",
 		},
 		RelLabelHasAcceptanceCriteria: {
 			kind: relFieldOnTo, fromNotFound: ErrTaskNotFound, toNotFound: ErrAcceptanceCriteriaNotFound,
-			fkTable: m.tables.AcceptanceCriteria, fkColumn: "parent_id",
+			fkTable: m.store.Table(roleAcceptanceCriteria), fkColumn: "parent_id",
 		},
 		RelLabelBlocks: {
 			kind: relFieldJoinTable, fromNotFound: ErrTaskNotFound, toNotFound: ErrTaskNotFound,
-			joinTable: m.tables.TaskBlocks, joinFromCol: "from_task_id", joinToCol: "to_task_id", joinExtraCol: "created_at",
+			joinTable: m.store.Table(roleBlocker), joinFromCol: "from_task_id", joinToCol: "to_task_id", joinExtraCol: "created_at",
 		},
 		RelLabelDependsOn: {
 			kind: relFieldJoinTable, fromNotFound: ErrTaskNotFound, toNotFound: ErrTaskNotFound,
-			joinTable: m.tables.TaskDependencies, joinFromCol: "from_task_id", joinToCol: "to_task_id", joinExtraCol: "created_at",
+			joinTable: m.store.Table(roleDependency), joinFromCol: "from_task_id", joinToCol: "to_task_id", joinExtraCol: "created_at",
 		},
 		RelLabelMemberOf: {
 			kind: relFieldJoinTable, fromNotFound: ErrTaskNotFound, toNotFound: ErrProjectNotFound,
-			joinTable: m.tables.TaskProjectMemberships, joinFromCol: "task_id", joinToCol: "project_id", joinExtraCol: "added_at",
+			joinTable: m.store.Table(roleMembership), joinFromCol: "task_id", joinToCol: "project_id", joinExtraCol: "added_at",
 		},
 		RelLabelHasTag: {
 			kind: relFieldJoinTable, fromNotFound: ErrTaskNotFound, toNotFound: ErrTagNotFound,
-			joinTable: m.tables.TaskTags, joinFromCol: "task_id", joinToCol: "tag_id", joinExtraCol: "tagged_at",
+			joinTable: m.store.Table(roleTagging), joinFromCol: "task_id", joinToCol: "tag_id", joinExtraCol: "tagged_at",
 		},
 	}
 }
@@ -124,8 +124,8 @@ func (m *taskManager) rowExists(ctx context.Context, table, id string) (bool, er
 // in turn.
 func (m *taskManager) vertexTables() []string {
 	return []string{
-		m.tables.Tasks, m.tables.Agents, m.tables.Projects, m.tables.Tags,
-		m.tables.TaskTodos, m.tables.WorkflowRuns, m.tables.Deliverables, m.tables.AcceptanceCriteria,
+		m.store.Table(roleTask), m.store.Table(roleAgent), m.store.Table(roleProject), m.store.Table(roleTag),
+		m.store.Table(roleTaskTodo), m.store.Table(roleWorkflowRun), m.store.Table(roleDeliverable), m.store.Table(roleAcceptanceCriteria),
 	}
 }
 
@@ -379,35 +379,35 @@ func (m *taskManager) joinFromEndpointTable(label string) string {
 	switch label {
 	case RelLabelAssignedTo, RelLabelBlocks, RelLabelSubtaskOf, RelLabelDependsOn,
 		RelLabelMemberOf, RelLabelHasTag, RelLabelHasTodo, RelLabelHasDeliverable, RelLabelHasAcceptanceCriteria:
-		return m.tables.Tasks
+		return m.store.Table(roleTask)
 	case RelLabelTodoAssignedTo:
-		return m.tables.TaskTodos
+		return m.store.Table(roleTaskTodo)
 	case RelLabelStartedTask, RelLabelStartedTodo:
-		return m.tables.WorkflowRuns
+		return m.store.Table(roleWorkflowRun)
 	}
-	return m.tables.Tasks
+	return m.store.Table(roleTask)
 }
 
 func (m *taskManager) joinToEndpointTable(label string) string {
 	switch label {
 	case RelLabelAssignedTo, RelLabelTodoAssignedTo:
-		return m.tables.Agents
+		return m.store.Table(roleAgent)
 	case RelLabelBlocks, RelLabelSubtaskOf, RelLabelDependsOn:
-		return m.tables.Tasks
+		return m.store.Table(roleTask)
 	case RelLabelMemberOf:
-		return m.tables.Projects
+		return m.store.Table(roleProject)
 	case RelLabelHasTag:
-		return m.tables.Tags
+		return m.store.Table(roleTag)
 	case RelLabelHasTodo, RelLabelStartedTodo:
-		return m.tables.TaskTodos
+		return m.store.Table(roleTaskTodo)
 	case RelLabelStartedTask:
-		return m.tables.Tasks
+		return m.store.Table(roleTask)
 	case RelLabelHasDeliverable:
-		return m.tables.Deliverables
+		return m.store.Table(roleDeliverable)
 	case RelLabelHasAcceptanceCriteria:
-		return m.tables.AcceptanceCriteria
+		return m.store.Table(roleAcceptanceCriteria)
 	}
-	return m.tables.Tasks
+	return m.store.Table(roleTask)
 }
 
 // syntheticEdgeID builds a stable, opaque edge identifier — this package

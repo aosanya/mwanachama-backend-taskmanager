@@ -10,25 +10,24 @@ import (
 	"context"
 	"time"
 
-	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
+	"github.com/aosanya/mwanachama-backend-shared/specstore"
 )
 
 // ListWorkflowRunsStaleSince returns all non-terminal, unpaused WorkflowRuns
 // whose last_event_at is before cutoff and whose timeout_published is false.
 func (m *taskManager) ListWorkflowRunsStaleSince(ctx context.Context, cutoff time.Time) ([]WorkflowRun, error) {
 	cutoffStr := cutoff.UTC().Format(time.RFC3339)
-	var rows []gormstore.WorkflowRunRow
-	err := m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).
+	q := m.store.Query(ctx, roleWorkflowRun).
 		Where("(paused_at = '' OR paused_at IS NULL)").
 		Where("timeout_published = ?", false).
 		Where("last_event_at <> '' AND last_event_at < ?", cutoffStr).
-		Limit(maxListPage).Find(&rows).Error
+		Limit(maxListPage)
+	runs, err := specstore.List[WorkflowRun](m.store, q, roleWorkflowRun)
 	if err != nil {
 		return nil, err
 	}
 	var out []WorkflowRun
-	for _, r := range rows {
-		run := gormstore.WorkflowRunFromRow(r)
+	for _, run := range runs {
 		if run.Status.IsTerminal() {
 			continue
 		}
@@ -41,18 +40,17 @@ func (m *taskManager) ListWorkflowRunsStaleSince(ctx context.Context, cutoff tim
 // that have a current_step_id set and current_step_started_at before cutoff.
 func (m *taskManager) ListWorkflowRunsStepStaleSince(ctx context.Context, cutoff time.Time) ([]WorkflowRun, error) {
 	cutoffStr := cutoff.UTC().Format(time.RFC3339)
-	var rows []gormstore.WorkflowRunRow
-	err := m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).
+	q := m.store.Query(ctx, roleWorkflowRun).
 		Where("(paused_at = '' OR paused_at IS NULL)").
 		Where("current_step_id <> ''").
 		Where("current_step_started_at <> '' AND current_step_started_at < ?", cutoffStr).
-		Limit(maxListPage).Find(&rows).Error
+		Limit(maxListPage)
+	runs, err := specstore.List[WorkflowRun](m.store, q, roleWorkflowRun)
 	if err != nil {
 		return nil, err
 	}
 	var out []WorkflowRun
-	for _, r := range rows {
-		run := gormstore.WorkflowRunFromRow(r)
+	for _, run := range runs {
 		if run.Status.IsTerminal() {
 			continue
 		}
@@ -64,7 +62,7 @@ func (m *taskManager) ListWorkflowRunsStepStaleSince(ctx context.Context, cutoff
 // MarkTimeoutPublished sets timeout_published=true so the sweeper skips the
 // run on subsequent ticks.
 func (m *taskManager) MarkTimeoutPublished(ctx context.Context, runID string) error {
-	return m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).Where("id = ?", runID).
+	return m.db.WithContext(ctx).Table(m.store.Table(roleWorkflowRun)).Where("id = ?", runID).
 		UpdateColumn("timeout_published", true).Error
 }
 

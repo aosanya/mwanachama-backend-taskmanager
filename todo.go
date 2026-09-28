@@ -8,7 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
+	"github.com/aosanya/mwanachama-backend-shared/specstore"
 )
 
 // CreateTaskTodo creates a TaskTodo row. Todos with non-empty DependsOn
@@ -20,7 +20,7 @@ import (
 // A Code is minted for the new row inside the same transaction as its
 // insert.
 func (m *taskManager) CreateTaskTodo(ctx context.Context, todo TaskTodo) (TaskTodo, error) {
-	todo.ID = "" // server-minted; a caller-supplied id is never honoured
+	todo.ID = newSpecID()
 	if todo.Title == "" || todo.Instructions == "" || todo.ParentTaskID == "" {
 		return TaskTodo{}, fmt.Errorf("%w: title, instructions, and parent_task_id are required", ErrInvalidTask)
 	}
@@ -33,19 +33,22 @@ func (m *taskManager) CreateTaskTodo(ctx context.Context, todo TaskTodo) (TaskTo
 	todo.CreatedAt = now
 	todo.UpdatedAt = now
 
-	row := gormstore.TaskTodoToRow(todo)
 	txErr := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		code, err := gormstore.NextCode(ctx, tx, m.tables.CodeSequences, "task_todo", "TD")
+		code, err := m.nextCode(ctx, tx, "task_todo", "TD")
 		if err != nil {
 			return err
 		}
-		row.Code = code
-		return tx.Table(m.tables.TaskTodos).Create(&row).Error
+		todo.Code = code
+		row, err := encode(m.store.Object(roleTaskTodo), todo)
+		if err != nil {
+			return err
+		}
+		return tx.Table(m.store.Table(roleTaskTodo)).Create(row).Error
 	})
 	if txErr != nil {
 		return TaskTodo{}, fmt.Errorf("CreateTaskTodo: %w", txErr)
 	}
-	return gormstore.TaskTodoFromRow(row), nil
+	return todo, nil
 }
 
 // DispatchTaskTodo publishes [TopicTodoDispatched] for an existing todo so
@@ -58,7 +61,7 @@ func (m *taskManager) DispatchTaskTodo(ctx context.Context, todoID string) error
 	}
 	if todo.Status == TodoStatusBlocked {
 		now := time.Now().UTC().Format(time.RFC3339)
-		if err := m.db.WithContext(ctx).Table(m.tables.TaskTodos).Where("id = ?", todoID).
+		if err := m.store.Query(ctx, roleTaskTodo).Where("id = ?", todoID).
 			Updates(map[string]any{"status": string(TodoStatusPending), "updated_at": now}).Error; err != nil {
 			return fmt.Errorf("DispatchTaskTodo: unblock %s: %w", todoID, err)
 		}
@@ -84,16 +87,15 @@ func (m *taskManager) DispatchTaskTodo(ctx context.Context, todoID string) error
 
 // GetTaskTodo reads a single TaskTodo row.
 func (m *taskManager) GetTaskTodo(ctx context.Context, todoID string) (TaskTodo, error) {
-	var row gormstore.TaskTodoRow
-	err := m.db.WithContext(ctx).Table(m.tables.TaskTodos).
-		Where("id = ? AND deleted = ?", todoID, false).First(&row).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return TaskTodo{}, ErrTaskTodoNotFound
+	var todo TaskTodo
+	q := m.store.Query(ctx, roleTaskTodo).Where("id = ? AND deleted = ?", todoID, false)
+	if err := m.store.Take(q, roleTaskTodo, &todo, ErrTaskTodoNotFound); err != nil {
+		if errors.Is(err, ErrTaskTodoNotFound) {
+			return TaskTodo{}, err
 		}
 		return TaskTodo{}, fmt.Errorf("GetTaskTodo: %w", err)
 	}
-	return gormstore.TaskTodoFromRow(row), nil
+	return todo, nil
 }
 
 // UpdateTaskTodoStatus transitions a TaskTodo to a new [TodoStatus].
@@ -102,7 +104,7 @@ func (m *taskManager) UpdateTaskTodoStatus(ctx context.Context, todoID string, s
 		return TaskTodo{}, err
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	if err := m.db.WithContext(ctx).Table(m.tables.TaskTodos).Where("id = ?", todoID).
+	if err := m.store.Query(ctx, roleTaskTodo).Where("id = ?", todoID).
 		Updates(map[string]any{"status": string(status), "updated_at": now}).Error; err != nil {
 		return TaskTodo{}, fmt.Errorf("UpdateTaskTodoStatus: %w", err)
 	}
@@ -112,17 +114,13 @@ func (m *taskManager) UpdateTaskTodoStatus(ctx context.Context, todoID string, s
 // ListTaskTodos returns all non-deleted TaskTodos, optionally filtered by
 // workflowRunID. When workflowRunID is empty, all todos are returned.
 func (m *taskManager) ListTaskTodos(ctx context.Context, workflowRunID string) ([]TaskTodo, error) {
-	q := m.db.WithContext(ctx).Table(m.tables.TaskTodos).Where("deleted = ?", false)
+	q := m.store.Query(ctx, roleTaskTodo).Where("deleted = ?", false)
 	if workflowRunID != "" {
 		q = q.Where("workflow_run_id = ?", workflowRunID)
 	}
-	var rows []gormstore.TaskTodoRow
-	if err := q.Limit(maxListPage).Find(&rows).Error; err != nil {
+	out, err := specstore.List[TaskTodo](m.store, q.Limit(maxListPage), roleTaskTodo)
+	if err != nil {
 		return nil, fmt.Errorf("ListTaskTodos: %w", err)
-	}
-	out := make([]TaskTodo, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, gormstore.TaskTodoFromRow(r))
 	}
 	return out, nil
 }

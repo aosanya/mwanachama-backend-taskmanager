@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"gorm.io/gorm"
-
-	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
+	"github.com/aosanya/mwanachama-backend-shared/specstore"
 )
 
 // UpsertAgent creates or merges an Agent row keyed by (agent_id).
@@ -22,26 +20,29 @@ func (m *taskManager) UpsertAgent(ctx context.Context, agent Agent) (Agent, erro
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	var existing gormstore.AgentRow
-	err := m.db.WithContext(ctx).Table(m.tables.Agents).Where("agent_id = ?", agent.AgentID).First(&existing).Error
+	existing, err := m.GetAgentByAgentID(ctx, agent.AgentID)
 	switch {
 	case err == nil:
 		existing.DisplayName = agent.DisplayName
 		existing.Capability = agent.Capability
 		existing.RoleName = agent.RoleName
 		existing.UpdatedAt = now
-		if err := m.db.WithContext(ctx).Table(m.tables.Agents).Where("id = ?", existing.ID).Save(&existing).Error; err != nil {
+		row, err := encode(m.store.Object(roleAgent), existing)
+		if err != nil {
 			return Agent{}, fmt.Errorf("UpsertAgent: %w", err)
 		}
-		return gormstore.AgentFromRow(existing), nil
-	case errors.Is(err, gorm.ErrRecordNotFound):
+		if err := m.store.Query(ctx, roleAgent).Where("id = ?", existing.ID).Updates(row).Error; err != nil {
+			return Agent{}, fmt.Errorf("UpsertAgent: %w", err)
+		}
+		return existing, nil
+	case errors.Is(err, ErrAgentNotFound):
+		agent.ID = newSpecID()
 		agent.CreatedAt = now
 		agent.UpdatedAt = now
-		row := gormstore.AgentToRow(agent)
-		if err := m.db.WithContext(ctx).Table(m.tables.Agents).Create(&row).Error; err != nil {
+		if err := m.store.Insert(ctx, roleAgent, agent); err != nil {
 			return Agent{}, fmt.Errorf("UpsertAgent: %w", err)
 		}
-		return gormstore.AgentFromRow(row), nil
+		return agent, nil
 	default:
 		return Agent{}, fmt.Errorf("UpsertAgent: %w", err)
 	}
@@ -52,12 +53,13 @@ func (m *taskManager) UpsertAgent(ctx context.Context, agent Agent) (Agent, erro
 // first; on NotFound it falls back to a slug match. Returns
 // [ErrAgentNotFound] if no match is found.
 func (m *taskManager) GetAgent(ctx context.Context, idOrSlug string) (Agent, error) {
-	var row gormstore.AgentRow
-	err := m.db.WithContext(ctx).Table(m.tables.Agents).Where("id = ?", idOrSlug).First(&row).Error
+	var a Agent
+	q := m.store.Query(ctx, roleAgent).Where("id = ?", idOrSlug)
+	err := m.store.Take(q, roleAgent, &a, ErrAgentNotFound)
 	if err == nil {
-		return gormstore.AgentFromRow(row), nil
+		return a, nil
 	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
+	if !errors.Is(err, ErrAgentNotFound) {
 		return Agent{}, fmt.Errorf("GetAgent: %w", err)
 	}
 	return m.GetAgentByAgentID(ctx, idOrSlug)
@@ -69,26 +71,23 @@ func (m *taskManager) GetAgentByAgentID(ctx context.Context, agentIDSlug string)
 	if agentIDSlug == "" {
 		return Agent{}, ErrAgentNotFound
 	}
-	var row gormstore.AgentRow
-	err := m.db.WithContext(ctx).Table(m.tables.Agents).Where("agent_id = ?", agentIDSlug).First(&row).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return Agent{}, ErrAgentNotFound
+	var a Agent
+	q := m.store.Query(ctx, roleAgent).Where("agent_id = ?", agentIDSlug)
+	if err := m.store.Take(q, roleAgent, &a, ErrAgentNotFound); err != nil {
+		if errors.Is(err, ErrAgentNotFound) {
+			return Agent{}, err
 		}
 		return Agent{}, fmt.Errorf("GetAgentByAgentID: %w", err)
 	}
-	return gormstore.AgentFromRow(row), nil
+	return a, nil
 }
 
 // ListAgents returns all Agents.
 func (m *taskManager) ListAgents(ctx context.Context) ([]Agent, error) {
-	var rows []gormstore.AgentRow
-	if err := m.db.WithContext(ctx).Table(m.tables.Agents).Limit(maxListPage).Find(&rows).Error; err != nil {
+	q := m.store.Query(ctx, roleAgent).Limit(maxListPage)
+	out, err := specstore.List[Agent](m.store, q, roleAgent)
+	if err != nil {
 		return nil, fmt.Errorf("ListAgents: %w", err)
-	}
-	out := make([]Agent, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, gormstore.AgentFromRow(r))
 	}
 	return out, nil
 }

@@ -15,14 +15,9 @@ package mwanachamataskmanager
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
-
-	"gorm.io/gorm"
-
-	"github.com/aosanya/mwanachama-backend-taskmanager/gormstore"
 )
 
 // CancelWorkflowRun implements [TaskManager.CancelWorkflowRun].
@@ -46,11 +41,10 @@ func (m *taskManager) CancelWorkflowRun(ctx context.Context, runID, reason, canc
 	run.CancelReason = reason
 	run.CancellingUntil = quiesceDeadline.UTC().Format(time.RFC3339)
 
-	row := gormstore.WorkflowRunToRow(run)
-	if err := m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).Where("id = ?", runID).Save(&row).Error; err != nil {
+	if err := m.saveRun(ctx, run); err != nil {
 		return WorkflowRun{}, fmt.Errorf("CancelWorkflowRun: %w", err)
 	}
-	result := gormstore.WorkflowRunFromRow(row)
+	result := run
 
 	// Cascade: flip every non-terminal Task anchored by the run to cancelled
 	// and emit work.task.cancelled per task. Failures cascading individual
@@ -77,11 +71,10 @@ func (m *taskManager) FinalizeWorkflowRunCancellation(ctx context.Context, runID
 	run.UpdatedAt = now.Format(time.RFC3339)
 	run.CompletedAt = run.UpdatedAt
 
-	row := gormstore.WorkflowRunToRow(run)
-	if err := m.db.WithContext(ctx).Table(m.tables.WorkflowRuns).Where("id = ?", runID).Save(&row).Error; err != nil {
+	if err := m.saveRun(ctx, run); err != nil {
 		return WorkflowRun{}, fmt.Errorf("FinalizeWorkflowRunCancellation: %w", err)
 	}
-	result := gormstore.WorkflowRunFromRow(row)
+	result := run
 
 	m.publishRunStatusEvent(ctx, result, now, result.CancelReason)
 	return result, nil
@@ -119,13 +112,12 @@ func (m *taskManager) cancelTask(ctx context.Context, task Task, reason string) 
 	if task.CompletedAt == "" {
 		task.CompletedAt = now
 	}
-	row := gormstore.TaskToRow(task)
-	res := m.db.WithContext(ctx).Table(m.tables.Tasks).Where("id = ?", task.ID).Save(&row)
-	if res.Error != nil {
-		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			return ErrTaskNotFound
-		}
-		return fmt.Errorf("cancelTask: %w", res.Error)
+	row, err := encode(m.store.Object(roleTask), task)
+	if err != nil {
+		return fmt.Errorf("cancelTask: %w", err)
+	}
+	if err := m.store.Query(ctx, roleTask).Where("id = ?", task.ID).Updates(row).Error; err != nil {
+		return fmt.Errorf("cancelTask: %w", err)
 	}
 	m.publish(ctx, TopicTaskCancelled, TaskCancelledPayload{
 		TaskID:        task.ID,

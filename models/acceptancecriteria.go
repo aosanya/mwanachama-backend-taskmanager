@@ -1,5 +1,12 @@
 package models
 
+const (
+	AcceptanceResultPassed  = "passed"
+	AcceptanceResultFailed  = "failed"
+	AcceptanceResultSkipped = "skipped"
+	AcceptanceResultBlocked = "blocked"
+)
+
 // AcceptanceCriteria is a verifiable condition that must be satisfied
 // before the owning Task or TaskTodo is considered done. A reviewer writes
 // the runtime result against each criterion. ParentID is a polymorphic

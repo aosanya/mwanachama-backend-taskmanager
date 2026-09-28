@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/aosanya/mwanachama-backend-shared/spec"
+
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
@@ -23,7 +25,7 @@ import (
 // content field together) that no TaskManager method exposes — GetTask/
 // ListTasks both filter deleted=false, so a deleted row's current content
 // is otherwise unobservable through the public API.
-func w19RaceManagerAndDB(t *testing.T, prefix string) (mwanachamataskmanager.TaskManager, *gorm.DB, mwanachamataskmanager.TableNames) {
+func w19RaceManagerAndDB(t *testing.T, prefix string) (mwanachamataskmanager.TaskManager, *gorm.DB, testTables) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
@@ -34,11 +36,11 @@ func w19RaceManagerAndDB(t *testing.T, prefix string) (mwanachamataskmanager.Tas
 		t.Fatalf("db.DB: %v", err)
 	}
 	sqlDB.SetMaxOpenConns(1)
-	tables := mwanachamataskmanager.DefaultTableNames(prefix)
-	if err := mwanachamataskmanager.Migrate(db, tables); err != nil {
+	workSpec, tables := specForInstance(t, "../spec/examples/work.taskmanager.json", prefix)
+	if err := spec.Migrate(db, workSpec); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
-	mgr, err := mwanachamataskmanager.NewTaskManager(db, tables, nil)
+	mgr, err := mwanachamataskmanager.NewTaskManager(db, workSpec, nil)
 	if err != nil {
 		t.Fatalf("NewTaskManager: %v", err)
 	}
