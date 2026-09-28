@@ -6,30 +6,32 @@ package models
 // relationship strategy table.
 type Relationship struct {
 	// ID is a storage-assigned or synthesised edge identifier.
-	ID string
+	ID string `json:"id"`
 
 	// Label is the edge label — one of the RelLabel* constants.
-	Label string
+	Label string `json:"label"`
 
-	FromID string
-	ToID   string
+	FromID string `json:"from_id"`
+	ToID   string `json:"to_id"`
 
 	// Properties are caller-supplied edge metadata. Omitted when unset so a
 	// schema-validated consumer (MCP output) never sees a null object.
-	Properties map[string]any `json:"Properties,omitempty"`
+	Properties map[string]any `json:"properties,omitempty"`
 
-	CreatedAt string
+	CreatedAt string `json:"created_at"`
 }
 
 // Direction selects edge orientation for TaskManager.TraverseRelationships.
-type Direction int
+// Anything other than DirectionInbound, the empty string included, reads as
+// DirectionOutbound.
+type Direction string
 
 const (
 	// DirectionInbound returns edges pointing AT the start vertex.
-	DirectionInbound Direction = iota
+	DirectionInbound Direction = "inbound"
 
 	// DirectionOutbound returns edges pointing AWAY from the start vertex.
-	DirectionOutbound
+	DirectionOutbound Direction = "outbound"
 )
 
 // Edge-label constants — the closed set of allowed Work relationship labels.

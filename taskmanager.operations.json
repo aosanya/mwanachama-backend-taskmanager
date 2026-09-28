@@ -1,0 +1,522 @@
+{
+  "operations": {
+    "create_task": {
+      "method": "POST", "path": "/tasks", "call": "CreateTask", "action": "taskmanager.task.create",
+      "status": 201,
+      "title": "Create task",
+      "description": "Create one task. It lands pending whatever status the caller asked for, and its id is server-minted.",
+      "args": [{"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "list_tasks": {
+      "method": "GET", "path": "/tasks", "call": "ListTasks", "action": "taskmanager.task.list",
+      "title": "List tasks",
+      "description": "List the tasks matching the filter. Narrow by status, priority or run, and pass a limit unless you genuinely need the whole board.",
+      "args": [{"from": "query", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "get_task": {
+      "method": "GET", "path": "/tasks/{taskID}", "call": "GetTask", "action": "taskmanager.task.read",
+      "title": "Read task",
+      "description": "Read one task, its labels resolved.",
+      "args": [{"from": "path", "as": "taskID", "description": "The task to read."}],
+      "returns": [{"body": true}]
+    },
+    "update_task": {
+      "method": "PUT", "path": "/tasks/{taskID}", "call": "UpdateTask", "action": "taskmanager.task.update",
+      "title": "Update task",
+      "description": "Replace the mutable fields of one task. A status change is checked against the lifecycle, and moving from pending to in_progress is refused while anything still blocks it.",
+      "args": [{"from": "body", "whole": true},
+               {"from": "path", "as": "taskID", "into": "ID", "description": "The task to update."}],
+      "returns": [{"body": true}]
+    },
+    "delete_task": {
+      "method": "DELETE", "path": "/tasks/{taskID}", "call": "DeleteTask", "action": "taskmanager.task.delete",
+      "status": 204,
+      "title": "Delete task",
+      "description": "Soft-delete one task. It stops being readable and its row stays.",
+      "args": [{"from": "path", "as": "taskID", "description": "The task to delete."}],
+      "returns": [{"body": true}]
+    },
+    "unblock_task": {
+      "method": "POST", "path": "/tasks/{taskID}/unblock", "call": "UnblockTask", "action": "taskmanager.task.unblock",
+      "title": "Unblock task",
+      "description": "Release one task from its hold and record why.",
+      "args": [{"from": "path", "as": "taskID", "description": "The task to release."},
+               {"from": "body", "as": "note", "description": "Why it is being released."}],
+      "returns": [{"body": true}]
+    },
+    "get_task_by_name": {
+      "method": "GET", "path": "/projects/{projectName}/tasks/by-name/{taskName}", "call": "GetTaskByName", "action": "taskmanager.task.read_by_name",
+      "title": "Read task by name",
+      "description": "Read one task by the project-scoped name a person quotes, such as MVP-001.",
+      "args": [{"from": "path", "as": "projectName", "description": "The project the name is scoped to."},
+               {"from": "path", "as": "taskName", "description": "The task's project-scoped name."}],
+      "returns": [{"body": true}]
+    },
+    "create_task_in_project": {
+      "method": "POST", "path": "/projects/{projectName}/tasks", "call": "CreateTaskInProject", "action": "taskmanager.task.create_in_project",
+      "status": 201,
+      "title": "Create task in project",
+      "description": "Create one task inside a project, minting its project-scoped name from the project's prefix and writing the membership.",
+      "args": [{"from": "path", "as": "projectName", "description": "The project to create it in."},
+               {"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
+
+    "assign_task": {
+      "method": "POST", "path": "/tasks/{taskID}/assign", "call": "AssignTask", "action": "taskmanager.task.assign",
+      "status": 204,
+      "title": "Assign task",
+      "description": "Hand one task to a worker. A task whose dependencies are unmet is held rather than dispatched.",
+      "args": [{"from": "path", "as": "taskID", "description": "The task to hand over."},
+               {"from": "body", "as": "agent_id", "required": true, "description": "The worker to hand it to."},
+               {"from": "body", "as": "workflow_run_id", "description": "The run this assignment belongs to."}],
+      "returns": [{"body": true}]
+    },
+    "unassign_task": {
+      "method": "POST", "path": "/tasks/{taskID}/unassign", "call": "UnassignTask", "action": "taskmanager.task.unassign",
+      "status": 204,
+      "title": "Unassign task",
+      "description": "Take one task back off whoever holds it.",
+      "args": [{"from": "path", "as": "taskID", "description": "The task to take back."}],
+      "returns": [{"body": true}]
+    },
+    "unblock_dependents": {
+      "method": "POST", "path": "/tasks/{taskID}/unblock-dependents", "call": "UnblockDependents", "action": "taskmanager.task.unblock_dependents",
+      "status": 204,
+      "title": "Unblock dependents",
+      "description": "Sweep everything waiting on one finished task and release whatever has nothing left to wait for.",
+      "args": [{"from": "path", "as": "taskID", "description": "The task that just finished."}],
+      "returns": [{"body": true}]
+    },
+
+    "upsert_agent": {
+      "method": "POST", "path": "/agents", "call": "UpsertAgent", "action": "taskmanager.agent.upsert",
+      "title": "Write worker",
+      "description": "Create the worker with this identifier or merge into the one already there. The identifier is the key and never changes.",
+      "args": [{"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "list_agents": {
+      "method": "GET", "path": "/agents", "call": "ListAgents", "action": "taskmanager.agent.list",
+      "title": "List workers",
+      "description": "List every worker this instance knows.",
+      "returns": [{"body": true}]
+    },
+    "get_agent_by_agent_id": {
+      "method": "GET", "path": "/agents/by-agent-id/{agentID}", "call": "GetAgentByAgentID", "action": "taskmanager.agent.read_by_agent_id",
+      "title": "Read worker by identifier",
+      "description": "Read one worker by its identifier in whatever system runs it.",
+      "args": [{"from": "path", "as": "agentID", "description": "The worker's external identifier."}],
+      "returns": [{"body": true}]
+    },
+    "get_agent": {
+      "method": "GET", "path": "/agents/{idOrSlug}", "call": "GetAgent", "action": "taskmanager.agent.read",
+      "title": "Read worker",
+      "description": "Read one worker by its storage key, falling back to its external identifier.",
+      "args": [{"from": "path", "as": "idOrSlug", "description": "The worker's storage key or external identifier."}],
+      "returns": [{"body": true}]
+    },
+
+    "create_project": {
+      "method": "POST", "path": "/projects", "call": "CreateProject", "action": "taskmanager.project.create",
+      "status": 201,
+      "title": "Create project",
+      "description": "Create one project. Its key is derived from its name and its id is server-minted.",
+      "args": [{"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "list_projects": {
+      "method": "GET", "path": "/projects", "call": "ListProjects", "action": "taskmanager.project.list",
+      "title": "List projects",
+      "description": "List every project that has not been deleted.",
+      "returns": [{"body": true}]
+    },
+    "get_project": {
+      "method": "GET", "path": "/projects/{projectID}", "call": "GetProject", "action": "taskmanager.project.read",
+      "title": "Read project",
+      "description": "Read one project by its storage key.",
+      "args": [{"from": "path", "as": "projectID", "description": "The project to read."}],
+      "returns": [{"body": true}]
+    },
+    "update_project": {
+      "method": "PUT", "path": "/projects/{projectID}", "call": "UpdateProject", "action": "taskmanager.project.update",
+      "title": "Update project",
+      "description": "Replace the mutable fields of one project.",
+      "args": [{"from": "body", "whole": true},
+               {"from": "path", "as": "projectID", "into": "ID", "description": "The project to update."}],
+      "returns": [{"body": true}]
+    },
+    "delete_project": {
+      "method": "DELETE", "path": "/projects/{projectID}", "call": "DeleteProject", "action": "taskmanager.project.delete",
+      "status": 204,
+      "title": "Delete project",
+      "description": "Soft-delete one project and drop every membership pointing at it. The tasks themselves are left alone.",
+      "args": [{"from": "path", "as": "projectID", "description": "The project to delete."}],
+      "returns": [{"body": true}]
+    },
+    "list_tasks_in_project": {
+      "method": "GET", "path": "/projects/{projectID}/tasks", "call": "ListTasksInProject", "action": "taskmanager.project.list_tasks",
+      "title": "List a project's tasks",
+      "description": "List the tasks that are members of one project.",
+      "args": [{"from": "path", "as": "projectID", "description": "The project whose tasks to list."}],
+      "returns": [{"body": true}]
+    },
+    "add_task_to_project": {
+      "method": "POST", "path": "/projects/{projectID}/tasks/{taskID}", "call": "AddTaskToProject", "action": "taskmanager.project.add_task",
+      "status": 204,
+      "title": "Add task to project",
+      "description": "Record that one task belongs to one project. A task may belong to several.",
+      "args": [{"from": "path", "as": "taskID", "description": "The task to add."},
+               {"from": "path", "as": "projectID", "description": "The project to add it to."}],
+      "returns": [{"body": true}]
+    },
+    "remove_task_from_project": {
+      "method": "DELETE", "path": "/projects/{projectID}/tasks/{taskID}", "call": "RemoveTaskFromProject", "action": "taskmanager.project.remove_task",
+      "status": 204,
+      "title": "Remove task from project",
+      "description": "Drop one task's membership of one project. The task itself is left alone.",
+      "args": [{"from": "path", "as": "taskID", "description": "The task to remove."},
+               {"from": "path", "as": "projectID", "description": "The project to remove it from."}],
+      "returns": [{"body": true}]
+    },
+    "list_projects_for_task": {
+      "method": "GET", "path": "/tasks/{taskID}/projects", "call": "ListProjectsForTask", "action": "taskmanager.project.list_for_task",
+      "title": "List a task's projects",
+      "description": "List the projects one task belongs to.",
+      "args": [{"from": "path", "as": "taskID", "description": "The task whose projects to list."}],
+      "returns": [{"body": true}]
+    },
+
+    "create_relationship": {
+      "method": "POST", "path": "/relationships", "call": "CreateRelationship", "action": "taskmanager.relationship.create",
+      "status": 201,
+      "title": "Create edge",
+      "description": "Write one directed edge between two things. Re-writing an edge that already exists returns it unchanged rather than writing a second.",
+      "args": [{"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "delete_relationship": {
+      "method": "DELETE", "path": "/relationships", "call": "DeleteRelationship", "action": "taskmanager.relationship.delete",
+      "status": 204,
+      "title": "Delete edge",
+      "description": "Remove the one edge identified by its two ends and its label.",
+      "args": [{"from": "query", "as": "from_id", "required": true, "description": "The edge's source."},
+               {"from": "query", "as": "to_id", "required": true, "description": "The edge's target."},
+               {"from": "query", "as": "label", "required": true, "description": "The edge's label."}],
+      "returns": [{"body": true}]
+    },
+    "traverse_relationships": {
+      "method": "GET", "path": "/relationships/traverse", "call": "TraverseRelationships", "action": "taskmanager.relationship.traverse",
+      "title": "Traverse edges",
+      "description": "List the edges of one label touching one thing, in the direction asked for. Anything other than inbound reads as outbound.",
+      "args": [{"from": "query", "as": "vertex_id", "required": true, "description": "The thing to traverse from."},
+               {"from": "query", "as": "label", "required": true, "description": "The edge label to follow."},
+               {"from": "query", "as": "direction", "description": "inbound for edges pointing at it, outbound for edges leading away."}],
+      "returns": [{"body": true}]
+    },
+
+    "import_project": {
+      "method": "POST", "path": "/projects/import", "call": "ImportProject", "action": "taskmanager.import.run",
+      "status": 201,
+      "title": "Import project",
+      "description": "Read a project and its tasks out of one document and write them, returning what was created. Runs to completion before answering.",
+      "args": [{"from": "body", "as": "document", "required": true, "description": "The document to read the project out of."}],
+      "returns": [{"body": true}]
+    },
+    "start_import_project": {
+      "method": "POST", "path": "/projects/import/jobs", "call": "StartImportProject", "action": "taskmanager.import.start",
+      "status": 202,
+      "title": "Start import",
+      "description": "Validate a document and start importing it in the background, answering straight away with the job to ask after.",
+      "args": [{"from": "body", "as": "document", "required": true, "description": "The document to read the project out of."}],
+      "returns": [{"body": true}]
+    },
+    "get_import_project_status": {
+      "method": "GET", "path": "/projects/import/jobs/{jobID}", "call": "GetImportProjectStatus", "action": "taskmanager.import.read",
+      "title": "Read import",
+      "description": "Read where one background import has got to, its progress lines included while it is still running.",
+      "args": [{"from": "path", "as": "jobID", "description": "The import to read."}],
+      "returns": [{"body": true}]
+    },
+    "cancel_import_project": {
+      "method": "POST", "path": "/projects/import/jobs/{jobID}/cancel", "call": "CancelImportProject", "action": "taskmanager.import.cancel",
+      "status": 204,
+      "title": "Cancel import",
+      "description": "Stop one background import. What it already wrote stays written.",
+      "args": [{"from": "path", "as": "jobID", "description": "The import to stop."}],
+      "returns": [{"body": true}]
+    },
+
+    "list_deliverables_for_task": {
+      "method": "GET", "path": "/tasks/{taskID}/deliverables", "call": "ListDeliverablesForTask", "action": "taskmanager.deliverable.list",
+      "title": "List deliverables",
+      "description": "List what one task owes, in order.",
+      "args": [{"from": "path", "as": "taskID", "description": "The task whose deliverables to list."}],
+      "returns": [{"body": true}]
+    },
+    "list_acceptance_criteria_for_task": {
+      "method": "GET", "path": "/tasks/{taskID}/acceptance-criteria", "call": "ListAcceptanceCriteriaForTask", "action": "taskmanager.acceptance_criteria.list",
+      "title": "List acceptance criteria",
+      "description": "List the conditions one task has to satisfy, in order.",
+      "args": [{"from": "path", "as": "taskID", "description": "The task whose criteria to list."}],
+      "returns": [{"body": true}]
+    },
+    "write_acceptance_criteria_result": {
+      "method": "PUT", "path": "/acceptance-criteria/{criteriaID}/result", "call": "WriteAcceptanceCriteriaResult", "action": "taskmanager.acceptance_criteria.write_result",
+      "status": 204,
+      "title": "Write review result",
+      "description": "Record what the reviewer found against one condition.",
+      "args": [{"from": "path", "as": "criteriaID", "description": "The condition reviewed."},
+               {"from": "body", "as": "result", "required": true, "field": "AcceptanceCriteria.result"},
+               {"from": "body", "as": "notes", "description": "What the reviewer saw, in their own words."}],
+      "returns": [{"body": true}]
+    },
+
+    "create_task_todo": {
+      "method": "POST", "path": "/todos", "call": "CreateTaskTodo", "action": "taskmanager.task_todo.create",
+      "status": 201,
+      "title": "Create step",
+      "description": "Create one step of a task's decomposition. A step with predecessors lands blocked and is not dispatched until they finish.",
+      "args": [{"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "get_task_todo": {
+      "method": "GET", "path": "/todos/{todoID}", "call": "GetTaskTodo", "action": "taskmanager.task_todo.read",
+      "title": "Read step",
+      "description": "Read one step of a decomposition.",
+      "args": [{"from": "path", "as": "todoID", "description": "The step to read."}],
+      "returns": [{"body": true}]
+    },
+    "dispatch_task_todo": {
+      "method": "POST", "path": "/todos/{todoID}/dispatch", "call": "DispatchTaskTodo", "action": "taskmanager.task_todo.dispatch",
+      "status": 204,
+      "title": "Dispatch step",
+      "description": "Announce one step so a worker picks it up, releasing it from its hold first if it is still blocked.",
+      "args": [{"from": "path", "as": "todoID", "description": "The step to dispatch."}],
+      "returns": [{"body": true}]
+    },
+    "update_task_todo_status": {
+      "method": "PUT", "path": "/todos/{todoID}/status", "call": "UpdateTaskTodoStatus", "action": "taskmanager.task_todo.set_status",
+      "title": "Set step status",
+      "description": "Move one step to a new lifecycle state.",
+      "args": [{"from": "path", "as": "todoID", "description": "The step to move."},
+               {"from": "body", "as": "status", "required": true, "field": "TaskTodo.status"}],
+      "returns": [{"body": true}]
+    },
+    "list_task_todos": {
+      "method": "GET", "path": "/workflow-runs/{runID}/todos", "call": "ListTaskTodos", "action": "taskmanager.task_todo.list",
+      "title": "List a run's steps",
+      "description": "List the steps belonging to one run.",
+      "args": [{"from": "path", "as": "runID", "description": "The run whose steps to list."}],
+      "returns": [{"body": true}]
+    },
+
+    "create_workflow_run": {
+      "method": "POST", "path": "/workflow-runs", "call": "CreateWorkflowRun", "action": "taskmanager.workflow_run.create",
+      "status": 201,
+      "title": "Create run",
+      "description": "Open one run. An empty name is generated, and a name already taken is refused.",
+      "args": [{"from": "body", "as": "name", "description": "The run's label. Generated when empty."},
+               {"from": "body", "as": "trigger_event", "description": "What started the run."},
+               {"from": "body", "as": "initiator", "description": "Who or what asked for it."}],
+      "returns": [{"body": true}]
+    },
+    "create_recovery_workflow_run": {
+      "method": "POST", "path": "/workflow-runs/recovery", "call": "CreateRecoveryWorkflowRun", "action": "taskmanager.workflow_run.create_recovery",
+      "status": 201,
+      "title": "Create recovery run",
+      "description": "Open a run that answers another's failure, charged against its lineage's shared budget.",
+      "args": [{"from": "body", "as": "name", "description": "The run's label. Generated when empty."},
+               {"from": "body", "as": "trigger_event", "description": "What started the run."},
+               {"from": "body", "as": "initiator", "description": "Who or what asked for it."},
+               {"from": "body", "as": "parent_run_id", "required": true, "description": "The run whose failure spawned this one."},
+               {"from": "body", "as": "root_run_id", "description": "The top of the chain, which holds the budget."}],
+      "returns": [{"body": true}]
+    },
+    "list_workflow_runs": {
+      "method": "GET", "path": "/workflow-runs", "call": "ListWorkflowRuns", "action": "taskmanager.workflow_run.list",
+      "title": "List runs",
+      "description": "List runs newest first, or the single run carrying one label.",
+      "args": [{"from": "query", "as": "name", "description": "Keep only the run with this label."}],
+      "returns": [{"body": true}]
+    },
+    "list_workflow_runs_stale_since": {
+      "method": "POST", "path": "/workflow-runs/stale", "call": "ListWorkflowRunsStaleSince", "action": "taskmanager.workflow_run.list_stale",
+      "title": "List quiet runs",
+      "description": "List the runs still in flight that no event has touched since the cutoff and that have not already been announced as timed out.",
+      "args": [{"from": "body", "as": "cutoff", "required": true, "description": "The instant a run must have been quiet since, as an RFC 3339 string."}],
+      "returns": [{"body": true}]
+    },
+    "list_workflow_runs_step_stale_since": {
+      "method": "POST", "path": "/workflow-runs/step-stale", "call": "ListWorkflowRunsStepStaleSince", "action": "taskmanager.workflow_run.list_step_stale",
+      "title": "List stuck steps",
+      "description": "List the runs still in flight whose current step began before the cutoff and has not moved.",
+      "args": [{"from": "body", "as": "cutoff", "required": true, "description": "The instant a step must have started before, as an RFC 3339 string."}],
+      "returns": [{"body": true}]
+    },
+    "get_workflow_run": {
+      "method": "GET", "path": "/workflow-runs/{runID}", "call": "GetWorkflowRun", "action": "taskmanager.workflow_run.read",
+      "title": "Read run",
+      "description": "Read one run's anchor.",
+      "args": [{"from": "path", "as": "runID", "description": "The run to read."}],
+      "returns": [{"body": true}]
+    },
+    "update_workflow_run_status": {
+      "method": "PUT", "path": "/workflow-runs/{runID}/status", "call": "UpdateWorkflowRunStatus", "action": "taskmanager.workflow_run.set_status",
+      "title": "Set run status",
+      "description": "Move one run to a new lifecycle state. The move is checked against the state machine.",
+      "args": [{"from": "path", "as": "runID", "description": "The run to move."},
+               {"from": "body", "as": "new_status", "required": true, "field": "WorkflowRun.status"},
+               {"from": "body", "as": "reason", "description": "Why it moved. Recorded when the run fails."}],
+      "returns": [{"body": true}]
+    },
+    "get_workflow_run_closure": {
+      "method": "GET", "path": "/workflow-runs/{runID}/closure", "call": "GetWorkflowRunClosure", "action": "taskmanager.workflow_run.read_closure",
+      "title": "Read run closure",
+      "description": "Read everything one run produced — its tasks, its steps, the edges between them, and the outside things it touched.",
+      "args": [{"from": "path", "as": "runID", "description": "The run whose closure to read."}],
+      "returns": [{"body": true}]
+    },
+    "list_tasks_for_run": {
+      "method": "GET", "path": "/workflow-runs/{runID}/tasks", "call": "ListTasksForRun", "action": "taskmanager.workflow_run.list_tasks",
+      "title": "List a run's tasks",
+      "description": "List the tasks belonging to one run.",
+      "args": [{"from": "path", "as": "runID", "description": "The run whose tasks to list."}],
+      "returns": [{"body": true}]
+    },
+    "link_task_to_run": {
+      "method": "POST", "path": "/workflow-runs/{runID}/tasks/{taskID}/link", "call": "LinkTaskToRun", "action": "taskmanager.workflow_run.link_task",
+      "status": 204,
+      "title": "Link task to run",
+      "description": "Record that one task belongs to one run, so rolling the run back reaches it.",
+      "args": [{"from": "path", "as": "runID", "description": "The run."},
+               {"from": "path", "as": "taskID", "description": "The task to link."}],
+      "returns": [{"body": true}]
+    },
+    "link_todo_to_run": {
+      "method": "POST", "path": "/workflow-runs/{runID}/todos/{todoID}/link", "call": "LinkTodoToRun", "action": "taskmanager.workflow_run.link_todo",
+      "status": 204,
+      "title": "Link step to run",
+      "description": "Record that one step belongs to one run, so rolling the run back reaches it.",
+      "args": [{"from": "path", "as": "runID", "description": "The run."},
+               {"from": "path", "as": "todoID", "description": "The step to link."}],
+      "returns": [{"body": true}]
+    },
+    "set_failure_budget": {
+      "method": "PUT", "path": "/workflow-runs/{runID}/failure-budget", "call": "SetFailureBudget", "action": "taskmanager.workflow_run.set_failure_budget",
+      "title": "Set recovery budget",
+      "description": "Say how many recovery activations one lineage is allowed. Meaningful on the root run.",
+      "args": [{"from": "path", "as": "runID", "description": "The run whose budget to set."},
+               {"from": "body", "as": "budget", "required": true, "description": "How many activations are allowed."}],
+      "returns": [{"body": true}]
+    },
+    "increment_failure_budget": {
+      "method": "POST", "path": "/workflow-runs/{rootRunID}/failure-budget/increment", "call": "IncrementFailureBudget", "action": "taskmanager.workflow_run.increment_failure_budget",
+      "title": "Charge recovery budget",
+      "description": "Charge one recovery activation against a lineage's budget and say what is left. Charging the same child twice is a no-op.",
+      "args": [{"from": "path", "as": "rootRunID", "description": "The top of the chain, which holds the budget."},
+               {"from": "body", "as": "child_run_id", "required": true, "description": "The recovery run being charged."}],
+      "returns": [{"as": "used"}, {"as": "budget"}, {"as": "exhausted"}]
+    },
+    "rollback_workflow_run": {
+      "method": "POST", "path": "/workflow-runs/{runID}/rollback", "call": "RollbackWorkflowRun", "action": "taskmanager.workflow_run.rollback",
+      "title": "Roll run back",
+      "description": "Undo one run: move it to rolling_back, compensate what it produced, then finish it as rolled_back.",
+      "args": [{"from": "path", "as": "runID", "description": "The run to undo."},
+               {"from": "body", "as": "reason", "description": "Why it is being undone."}],
+      "returns": [{"body": true}]
+    },
+    "delete_workflow_run_artifacts": {
+      "method": "DELETE", "path": "/workflow-runs/{runID}/artifacts", "call": "DeleteWorkflowRunArtifacts", "action": "taskmanager.workflow_run.delete_artifacts",
+      "status": 204,
+      "title": "Compensate run artifacts",
+      "description": "Reset the tasks one run produced and soft-delete its steps. Refused while another run still depends on one of them.",
+      "args": [{"from": "path", "as": "runID", "description": "The run whose artifacts to compensate."}],
+      "returns": [{"body": true}]
+    },
+    "cancel_workflow_run": {
+      "method": "POST", "path": "/workflow-runs/{runID}/cancel", "call": "CancelWorkflowRun", "action": "taskmanager.workflow_run.cancel",
+      "title": "Cancel run",
+      "description": "Begin cancelling one run, giving in-flight work until the deadline to quiesce, and cancel every task it holds that has not finished.",
+      "args": [{"from": "path", "as": "runID", "description": "The run to cancel."},
+               {"from": "body", "as": "reason", "description": "Why it is being cancelled."},
+               {"from": "body", "as": "cancelled_by", "description": "Who issued the cancel."},
+               {"from": "body", "as": "quiesce_deadline", "required": true, "description": "When in-flight work must have stopped by, as an RFC 3339 string."}],
+      "returns": [{"body": true}]
+    },
+    "finalize_workflow_run_cancellation": {
+      "method": "POST", "path": "/workflow-runs/{runID}/finalize-cancel", "call": "FinalizeWorkflowRunCancellation", "action": "taskmanager.workflow_run.finalize_cancel",
+      "title": "Finish cancelling run",
+      "description": "Close out a run whose quiesce deadline has passed.",
+      "args": [{"from": "path", "as": "runID", "description": "The run to close out."}],
+      "returns": [{"body": true}]
+    },
+    "touch_workflow_run_last_event_at": {
+      "method": "PUT", "path": "/workflow-runs/{runID}/last-event-at", "call": "TouchWorkflowRunLastEventAt", "action": "taskmanager.workflow_run.touch",
+      "status": 204,
+      "title": "Mark run alive",
+      "description": "Record that an event touched one run, which is what keeps the watchdog off it.",
+      "args": [{"from": "path", "as": "runID", "description": "The run touched."},
+               {"from": "body", "as": "ts", "required": true, "description": "When it was touched, as an RFC 3339 string."}],
+      "returns": [{"body": true}]
+    },
+    "mark_timeout_published": {
+      "method": "POST", "path": "/workflow-runs/{runID}/mark-timeout-published", "call": "MarkTimeoutPublished", "action": "taskmanager.workflow_run.mark_timeout_published",
+      "status": 204,
+      "title": "Mark timeout announced",
+      "description": "Record that a timeout was already announced for one run, so it is announced once.",
+      "args": [{"from": "path", "as": "runID", "description": "The run announced."}],
+      "returns": [{"body": true}]
+    },
+    "handle_run_timeout": {
+      "method": "POST", "path": "/workflow-runs/{runID}/handle-timeout", "call": "HandleRunTimeout", "action": "taskmanager.workflow_run.handle_timeout",
+      "status": 204,
+      "title": "Handle run timeout",
+      "description": "Act on one run having gone quiet for too long.",
+      "args": [{"from": "path", "as": "runID", "description": "The run that went quiet."}],
+      "returns": [{"body": true}]
+    },
+    "handle_task_timeout": {
+      "method": "POST", "path": "/workflow-runs/{runID}/tasks/{taskOrTodoID}/handle-timeout", "call": "HandleTaskTimeout", "action": "taskmanager.workflow_run.handle_task_timeout",
+      "status": 204,
+      "title": "Handle step timeout",
+      "description": "Act on one task or step having stalled inside a run.",
+      "args": [{"from": "path", "as": "taskOrTodoID", "description": "The task or step that stalled."},
+               {"from": "path", "as": "runID", "description": "The run it belongs to."}],
+      "returns": [{"body": true}]
+    }
+  },
+
+  "errors": {
+    "ErrTaskNotFound": 404,
+    "ErrAgentNotFound": 404,
+    "ErrProjectNotFound": 404,
+    "ErrTagNotFound": 404,
+    "ErrTaskTodoNotFound": 404,
+    "ErrWorkflowRunNotFound": 404,
+    "ErrRelationshipNotFound": 404,
+    "ErrImportJobNotFound": 404,
+    "ErrDeliverableNotFound": 404,
+    "ErrAcceptanceCriteriaNotFound": 404,
+
+    "ErrTaskAlreadyExists": 409,
+    "ErrProjectAlreadyExists": 409,
+    "ErrWorkflowRunNameExists": 409,
+    "ErrRollbackConflict": 409,
+    "ErrFailureBudgetAlreadySet": 409,
+    "ErrImportJobNotCancellable": 409,
+    "ErrCannotCancelTerminalRun": 409,
+    "ErrForeignRunDependency": 409,
+    "ErrWorkflowRunMismatch": 409,
+    "ErrBlocked": 409,
+
+    "ErrInvalidStatusTransition": 400,
+    "ErrInvalidTask": 400,
+    "ErrInvalidRunStatusTransition": 400,
+    "ErrInvalidRelationship": 400,
+    "ErrInvalidImport": 400,
+    "ErrNotRootWorkflowRun": 400
+  }
+}

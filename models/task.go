@@ -159,11 +159,11 @@ type Task struct {
 // TaskFilter constrains the results returned by TaskManager.ListTasks.
 // Zero values mean "no filter" for that field.
 type TaskFilter struct {
-	Status        TaskStatus
-	Priority      TaskPriority
-	WorkflowRunID string
+	Status        TaskStatus   `query:"status"`
+	Priority      TaskPriority `query:"priority"`
+	WorkflowRunID string       `query:"workflow_run_id"`
 
 	// Limit caps the number of tasks returned, up to maxListPage. 0 (or
 	// anything above maxListPage) falls back to maxListPage.
-	Limit int
+	Limit int `query:"limit"`
 }

@@ -1,42 +1,110 @@
-// Package routes provides HTTP handlers over [mwanachamataskmanager.TaskManager],
-// mounted by mwanachama-backend-api-gateway. See doc.go for scope.
 package routes
 
 import (
-	"net/http"
+	"fmt"
+	"sync"
+
+	"github.com/aosanya/mwanachama-backend-shared/dispatch"
+	"github.com/aosanya/mwanachama-backend-shared/httpwire"
 
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
-// Route is one HTTP endpoint: a method, a path relative to this package's
-// mount point, and the handler. The mounting process wraps Handler with its
-// own auth/capability gates and builds the mux itself — see doc.go.
-type Route struct {
-	Method  string
-	Path    string
-	Handler http.HandlerFunc
+type Route = httpwire.Route
+
+var operations = sync.OnceValues(func() (*dispatch.Spec, error) {
+	return dispatch.Parse(mwanachamataskmanager.Operations())
+})
+
+var sentinels = map[string]error{
+	"ErrTaskNotFound":               mwanachamataskmanager.ErrTaskNotFound,
+	"ErrAgentNotFound":              mwanachamataskmanager.ErrAgentNotFound,
+	"ErrProjectNotFound":            mwanachamataskmanager.ErrProjectNotFound,
+	"ErrTagNotFound":                mwanachamataskmanager.ErrTagNotFound,
+	"ErrTaskTodoNotFound":           mwanachamataskmanager.ErrTaskTodoNotFound,
+	"ErrWorkflowRunNotFound":        mwanachamataskmanager.ErrWorkflowRunNotFound,
+	"ErrRelationshipNotFound":       mwanachamataskmanager.ErrRelationshipNotFound,
+	"ErrImportJobNotFound":          mwanachamataskmanager.ErrImportJobNotFound,
+	"ErrDeliverableNotFound":        mwanachamataskmanager.ErrDeliverableNotFound,
+	"ErrAcceptanceCriteriaNotFound": mwanachamataskmanager.ErrAcceptanceCriteriaNotFound,
+	"ErrTaskAlreadyExists":          mwanachamataskmanager.ErrTaskAlreadyExists,
+	"ErrProjectAlreadyExists":       mwanachamataskmanager.ErrProjectAlreadyExists,
+	"ErrWorkflowRunNameExists":      mwanachamataskmanager.ErrWorkflowRunNameExists,
+	"ErrRollbackConflict":           mwanachamataskmanager.ErrRollbackConflict,
+	"ErrFailureBudgetAlreadySet":    mwanachamataskmanager.ErrFailureBudgetAlreadySet,
+	"ErrImportJobNotCancellable":    mwanachamataskmanager.ErrImportJobNotCancellable,
+	"ErrCannotCancelTerminalRun":    mwanachamataskmanager.ErrCannotCancelTerminalRun,
+	"ErrForeignRunDependency":       mwanachamataskmanager.ErrForeignRunDependency,
+	"ErrWorkflowRunMismatch":        mwanachamataskmanager.ErrWorkflowRunMismatch,
+	"ErrBlocked":                    mwanachamataskmanager.ErrBlocked,
+	"ErrInvalidStatusTransition":    mwanachamataskmanager.ErrInvalidStatusTransition,
+	"ErrInvalidTask":                mwanachamataskmanager.ErrInvalidTask,
+	"ErrInvalidRunStatusTransition": mwanachamataskmanager.ErrInvalidRunStatusTransition,
+	"ErrInvalidRelationship":        mwanachamataskmanager.ErrInvalidRelationship,
+	"ErrInvalidImport":              mwanachamataskmanager.ErrInvalidImport,
+	"ErrNotRootWorkflowRun":         mwanachamataskmanager.ErrNotRootWorkflowRun,
 }
 
-// Pattern returns the Go 1.22+ ServeMux pattern for this route under
-// prefix, e.g. Pattern("/v1/taskmanager") on {Method: "GET", Path:
-// "/tasks/{taskID}"} yields "GET /v1/taskmanager/tasks/{taskID}".
-func (rt Route) Pattern(prefix string) string {
-	return rt.Method + " " + prefix + rt.Path
+// AnonymousActions is empty on purpose: nothing on a work board is readable
+// without a caller. It stays as the allowlist Split is built on, so an
+// operation added to the spec and not named here arrives gated.
+var AnonymousActions = []string{}
+
+type Mount struct {
+	Authorize dispatch.Authorizer
+	Caller    dispatch.Caller
 }
 
-// Routes returns every route this package defines, over tm. Concatenates
-// the per-entity route lists — see task.go, agent.go, project.go,
-// assignment.go, deliverable.go, importroutes.go, workflowrun.go, and
-// workflowrun_lifecycle.go.
-func Routes(tm mwanachamataskmanager.TaskManager) []Route {
-	var out []Route
-	out = append(out, TaskRoutes(tm)...)
-	out = append(out, AgentRoutes(tm)...)
-	out = append(out, ProjectRoutes(tm)...)
-	out = append(out, AssignmentRoutes(tm)...)
-	out = append(out, DeliverableRoutes(tm)...)
-	out = append(out, ImportRoutes(tm)...)
-	out = append(out, WorkflowRunRoutes(tm)...)
-	out = append(out, WorkflowRunLifecycleRoutes(tm)...)
+func Build(tm mwanachamataskmanager.TaskManager) ([]Route, error) { return BuildWith(tm, nil) }
+
+func BuildWith(tm mwanachamataskmanager.TaskManager, authorize dispatch.Authorizer) ([]Route, error) {
+	return BuildFor(tm, Mount{Authorize: authorize})
+}
+
+func BuildFor(tm mwanachamataskmanager.TaskManager, m Mount) ([]Route, error) {
+	s, err := operations()
+	if err != nil {
+		return nil, err
+	}
+	return dispatch.Dispatch(s, dispatch.Deps{
+		Manager: tm, Errors: sentinels, Authorize: m.Authorize, Caller: m.Caller,
+	})
+}
+
+func Routes(tm mwanachamataskmanager.TaskManager) []Route { return RoutesWith(tm, nil) }
+
+func RoutesWith(tm mwanachamataskmanager.TaskManager, authorize dispatch.Authorizer) []Route {
+	return RoutesFor(tm, Mount{Authorize: authorize})
+}
+
+func RoutesFor(tm mwanachamataskmanager.TaskManager, m Mount) []Route {
+	out, err := BuildFor(tm, m)
+	if err != nil {
+		panic(fmt.Sprintf("taskmanager routes: %v", err))
+	}
 	return out
+}
+
+func Split(tm mwanachamataskmanager.TaskManager) dispatch.Split { return SplitWith(tm, nil) }
+
+func SplitWith(tm mwanachamataskmanager.TaskManager, authorize dispatch.Authorizer) dispatch.Split {
+	return SplitFor(tm, Mount{Authorize: authorize})
+}
+
+func SplitFor(tm mwanachamataskmanager.TaskManager, m Mount) dispatch.Split {
+	public := dispatch.Anonymous(Routes(tm), AnonymousActions...)
+	gated := dispatch.Anonymous(RoutesFor(tm, m), AnonymousActions...)
+	return dispatch.Split{Anonymous: public.Anonymous, Gated: gated.Gated}
+}
+
+func OperatorRoutes(tm mwanachamataskmanager.TaskManager) []Route {
+	return OperatorRoutesWith(tm, nil)
+}
+
+func OperatorRoutesWith(tm mwanachamataskmanager.TaskManager, authorize dispatch.Authorizer) []Route {
+	return OperatorRoutesFor(tm, Mount{Authorize: authorize})
+}
+
+func OperatorRoutesFor(tm mwanachamataskmanager.TaskManager, m Mount) []Route {
+	return SplitFor(tm, m).Gated
 }
