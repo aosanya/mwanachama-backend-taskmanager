@@ -53,6 +53,18 @@ segment a taskmanager instance named `wakala` and an agency instance of the
 same name both want `wakala_work_items` — a silent collision, not an error,
 because `AutoMigrate` adopts a table that already exists.
 
+**A second mount of this module in one instance adds a fourth segment** —
+`<instance>_taskmanager_<mount>_<object>`, via `SpecForMount(instance,
+mount)`; `SpecFor` is the default mount, whose segment is elided, so its
+names are unchanged. ⚠️ **This module has effectively no room for it.**
+`<slug11>_taskmanager_workflow_runs_parent_workflow_run_idx` is 61 of 63
+bytes against the real 11-character `tableSlug()`, leaving room for a mount
+name of **one character** — so in practice taskmanager is single-mount until
+`mwanachama-backend-shared`'s S28 shortens how index names are built. The
+short instance names this repo's own tests use (`wakala`, `kazi`) hide this:
+`SpecForMount("wakala", "second")` passes at 6 characters because `wakala` is
+5 bytes shorter than a real slug. Measure against a real slug, not a fixture.
+
 **A column is found by field name, never by json tag** —
 `specstore.ColumnName` turns `SubmittedBy` into `submitted_by`. **Every
 declared column is written on every write**, because a map missing a key
