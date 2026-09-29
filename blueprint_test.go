@@ -375,3 +375,47 @@ func sorted(in []string) []string {
 	sort.Strings(out)
 	return out
 }
+
+func TestTwoMountsOfTheSameModuleCoexist(t *testing.T) {
+	db := openSpecTestDB(t)
+
+	second, err := SpecForMount("wakala", "second")
+	if err != nil {
+		t.Fatalf("SpecForMount second: %v", err)
+	}
+	third, err := SpecForMount("wakala", "third")
+	if err != nil {
+		t.Fatalf("SpecForMount third: %v", err)
+	}
+
+	for _, s := range []*spec.Spec{second, third} {
+		if err := Provision(db, s); err != nil {
+			t.Fatalf("provision mount %q: %v", s.Mount, err)
+		}
+	}
+
+	o, ok := second.ByRole("task")
+	if !ok {
+		t.Fatal("the shipped spec fills no task")
+	}
+	po, _ := third.ByRole("task")
+	if got := second.TableFor(o); got != "wakala_taskmanager_second_work_items" {
+		t.Errorf("second-mount task table = %q", got)
+	}
+	if got := third.TableFor(po); got != "wakala_taskmanager_third_work_items" {
+		t.Errorf("third-mount task table = %q", got)
+	}
+	if second.TableFor(o) == third.TableFor(po) {
+		t.Fatal("two mounts landed in one table")
+	}
+}
+
+func TestSpecForDefaultsToTheMainMount(t *testing.T) {
+	s, err := SpecFor("wakala")
+	if err != nil {
+		t.Fatalf("SpecFor: %v", err)
+	}
+	if s.MountName() != spec.DefaultMount {
+		t.Errorf("MountName = %q, want %q", s.MountName(), spec.DefaultMount)
+	}
+}
