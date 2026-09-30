@@ -47,23 +47,17 @@ column to land in. `TestEveryExampleFitsTheTypes` runs that agreement against
 *every* spec under `spec/examples/`, not just the one a test happened to
 load.
 
-**A table is `<instance>_<module>_<object>`.** The module segment is not
-decoration: the agency module also declares a `work_item`, and without the
-segment a taskmanager instance named `wakala` and an agency instance of the
-same name both want `wakala_work_items` — a silent collision, not an error,
-because `AutoMigrate` adopts a table that already exists.
+**A table is `<instance>_hashOf(<module>_<mount>_<object>)`** — only the
+instance stays readable, e.g. `agy1f2e3d4c_8766f69928a18f58`. The hash is 16
+hex characters of SHA-256 over the **raw name** `<module>_<mount>_<object>`,
+which `spec.RawNameFor` builds and `spec.Migrate` records in the
+`spec_table_names` registry alongside the physical name. Hashing is what keeps
+every identifier a constant 28 bytes (51 for an index) against Postgres's
+63-byte ceiling, which the readable form had already reached. Assert on
+`RawNameFor` in tests, never on a physical name literal, and exclude
+`spec.NameRegistryTable` from anything that counts tables. See
+[declared-domains.md](../mwanachama-backend-shared/documentation/2.%20design/declared-domains.md).
 
-**A second mount of this module in one instance adds a fourth segment** —
-`<instance>_taskmanager_<mount>_<object>`, via `SpecForMount(instance,
-mount)`; `SpecFor` is the default mount, whose segment is elided, so its
-names are unchanged. ⚠️ **This module has effectively no room for it.**
-`<slug11>_taskmanager_workflow_runs_parent_workflow_run_idx` is 61 of 63
-bytes against the real 11-character `tableSlug()`, leaving room for a mount
-name of **one character** — so in practice taskmanager is single-mount until
-`mwanachama-backend-shared`'s S28 shortens how index names are built. The
-short instance names this repo's own tests use (`wakala`, `kazi`) hide this:
-`SpecForMount("wakala", "second")` passes at 6 characters because `wakala` is
-5 bytes shorter than a real slug. Measure against a real slug, not a fixture.
 
 **A column is found by field name, never by json tag** —
 `specstore.ColumnName` turns `SubmittedBy` into `submitted_by`. **Every

@@ -42,7 +42,8 @@ func specExamplePaths(t *testing.T) []string {
 func tableNames(t *testing.T, db *gorm.DB) []string {
 	t.Helper()
 	var names []string
-	if err := db.Raw(`select name from sqlite_master where type='table' and name not like 'sqlite_%'`).
+	if err := db.Raw(`select name from sqlite_master where type='table' and name not like 'sqlite_%'
+		and name not like '%_' || ?`, spec.NameRegistrySuffix).
 		Scan(&names).Error; err != nil {
 		t.Fatalf("list tables: %v", err)
 	}
@@ -239,41 +240,26 @@ func TestShippedExamplesCoexist(t *testing.T) {
 		}
 	}
 
-	want := []string{
-		"kazi_taskmanager_acceptance_criteria", "kazi_taskmanager_agents",
-		"kazi_taskmanager_code_sequences", "kazi_taskmanager_deliverables",
-		"kazi_taskmanager_import_project_jobs", "kazi_taskmanager_projects",
-		"kazi_taskmanager_tags", "kazi_taskmanager_task_blocks",
-		"kazi_taskmanager_task_dependencies", "kazi_taskmanager_task_project_memberships",
-		"kazi_taskmanager_task_tags", "kazi_taskmanager_task_todos",
-		"kazi_taskmanager_tasks", "kazi_taskmanager_workflow_runs",
-		"wakala_taskmanager_checks", "wakala_taskmanager_code_sequences",
-		"wakala_taskmanager_gates", "wakala_taskmanager_import_jobs",
-		"wakala_taskmanager_labellings", "wakala_taskmanager_labels",
-		"wakala_taskmanager_objective_memberships", "wakala_taskmanager_objectives",
-		"wakala_taskmanager_operators", "wakala_taskmanager_outputs",
-		"wakala_taskmanager_precedences", "wakala_taskmanager_steps",
-		"wakala_taskmanager_work_items", "wakala_taskmanager_workflow_runs",
-	}
+	want := declaredTables(work, agency)
 	if got := tableNames(t, db); strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("tables =\n  %v\nwant\n  %v", got, want)
 	}
 
 	for _, tc := range []struct {
-		s         *spec.Spec
-		wantName  string
-		wantTable string
+		s        *spec.Spec
+		wantName string
+		wantRaw  string
 	}{
-		{work, "task", "kazi_taskmanager_tasks"},
-		{agency, "work_item", "wakala_taskmanager_work_items"},
+		{work, "task", "taskmanager_main_tasks"},
+		{agency, "work_item", "taskmanager_main_work_items"},
 	} {
 		o, ok := tc.s.ByRole(roleTask)
 		if !ok {
 			t.Fatalf("%s: no object fills the task role", tc.s.Domain)
 		}
-		if o.Name != tc.wantName || tc.s.TableFor(o) != tc.wantTable {
-			t.Errorf("%s: task is %q at %q, want %q at %q",
-				tc.s.Domain, o.Name, tc.s.TableFor(o), tc.wantName, tc.wantTable)
+		if o.Name != tc.wantName || tc.s.RawNameFor(o) != tc.wantRaw {
+			t.Errorf("%s: task is %q raw-named %q, want %q named %q",
+				tc.s.Domain, o.Name, tc.s.RawNameFor(o), tc.wantName, tc.wantRaw)
 		}
 	}
 }
@@ -289,8 +275,12 @@ func TestTheModuleSegmentKeepsTwoModulesApart(t *testing.T) {
 	if !ok {
 		t.Fatal("no object fills the task role")
 	}
-	if got := agency.TableFor(o); got != "wakala_taskmanager_work_items" {
-		t.Errorf("table = %q, want wakala_taskmanager_work_items — without the module segment this collides with the agency module's own work_items", got)
+	if got := agency.RawNameFor(o); got != "taskmanager_main_work_items" {
+		t.Errorf("raw name = %q, want the module segment in it — without it this collides with the agency module's own work_items", got)
+	}
+	other := &spec.Spec{Module: "agency", Instance: agency.Instance}
+	if agency.TableFor(o) == other.Instance+"_"+spec.HashName("agency_main_work_items") {
+		t.Error("the agency module's work_items hashes to the same table")
 	}
 }
 
@@ -399,11 +389,20 @@ func TestTwoMountsOfTheSameModuleCoexist(t *testing.T) {
 		t.Fatal("the shipped spec fills no task")
 	}
 	po, _ := third.ByRole("task")
-	if got := second.TableFor(o); got != "wakala_taskmanager_second_work_items" {
-		t.Errorf("second-mount task table = %q", got)
+	if got := second.RawNameFor(o); got != "taskmanager_second_work_items" {
+		t.Errorf("second-mount raw name = %q", got)
 	}
-	if got := third.TableFor(po); got != "wakala_taskmanager_third_work_items" {
-		t.Errorf("third-mount task table = %q", got)
+	if got := third.RawNameFor(po); got != "taskmanager_third_work_items" {
+		t.Errorf("third-mount raw name = %q", got)
+	}
+	for _, s := range []*spec.Spec{second, third} {
+		want := len(s.Instance) + 1 + spec.MountHashLength + 1 + spec.HashLength
+		if got := s.TableFor(mustTask(t, s)); len(got) != want {
+			t.Errorf("mount %q table %q is not instance + mount key + object hash", s.Mount, got)
+		}
+		if s.MountKey() == spec.HashMount(spec.DefaultMount) {
+			t.Errorf("mount %q shares the default mount's group prefix", s.Mount)
+		}
 	}
 	if second.TableFor(o) == third.TableFor(po) {
 		t.Fatal("two mounts landed in one table")
@@ -418,4 +417,24 @@ func TestSpecForDefaultsToTheMainMount(t *testing.T) {
 	if s.MountName() != spec.DefaultMount {
 		t.Errorf("MountName = %q, want %q", s.MountName(), spec.DefaultMount)
 	}
+}
+
+func declaredTables(specs ...*spec.Spec) []string {
+	var out []string
+	for _, s := range specs {
+		for _, o := range s.Objects {
+			out = append(out, s.TableFor(o))
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func mustTask(t *testing.T, s *spec.Spec) spec.Object {
+	t.Helper()
+	o, ok := s.ByRole(roleTask)
+	if !ok {
+		t.Fatal("the spec fills no task role")
+	}
+	return o
 }
