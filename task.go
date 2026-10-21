@@ -417,3 +417,5 @@ func NewTaskManager(db *gorm.DB, s *spec.Spec, pub events.Publisher) (TaskManage
 	}
 	return &taskManager{db: db, store: st, publisher: pub}, nil
 }
+
+func Unbound() TaskManager { return (*taskManager)(nil) }
