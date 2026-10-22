@@ -30,6 +30,30 @@ or `cancelled`. When every task linked to that task's case is `completed` or
 tasks settling together publish once. A `failed` task does not settle a case:
 the row names done and cancelled only. A case with no tasks stays open.
 
+### Every path that writes a task's status
+
+A task's status is written in five places, and each one either settles its
+case or provably cannot:
+
+| Path | Writes | Settles the case |
+| --- | --- | --- |
+| `UpdateTask` | any legal transition | yes, after the write |
+| `cancelTask`, the `CancelWorkflowRun` cascade | `cancelled` | yes, after each task's write |
+| `HandleTaskTimeout`, `HandleRunTimeout` (watchdog) | `failed`, through `UpdateTask` | goes through `closeCaseIfSettled`, which does nothing for `failed` |
+| `UnblockTask` | `awaiting-direction`, through `UpdateTask` | cannot: not a settling status |
+| `setTaskStatus` (`AssignTask`'s block, the unblock cascade) | `blocked`, `pending` | cannot: not a settling status |
+| `DeleteWorkflowRunArtifacts` (rollback) | `pending` | cannot: not a settling status |
+
+None of the settling writes runs inside a transaction today: `UpdateTask` and
+`cancelTask` each write one row and then settle, the same way. The only
+transactional status write is the rollback's reset, and a reset to `pending`
+never closes a case. Nor does it reopen one: a case already `done` stays
+`done` when a rollback puts one of its tasks back to `pending`, and an open
+case stays open. Whether a rollback should reopen a closed case is an open
+question for the owner, not settled here.
+
+Each row is pinned in `case_status_paths_test.go`.
+
 Linking a task to a case that is not open is refused (`ErrCaseNotOpen`, 409);
 linking a task already serving another case is refused
 (`ErrTaskAlreadyInCase`, 409); relinking the same pair is a no-op.
@@ -52,7 +76,5 @@ actions `taskmanager.case.open`, `.list`, `.read`, `.link_task` and
 
 - Nothing moves a case to `cancelled`; the value is declared, no operation
   sets it.
-- Only `UpdateTask` closes a case. A task settled by the run-cancel cascade or
-  a rollback does not yet.
 - `GET /cases` is not narrowed to the caller; a host wanting a requester to see
   only their own cases has to bind the filter.

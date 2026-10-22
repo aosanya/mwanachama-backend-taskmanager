@@ -124,5 +124,8 @@ func (m *taskManager) cancelTask(ctx context.Context, task Task, reason string) 
 		WorkflowRunID: task.WorkflowRunID,
 		Reason:        reason,
 	})
+	if err := m.closeCaseIfSettled(ctx, task.ID); err != nil {
+		slog.WarnContext(ctx, "cancelTask: closeCaseIfSettled", "task_id", task.ID, "err", err)
+	}
 	return nil
 }
