@@ -135,6 +135,11 @@
           "description": "The task that was split to produce this one. Empty for a root task."
         },
         {
+          "name": "linked_ref",
+          "type": "string",
+          "description": "An opaque reference to something another module owns that this task points at, such as the questionnaire it asks its assignee to answer. Empty when the task points at nothing. The module stores it and reads it back; it never resolves it."
+        },
+        {
           "name": "deleted",
           "type": "bool",
           "description": "Soft delete. A deleted row is invisible to every read."

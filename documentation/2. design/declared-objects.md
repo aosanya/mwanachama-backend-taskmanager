@@ -139,3 +139,23 @@ applied.
   something this conversion quietly fixed.
 - **`routes/`'s thirteen hand-written route builders** — deleted the same
   day. See [routes.md](routes.md).
+
+## A task may point at something another module owns (W30)
+
+Member app decision 274 lets a task point at a form, so its assignee can be
+sent straight to the form it asks them to answer. The column is
+`task.linked_ref`, not `form_id`: this module names no domain, and a board
+that runs a clinic's referrals or a studio's reviews would point a task at
+something that is not a form at all. The value is opaque. The module stores
+it on create and on update, reads it back on every task read, and never
+resolves it, so a task whose referent is gone still reads, and a clinic's
+spec needs no change to carry one.
+
+It is optional and empty by default. Because `UpdateTask` replaces the
+mutable fields whole, an update that omits it clears it, the same as every
+other field on the task.
+
+What the string holds is the host's to decide. The natural shape is
+`mwanachama-backend-shared/identity`'s raw `<module>/<instance>/<identity>`,
+which survives a form's versions; a bare form row id would not. That choice
+is left open rather than enforced here.

@@ -153,6 +153,8 @@ type Task struct {
 	// Empty for root tasks.
 	ParentTaskID string `json:"parent_task_id,omitempty"`
 
+	LinkedRef string `json:"linked_ref,omitempty"`
+
 	Deleted bool `json:"deleted"`
 }
 
