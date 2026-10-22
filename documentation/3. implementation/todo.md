@@ -5,6 +5,7 @@ Everything else (completed rows, board context) is in [todo_done.md](todo_done.m
 
 | Task | Title | Status | Notes |
 |------|--------|--------|-------|
+| W32 | 🧭 **Task settings** (member app decisions 280, 281, 2026-10-22): projects and the agency's states (W31), declared through S64. | ⏸️ | S64; W31 |
 | W28 | 🧭 **A task's assignee is a person or a role** (member app decisions 272, 275, 2026-10-22): an assignee is an actor id, a role kind id, or an Agent as today; a role's tasks are listed for each holder; unassigning keeps the history. Unblocks wakala-api WK182, WK183. | 📋 | |
 | W29 | 🧭 **Cases** (member app decision 276, 2026-10-22): a case with its requester, subject, status (open, done, cancelled) and its tasks; done when every task is done or cancelled; events `case.opened` and `case.closed`. Unblocks wakala-api WK182, WK184. | 📋 | |
 | W30 | 🧭 **A task may point at a form** (member app decision 274, 2026-10-22): an optional form reference on a task, read back with it. | 📋 | |
