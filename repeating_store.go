@@ -16,6 +16,7 @@ type (
 	RepeatingTaskRecord = models.RepeatingTaskRecord
 	RepeatingTaskPeriod = models.RepeatingTaskPeriod
 	RepeatingTaskFilter = models.RepeatingTaskFilter
+	NewRepeatingTask    = models.NewRepeatingTask
 )
 
 var ErrRepeatingTaskNotFound = errors.New("repeating task not found")
@@ -95,6 +96,28 @@ func parseInstant(s string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("%w: %q is not an instant", ErrInvalidRepeatingTask, s)
 	}
 	return t, nil
+}
+
+func RepeatingTaskFromNew(n NewRepeatingTask) (RepeatingTask, error) {
+	return RepeatingTaskFromRecord(RepeatingTaskRecord{
+		Title:         n.Title,
+		Description:   n.Description,
+		ScheduleRule:  n.Schedule.Rule,
+		ScheduleDates: n.Schedule.Dates,
+		ScheduleStart: n.Schedule.Start,
+		ScheduleEnd:   n.Schedule.End,
+		ScheduleZone:  n.Schedule.Zone,
+		AssigneeKind:  n.AssigneeKind,
+		AssigneeID:    n.AssigneeID,
+	})
+}
+
+func (m *taskManager) StartRepeatingTask(ctx context.Context, n NewRepeatingTask) (RepeatingTaskRecord, error) {
+	r, err := RepeatingTaskFromNew(n)
+	if err != nil {
+		return RepeatingTaskRecord{}, err
+	}
+	return m.CreateRepeatingTask(ctx, r)
 }
 
 func (m *taskManager) CreateRepeatingTask(ctx context.Context, r RepeatingTask) (RepeatingTaskRecord, error) {

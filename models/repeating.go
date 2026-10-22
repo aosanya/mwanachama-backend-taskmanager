@@ -29,3 +29,19 @@ type RepeatingTaskFilter struct {
 	AssigneeKind AssigneeKind `json:"assignee_kind,omitempty"`
 	AssigneeID   string       `json:"assignee_id,omitempty"`
 }
+
+type Schedule struct {
+	Start string   `json:"start"`
+	End   string   `json:"end,omitempty"`
+	Zone  string   `json:"zone"`
+	Rule  string   `json:"rule,omitempty"`
+	Dates []string `json:"dates,omitempty"`
+}
+
+type NewRepeatingTask struct {
+	Title        string       `json:"title"`
+	Description  string       `json:"description,omitempty"`
+	Schedule     Schedule     `json:"schedule"`
+	AssigneeKind AssigneeKind `json:"assignee_kind"`
+	AssigneeID   string       `json:"assignee_id"`
+}

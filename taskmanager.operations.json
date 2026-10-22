@@ -528,6 +528,14 @@
       "args": [{"from": "query", "whole": true}],
       "returns": [{"body": true}]
     },
+    "create_repeating_task": {
+      "method": "POST", "path": "/repeating-tasks", "call": "StartRepeatingTask", "action": "taskmanager.repeating_task.create",
+      "status": 201,
+      "title": "Create repeating task",
+      "description": "Create one repeating task: a title, an optional description, a schedule and an actor or role assignee. The schedule is a start (RFC 3339), an optional end (RFC 3339), an IANA time zone and either an iCalendar rule or a list of YYYY-MM-DD dates. At each period's start a task is made, due by the period's end. Its id is server-minted.",
+      "args": [{"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
     "get_repeating_task": {
       "method": "GET", "path": "/repeating-tasks/{repeatingTaskID}", "call": "GetRepeatingTask", "action": "taskmanager.repeating_task.read",
       "title": "Read repeating task",

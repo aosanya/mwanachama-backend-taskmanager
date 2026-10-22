@@ -80,6 +80,7 @@ action:
 
 | Address | Call | Action |
 | --- | --- | --- |
+| `POST /repeating-tasks` | `StartRepeatingTask` (body `NewRepeatingTask`, 201) | `taskmanager.repeating_task.create` |
 | `GET /repeating-tasks/{repeatingTaskID}` | `GetRepeatingTask` | `taskmanager.repeating_task.read` |
 | `GET /repeating-tasks` | `ListRepeatingTasks` (query `assignee_kind`, `assignee_id`) | `taskmanager.repeating_task.list` |
 | `POST /repeating-tasks/{repeatingTaskID}/stop` | `StopRepeatingTask` | `taskmanager.repeating_task.stop` |
@@ -88,15 +89,38 @@ action:
 They are pinned over a real mux by
 `routes/repeating_task_test.go`.
 
+## Create over the wire (fourth slice)
+
+`POST /repeating-tasks` takes `models.NewRepeatingTask`: `title`, optional
+`description`, `assignee_kind` (`actor` or `role`), `assignee_id` and a
+`schedule` object. The schedule is the same body shape as
+`mwanachama-backend-forms`' `form.schedule` (its `schedule.md`), so a staff
+screen that already composes one composes the other:
+
+| Field | Shape |
+| --- | --- |
+| `start` | RFC 3339 instant |
+| `end` | optional RFC 3339 instant |
+| `zone` | IANA time zone name |
+| `rule` | an iCalendar RRULE, or |
+| `dates` | a list of `YYYY-MM-DD` |
+
+`models.Schedule` carries it. `RepeatingTaskFromNew` maps it onto the stored
+record's `schedule_*` strings and converts through `RepeatingTaskFromRecord`,
+so the wire and the store parse one way; `StartRepeatingTask` then calls
+`CreateRepeatingTask`, which mints the id and validates. An unknown zone, an
+instant that is not RFC 3339, an unparseable rule or date, an agent assignee
+or a schedule `recur` refuses all answer 400 (`ErrInvalidRepeatingTask`). The
+stored record keeps its flat `schedule_*` fields on read; only the create
+body nests them. Pinned over a real mux by
+`TestARepeatingTaskIsCreatedOverTheMuxWithTheFormsScheduleShape`. A host must
+grant `taskmanager.repeating_task.create` before anyone can reach it.
+
+Unlike forms, an empty `zone` is not refused here: `time.LoadLocation("")`
+is UTC, which is what the stored form already did.
+
 ## Not built yet
 
-- **Create over the wire.** `CreateRepeatingTask` takes a `RepeatingTask`,
-  whose `recur.Schedule` has no JSON form (a `*recur.Rule`, `recur.Date`s and
-  a `*time.Location`). Declaring it needs a body shape — most likely the
-  stored record's own `schedule_rule`/`schedule_dates`/`schedule_start`/
-  `schedule_end`/`schedule_zone` strings, converted through
-  `RepeatingTaskFromRecord` — and a manager method taking that shape. Not
-  declared in this slice.
 - **The tick over the wire.** `MakeRepeatingTaskDue` takes a `time.Time` and
   answers a period and a `made` flag. It is the host's timer, not a caller's
   act, so whether it should be an address at all, and with which action, is

@@ -55,3 +55,52 @@ func TestARepeatingTaskIsReadListedAndStoppedOverTheMux(t *testing.T) {
 		t.Fatalf("missing %d %s", missing.Code, missing.Body)
 	}
 }
+
+func TestARepeatingTaskIsCreatedOverTheMuxWithTheFormsScheduleShape(t *testing.T) {
+	tm := wk11Manager(t)
+	m := wk11Mux(tm)
+
+	created := wk11Post(t, m, "/repeating-tasks", map[string]any{
+		"title":       "Monthly margin review",
+		"description": "Review last month's margin.",
+		"schedule": map[string]any{
+			"start": "2026-01-01T08:00:00Z",
+			"end":   "2027-01-01T08:00:00Z",
+			"zone":  "Africa/Nairobi",
+			"rule":  "FREQ=MONTHLY",
+		},
+		"assignee_kind": "role",
+		"assignee_id":   "role-3",
+	})
+	var rec models.RepeatingTaskRecord
+	if created.Code != 201 || json.Unmarshal(created.Body.Bytes(), &rec) != nil {
+		t.Fatalf("create %d %s", created.Code, created.Body)
+	}
+	if rec.ID == "" || rec.ScheduleRule == "" || rec.ScheduleZone != "Africa/Nairobi" || rec.ScheduleEnd != "2027-01-01T08:00:00Z" || rec.AssigneeID != "role-3" {
+		t.Fatalf("stored %+v", rec)
+	}
+	if _, err := tm.GetRepeatingTask(context.Background(), rec.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	dated := wk11Post(t, m, "/repeating-tasks", map[string]any{
+		"title":         "Term report",
+		"schedule":      map[string]any{"start": "2026-01-05T00:00:00Z", "zone": "UTC", "dates": []string{"2026-01-05", "2026-04-20", "2026-09-07"}},
+		"assignee_kind": "actor",
+		"assignee_id":   "actor-1",
+	})
+	if dated.Code != 201 {
+		t.Fatalf("dates %d %s", dated.Code, dated.Body)
+	}
+
+	for name, body := range map[string]map[string]any{
+		"unknown zone": {"title": "x", "schedule": map[string]any{"start": "2026-01-01T00:00:00Z", "zone": "Mars/Base", "rule": "FREQ=DAILY"}, "assignee_kind": "role", "assignee_id": "r"},
+		"bad start":    {"title": "x", "schedule": map[string]any{"start": "tomorrow", "zone": "UTC", "rule": "FREQ=DAILY"}, "assignee_kind": "role", "assignee_id": "r"},
+		"agent":        {"title": "x", "schedule": map[string]any{"start": "2026-01-01T00:00:00Z", "zone": "UTC", "rule": "FREQ=DAILY"}, "assignee_kind": "agent", "assignee_id": "a"},
+	} {
+		got := wk11Post(t, m, "/repeating-tasks", body)
+		if got.Code != 400 {
+			t.Fatalf("%s: %d %s", name, got.Code, got.Body)
+		}
+	}
+}
