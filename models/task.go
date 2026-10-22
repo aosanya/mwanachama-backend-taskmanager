@@ -95,6 +95,8 @@ type Task struct {
 
 	Status TaskStatus `json:"status"`
 
+	State string `json:"state,omitempty" spec:"-"`
+
 	Priority TaskPriority `json:"priority"`
 
 	// DueAt is the RFC 3339 deadline; empty string when no deadline is set.

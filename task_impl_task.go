@@ -49,6 +49,7 @@ func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
 		}
 	}
 	out.Tags = m.loadTagNames(ctx, out.ID)
+	out.State = m.stateNameFor(out.Status)
 	m.publish(ctx, TopicTaskCreated, TaskCreatedPayload{
 		TaskID:        out.ID,
 		Priority:      out.Priority,
@@ -68,6 +69,7 @@ func (m *taskManager) GetTask(ctx context.Context, taskID string) (Task, error) 
 		return Task{}, fmt.Errorf("GetTask: %w", err)
 	}
 	t.Tags = m.loadTagNames(ctx, t.ID)
+	t.State = m.stateNameFor(t.Status)
 	return t, nil
 }
 
@@ -122,6 +124,7 @@ func (m *taskManager) UpdateTask(ctx context.Context, task Task) (Task, error) {
 
 	out := task
 	out.Tags = m.loadTagNames(ctx, out.ID)
+	out.State = m.stateNameFor(out.Status)
 
 	if out.WorkflowRunID != "" && current.WorkflowRunID == "" {
 		if err := m.LinkTaskToRun(ctx, out.WorkflowRunID, out.ID); err != nil {
@@ -199,6 +202,7 @@ func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task,
 	}
 	for i := range tasks {
 		tasks[i].Tags = m.loadTagNames(ctx, tasks[i].ID)
+		tasks[i].State = m.stateNameFor(tasks[i].Status)
 	}
 	return tasks, nil
 }
