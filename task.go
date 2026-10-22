@@ -98,9 +98,10 @@ type TaskManager interface {
 	// vertex is missing.
 	AssignTask(ctx context.Context, taskID, agentID, workflowRunID string) error
 
-	// UnassignTask removes any outbound `assigned_to` edge from the Task.
-	// Idempotent — returns nil whether or not an edge was present.
 	UnassignTask(ctx context.Context, taskID string) error
+	AssignTaskToHolder(ctx context.Context, taskID string, kind AssigneeKind, assigneeID string) error
+	ListTaskAssignments(ctx context.Context, taskID string) ([]Assignment, error)
+	ListHeldTasks(ctx context.Context, query HolderTasksQuery) ([]Task, error)
 
 	// UnblockDependents transitions every Task with an inbound `depends_on`
 	// edge from completedTaskID out of [TaskStatusBlocked] when all of its

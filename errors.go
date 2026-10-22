@@ -6,6 +6,8 @@ import "errors"
 // taskID.
 var ErrTaskNotFound = errors.New("task not found")
 
+var ErrInvalidAssignee = errors.New("an assignee is an actor or a role with an id")
+
 // ErrTaskAlreadyExists is returned by [TaskManager.CreateTask] when a task
 // with the same ID already exists.
 var ErrTaskAlreadyExists = errors.New("task already exists")

@@ -10,6 +10,9 @@ type (
 	TaskStatus         = models.TaskStatus
 	TaskPriority       = models.TaskPriority
 	TaskFilter         = models.TaskFilter
+	Assignment         = models.Assignment
+	AssigneeKind       = models.AssigneeKind
+	HolderTasksQuery   = models.HolderTasksQuery
 	TaskTodo           = models.TaskTodo
 	TodoStatus         = models.TodoStatus
 	Agent              = models.Agent

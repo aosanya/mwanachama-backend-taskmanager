@@ -119,6 +119,11 @@ func TestVocabularyMatchesTheBlueprint(t *testing.T) {
 			models.ImportJobStatusFailed,
 			models.ImportJobStatusCancelled,
 		},
+		roleAssignment + ".assignee_kind": {
+			string(models.AssigneeAgent),
+			string(models.AssigneeActor),
+			string(models.AssigneeRole),
+		},
 		roleAcceptanceCriteria + ".result": {
 			models.AcceptanceResultPassed,
 			models.AcceptanceResultFailed,
@@ -297,8 +302,8 @@ func TestShippedExampleMigratesIdempotently(t *testing.T) {
 			t.Fatalf("migrate %d: %v", i, err)
 		}
 	}
-	if n := len(tableNames(t, db)); n != 14 {
-		t.Errorf("tables = %d, want 14", n)
+	if n := len(tableNames(t, db)); n != len(roles()) {
+		t.Errorf("tables = %d, want %d", n, len(roles()))
 	}
 }
 

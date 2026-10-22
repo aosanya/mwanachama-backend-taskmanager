@@ -19,6 +19,12 @@
       ]
     },
     {
+      "role": "assignment",
+      "name": "assignment",
+      "table": "assignments",
+      "description": "One stretch of a task being held by one assignee, kept after it ends."
+    },
+    {
       "role": "task_todo",
       "name": "step",
       "table": "steps",

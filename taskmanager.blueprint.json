@@ -110,6 +110,11 @@
           "description": "The worker currently responsible for this task. Empty means unassigned."
         },
         {
+          "name": "assignee_kind",
+          "type": "string",
+          "description": "What assigned_to names: agent, actor or role. Empty means unassigned, or a row older than the field, which is read as an agent."
+        },
+        {
           "name": "workflow_run_id",
           "type": "string",
           "description": "The run this task belongs to, denormalised so a run's closure is one query."
@@ -174,6 +179,21 @@
             "parent_task_id"
           ]
         }
+      ]
+    },
+    {
+      "role": "assignment",
+      "description": "One stretch of a task being held by one assignee, from when it was handed over until it was taken back. Kept after unassigning, so a task's history of who held it survives.",
+      "fields": [
+        {"name": "id", "type": "string", "description": "Unique identifier for the stretch.", "primary": true},
+        {"name": "task_id", "type": "string", "description": "The task that was held.", "required": true},
+        {"name": "assignee_kind", "type": "enum", "values": ["agent", "actor", "role"], "description": "What the assignee is: a worker, a person named by the host's own id, or a role whose holders the host resolves.", "required": true},
+        {"name": "assignee_id", "type": "string", "description": "The assignee's id, read as the kind says. The module never interprets it.", "required": true},
+        {"name": "assigned_at", "type": "timestamp", "description": "When the task was handed over."},
+        {"name": "unassigned_at", "type": "string", "description": "When the task was taken back or handed to somebody else. Empty while the stretch is current."}
+      ],
+      "indexes": [
+        {"name": "task", "description": "Reads one task's history of holders.", "fields": ["task_id"]}
       ]
     },
     {

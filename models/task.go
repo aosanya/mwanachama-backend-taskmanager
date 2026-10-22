@@ -133,6 +133,8 @@ type Task struct {
 	// Empty string means unassigned.
 	AssignedTo string `json:"assigned_to,omitempty"`
 
+	AssigneeKind AssigneeKind `json:"assignee_kind,omitempty"`
+
 	// WorkflowRunID denormalises the WorkflowRun anchor onto the Task so
 	// queries can filter by run-id directly.
 	WorkflowRunID string `json:"workflow_run_id,omitempty"`

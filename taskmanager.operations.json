@@ -82,6 +82,24 @@
       "args": [{"from": "path", "as": "taskID", "description": "The task to take back."}],
       "returns": [{"body": true}]
     },
+    "assign_task_to_holder": {
+      "method": "POST", "path": "/tasks/{taskID}/assign-holder", "call": "AssignTaskToHolder", "action": "taskmanager.task.assign_holder",
+      "status": 204,
+      "title": "Assign task to a person or a role",
+      "description": "Hand one task to a person or a role, named by the host's own id. A role's task is picked up by whoever holds it. The previous holder's stretch is closed and kept.",
+      "args": [{"from": "path", "as": "taskID", "description": "The task to hand over."},
+               {"from": "body", "as": "assignee_kind", "required": true, "description": "actor for a person, role for a role."},
+               {"from": "body", "as": "assignee_id", "required": true, "description": "The person's or the role's id, as the host knows it."}],
+      "returns": [{"body": true}]
+    },
+    "list_task_assignments": {
+      "method": "GET", "path": "/tasks/{taskID}/assignments", "call": "ListTaskAssignments", "action": "taskmanager.task.list_assignments",
+      "status": 200,
+      "title": "List task assignments",
+      "description": "Every stretch one task was held, oldest first, including the ones that ended when it was unassigned or handed on.",
+      "args": [{"from": "path", "as": "taskID", "description": "The task whose history to read."}],
+      "returns": [{"body": true}]
+    },
     "unblock_dependents": {
       "method": "POST", "path": "/tasks/{taskID}/unblock-dependents", "call": "UnblockDependents", "action": "taskmanager.task.unblock_dependents",
       "status": 204,
@@ -491,6 +509,7 @@
 
   "errors": {
     "ErrTaskNotFound": 404,
+    "ErrInvalidAssignee": 400,
     "ErrAgentNotFound": 404,
     "ErrProjectNotFound": 404,
     "ErrTagNotFound": 404,

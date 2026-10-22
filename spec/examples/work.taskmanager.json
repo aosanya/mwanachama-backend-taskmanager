@@ -10,6 +10,12 @@
       "description": "One piece of engineering work an agent is asked to carry out end to end."
     },
     {
+      "role": "assignment",
+      "name": "assignment",
+      "table": "assignments",
+      "description": "One stretch of a task being held by one assignee, kept after it ends."
+    },
+    {
       "role": "task_todo",
       "name": "task_todo",
       "table": "task_todos",

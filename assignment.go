@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/aosanya/mwanachama-backend-taskmanager/models"
 )
 
 // AssignTask sets the Agent currently responsible for a Task by writing its
@@ -59,9 +61,8 @@ func (m *taskManager) AssignTask(ctx context.Context, taskID, agentID, workflowR
 		}
 	}
 
-	if err := m.store.Query(ctx, roleTask).Where("id = ?", taskID).
-		UpdateColumn("assigned_to", resolvedAgentID).Error; err != nil {
-		return fmt.Errorf("AssignTask: assign: %w", err)
+	if err := m.handOver(ctx, taskID, models.AssigneeAgent, resolvedAgentID); err != nil {
+		return fmt.Errorf("AssignTask: %w", err)
 	}
 
 	// Check outbound depends_on edges. Any non-terminal target blocks dispatch.
@@ -160,14 +161,15 @@ func (m *taskManager) setTaskStatus(ctx context.Context, taskID string, status T
 	return nil
 }
 
-// UnassignTask clears the Task's AssignedAgentID column. Idempotent —
-// returns nil whether or not an assignee was set.
 func (m *taskManager) UnassignTask(ctx context.Context, taskID string) error {
 	if _, err := m.GetTask(ctx, taskID); err != nil {
 		return err
 	}
+	if err := m.closeCurrentAssignment(ctx, taskID, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		return fmt.Errorf("UnassignTask: %w", err)
+	}
 	if err := m.store.Query(ctx, roleTask).Where("id = ?", taskID).
-		UpdateColumn("assigned_to", "").Error; err != nil {
+		Updates(map[string]any{"assigned_to": "", "assignee_kind": ""}).Error; err != nil {
 		return fmt.Errorf("UnassignTask: %w", err)
 	}
 	return nil
