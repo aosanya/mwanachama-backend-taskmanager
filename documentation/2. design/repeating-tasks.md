@@ -35,15 +35,43 @@ The package has no scheduler (`workflow_run_watchdog.go` already says so).
 Calling `OccurrenceAt(now)` on a timer, and creating the task for a key not yet
 seen, is the host's.
 
+## Stored (second slice)
+
+Two declared objects in `taskmanager.blueprint.json`, named in both shipped
+domain specs:
+
+- `repeating_task` (`models.RepeatingTaskRecord`) — the template. The
+  `recur.Schedule` is stored in a serialised form: `schedule_rule` (the RFC 5545
+  rule, `Rule.String()`), `schedule_dates` (YYYY-MM-DD), `schedule_start` and
+  `schedule_end` as UTC instants, and `schedule_zone` as the IANA zone name.
+  `RecordOf` and `RepeatingTaskFromRecord` convert both ways; a zone the host
+  cannot load is refused. Stopping writes `stopped_at`; the row is never
+  deleted. `assignee_kind` is a plain string rather than an enum, because only
+  `actor` and `role` are allowed here and `Validate` already holds that.
+- `repeating_task_period` (`models.RepeatingTaskPeriod`) — one row per period
+  made, keyed by the period key, with the task it made and its due time.
+
+The manager methods, on `TaskManager`:
+
+- `CreateRepeatingTask` mints the id, validates, stores.
+- `GetRepeatingTask`, `ListRepeatingTasks` (by assignee kind and id).
+- `StopRepeatingTask` sets `stopped_at` once; stopping again is a no-op.
+- `MakeRepeatingTaskDue(id, at)` — the host's tick. It finds the period `at`
+  falls in; if that key has a row it answers the row and `made = false`;
+  otherwise it creates the task, assigns it to the template's assignee through
+  `AssignTaskToHolder` (the role stays the assignee, which is the provisional
+  answer to the open question below), and records the period. A stopped
+  template or a period with no end makes nothing.
+
+The task creation, the assignment and the period row are three writes, not
+one transaction, so a crash between them can leave a task with no period row;
+the next tick would then make a second one. Closing that is a follow-up.
+
 ## Not built yet
 
-- A declared `repeating_task` object in `taskmanager.blueprint.json`, its
-  `models/` type, and a record of which period keys were made (the store-side
-  idempotency), plus the declared operations to create, list and stop one.
-  Storing a `recur.Schedule` needs a serialised form (rule string, start,
-  end, zone name, dates).
-- Assigning the created task: `AssignTaskToHolder` exists and takes the
-  template's kind and id.
+- The declared operations (`taskmanager.operations.json`) to create, get,
+  list and stop a repeating task and to tick one.
+- One transaction around the tick's three writes.
 
 ## Open questions
 

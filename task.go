@@ -100,6 +100,11 @@ type TaskManager interface {
 
 	UnassignTask(ctx context.Context, taskID string) error
 	AssignTaskToHolder(ctx context.Context, taskID string, kind AssigneeKind, assigneeID string) error
+	CreateRepeatingTask(ctx context.Context, r RepeatingTask) (RepeatingTaskRecord, error)
+	GetRepeatingTask(ctx context.Context, id string) (RepeatingTaskRecord, error)
+	ListRepeatingTasks(ctx context.Context, filter RepeatingTaskFilter) ([]RepeatingTaskRecord, error)
+	StopRepeatingTask(ctx context.Context, id string) (RepeatingTaskRecord, error)
+	MakeRepeatingTaskDue(ctx context.Context, id string, at time.Time) (RepeatingTaskPeriod, bool, error)
 	ListTaskAssignments(ctx context.Context, taskID string) ([]Assignment, error)
 	ListHeldTasks(ctx context.Context, query HolderTasksQuery) ([]Task, error)
 

@@ -185,15 +185,54 @@
       "role": "assignment",
       "description": "One stretch of a task being held by one assignee, from when it was handed over until it was taken back. Kept after unassigning, so a task's history of who held it survives.",
       "fields": [
-        {"name": "id", "type": "string", "description": "Unique identifier for the stretch.", "primary": true},
-        {"name": "task_id", "type": "string", "description": "The task that was held.", "required": true},
-        {"name": "assignee_kind", "type": "enum", "values": ["agent", "actor", "role"], "description": "What the assignee is: a worker, a person named by the host's own id, or a role whose holders the host resolves.", "required": true},
-        {"name": "assignee_id", "type": "string", "description": "The assignee's id, read as the kind says. The module never interprets it.", "required": true},
-        {"name": "assigned_at", "type": "timestamp", "description": "When the task was handed over."},
-        {"name": "unassigned_at", "type": "string", "description": "When the task was taken back or handed to somebody else. Empty while the stretch is current."}
+        {
+          "name": "id",
+          "type": "string",
+          "description": "Unique identifier for the stretch.",
+          "primary": true
+        },
+        {
+          "name": "task_id",
+          "type": "string",
+          "description": "The task that was held.",
+          "required": true
+        },
+        {
+          "name": "assignee_kind",
+          "type": "enum",
+          "values": [
+            "agent",
+            "actor",
+            "role"
+          ],
+          "description": "What the assignee is: a worker, a person named by the host's own id, or a role whose holders the host resolves.",
+          "required": true
+        },
+        {
+          "name": "assignee_id",
+          "type": "string",
+          "description": "The assignee's id, read as the kind says. The module never interprets it.",
+          "required": true
+        },
+        {
+          "name": "assigned_at",
+          "type": "timestamp",
+          "description": "When the task was handed over."
+        },
+        {
+          "name": "unassigned_at",
+          "type": "string",
+          "description": "When the task was taken back or handed to somebody else. Empty while the stretch is current."
+        }
       ],
       "indexes": [
-        {"name": "task", "description": "Reads one task's history of holders.", "fields": ["task_id"]}
+        {
+          "name": "task",
+          "description": "Reads one task's history of holders.",
+          "fields": [
+            "task_id"
+          ]
+        }
       ]
     },
     {
@@ -1223,6 +1262,141 @@
           "description": "Reads one case's tasks.",
           "fields": [
             "case_id"
+          ]
+        }
+      ]
+    },
+    {
+      "role": "repeating_task",
+      "description": "A task template made again at the start of every period of its schedule, each made task due by that period's end. Stopping it keeps every task it already made.",
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "description": "Storage key, opaque to callers.",
+          "primary": true
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "description": "The title every made task carries.",
+          "required": true
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "description": "The description every made task carries."
+        },
+        {
+          "name": "schedule_rule",
+          "type": "string",
+          "description": "The schedule's recurrence rule in RFC 5545 form. Empty when the schedule is a list of dates."
+        },
+        {
+          "name": "schedule_dates",
+          "type": "json",
+          "description": "The schedule's dates as YYYY-MM-DD, when it is a list of dates rather than a rule."
+        },
+        {
+          "name": "schedule_start",
+          "type": "timestamp",
+          "description": "When the schedule starts.",
+          "required": true
+        },
+        {
+          "name": "schedule_end",
+          "type": "timestamp",
+          "description": "When the schedule ends. Empty when it runs on."
+        },
+        {
+          "name": "schedule_zone",
+          "type": "string",
+          "description": "The IANA time zone the schedule's periods are counted in.",
+          "required": true
+        },
+        {
+          "name": "assignee_kind",
+          "type": "string",
+          "description": "What the assignee is: actor, a person named by the host's own id, or role, whose holders the host resolves.",
+          "required": true
+        },
+        {
+          "name": "assignee_id",
+          "type": "string",
+          "description": "The assignee's id, read as the kind says. The module never interprets it.",
+          "required": true
+        },
+        {
+          "name": "stopped_at",
+          "type": "timestamp",
+          "description": "When the template was stopped. Empty while it runs."
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "description": "When the row was created."
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "description": "When the row was last written."
+        }
+      ],
+      "indexes": [
+        {
+          "name": "assignee",
+          "description": "Lists one assignee's repeating tasks.",
+          "fields": [
+            "assignee_kind",
+            "assignee_id"
+          ]
+        }
+      ]
+    },
+    {
+      "role": "repeating_task_period",
+      "description": "One period a repeating task has made its task for. The period key is the primary key, so a period is made once however often the host ticks.",
+      "fields": [
+        {
+          "name": "period_key",
+          "type": "string",
+          "description": "The template id and the period's start, as OccurrenceAt names it.",
+          "primary": true
+        },
+        {
+          "name": "repeating_task_id",
+          "type": "string",
+          "description": "The template the period belongs to.",
+          "required": true
+        },
+        {
+          "name": "task_id",
+          "type": "string",
+          "description": "The task made for the period.",
+          "required": true
+        },
+        {
+          "name": "period_start",
+          "type": "timestamp",
+          "description": "When the period starts."
+        },
+        {
+          "name": "due_at",
+          "type": "timestamp",
+          "description": "When the period ends, which is the made task's due time."
+        },
+        {
+          "name": "made_at",
+          "type": "timestamp",
+          "description": "When the task was made."
+        }
+      ],
+      "indexes": [
+        {
+          "name": "template",
+          "description": "Lists the periods one template has made.",
+          "fields": [
+            "repeating_task_id"
           ]
         }
       ]

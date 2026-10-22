@@ -113,6 +113,18 @@
       "name": "case_work_item",
       "table": "case_work_items",
       "description": "Records that one work item is worked for one case."
+    },
+    {
+      "role": "repeating_task",
+      "name": "repeating_work_item",
+      "table": "repeating_work_items",
+      "description": "A template made again every period of its schedule, each made one due by the period's end."
+    },
+    {
+      "role": "repeating_task_period",
+      "name": "repeating_work_item_period",
+      "table": "repeating_work_item_periods",
+      "description": "One period a repeating template has made its work item for."
     }
   ]
 }
