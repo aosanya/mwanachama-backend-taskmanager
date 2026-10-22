@@ -16,10 +16,29 @@ func (m *taskManager) AssignTaskToHolder(ctx context.Context, taskID string, kin
 	if assigneeID == "" {
 		return ErrInvalidAssignee
 	}
-	if _, err := m.GetTask(ctx, taskID); err != nil {
+	task, err := m.GetTask(ctx, taskID)
+	if err != nil {
 		return err
 	}
-	return m.handOver(ctx, taskID, kind, assigneeID)
+	if err := m.handOver(ctx, taskID, kind, assigneeID); err != nil {
+		return err
+	}
+	m.publish(ctx, TopicTaskHandedOver, TaskHandedOverPayload{
+		TaskID:       taskID,
+		AssigneeKind: kind,
+		AssigneeID:   assigneeID,
+		Title:        task.Title,
+	})
+	return nil
+}
+
+const TopicTaskHandedOver = "task.handed_over"
+
+type TaskHandedOverPayload struct {
+	TaskID       string
+	AssigneeKind AssigneeKind
+	AssigneeID   string
+	Title        string
 }
 
 func (m *taskManager) handOver(ctx context.Context, taskID string, kind AssigneeKind, assigneeID string) error {
