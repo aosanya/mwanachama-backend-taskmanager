@@ -63,15 +63,20 @@ The manager methods, on `TaskManager`:
   answer to the open question below), and records the period. A stopped
   template or a period with no end makes nothing.
 
-The task creation, the assignment and the period row are three writes, not
-one transaction, so a crash between them can leave a task with no period row;
-the next tick would then make a second one. Closing that is a follow-up.
+The task creation, the assignment and the period row are one transaction.
+The tick builds a store over the transaction from the manager's own spec and
+runs `CreateTask` and `AssignTaskToHolder` through it, so a failure at any of
+the three leaves no task and no period row, and the next tick makes the
+period's task cleanly. The events those two calls raise (task created, task
+assigned) are held during the transaction and published only after it
+commits, so a rolled-back tick announces nothing.
+`TestATickWhosePeriodRowFailsLeavesNoTaskBehind` refuses the period row's
+insert and checks no task is left; it fails against the three-write version.
 
 ## Not built yet
 
 - The declared operations (`taskmanager.operations.json`) to create, get,
   list and stop a repeating task and to tick one.
-- One transaction around the tick's three writes.
 
 ## Open questions
 

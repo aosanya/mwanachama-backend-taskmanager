@@ -9,6 +9,7 @@ import (
 	"github.com/aosanya/mwanachama-backend-shared/recur"
 	"github.com/aosanya/mwanachama-backend-shared/specstore"
 	"github.com/aosanya/mwanachama-backend-taskmanager/models"
+	"gorm.io/gorm"
 )
 
 type (
@@ -182,23 +183,50 @@ func (m *taskManager) MakeRepeatingTaskDue(ctx context.Context, id string, at ti
 	case !errors.Is(err, ErrRepeatingTaskNotFound):
 		return RepeatingTaskPeriod{}, false, fmt.Errorf("MakeRepeatingTaskDue: %w", err)
 	}
-	task, err := m.CreateTask(ctx, occ.Task(r))
-	if err != nil {
-		return RepeatingTaskPeriod{}, false, err
+	var held heldEvents
+	txErr := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		txStore, err := newStore(tx, m.store.Spec(), carriers())
+		if err != nil {
+			return err
+		}
+		txm := &taskManager{db: tx, store: txStore, publisher: &held}
+		task, err := txm.CreateTask(ctx, occ.Task(r))
+		if err != nil {
+			return err
+		}
+		if err := txm.AssignTaskToHolder(ctx, task.ID, r.AssigneeKind, r.AssigneeID); err != nil {
+			return err
+		}
+		made = RepeatingTaskPeriod{
+			PeriodKey:       occ.PeriodKey,
+			RepeatingTaskID: r.ID,
+			TaskID:          task.ID,
+			PeriodStart:     formatInstant(occ.Start),
+			DueAt:           formatInstant(occ.Due),
+			MadeAt:          time.Now().UTC().Format(time.RFC3339),
+		}
+		if err := txStore.Insert(ctx, roleRepeatingPeriod, made); err != nil {
+			return fmt.Errorf("MakeRepeatingTaskDue: %w", err)
+		}
+		return nil
+	})
+	if txErr != nil {
+		return RepeatingTaskPeriod{}, false, txErr
 	}
-	if err := m.AssignTaskToHolder(ctx, task.ID, r.AssigneeKind, r.AssigneeID); err != nil {
-		return RepeatingTaskPeriod{}, false, err
-	}
-	made = RepeatingTaskPeriod{
-		PeriodKey:       occ.PeriodKey,
-		RepeatingTaskID: r.ID,
-		TaskID:          task.ID,
-		PeriodStart:     formatInstant(occ.Start),
-		DueAt:           formatInstant(occ.Due),
-		MadeAt:          time.Now().UTC().Format(time.RFC3339),
-	}
-	if err := m.store.Insert(ctx, roleRepeatingPeriod, made); err != nil {
-		return RepeatingTaskPeriod{}, false, fmt.Errorf("MakeRepeatingTaskDue: %w", err)
+	for _, e := range held {
+		m.publish(ctx, e.topic, e.payload)
 	}
 	return made, true, nil
+}
+
+type heldEvent struct {
+	topic   string
+	payload any
+}
+
+type heldEvents []heldEvent
+
+func (h *heldEvents) Publish(_ context.Context, topic string, payload any) error {
+	*h = append(*h, heldEvent{topic: topic, payload: payload})
+	return nil
 }
