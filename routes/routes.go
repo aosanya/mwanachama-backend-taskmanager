@@ -46,6 +46,10 @@ var sentinels = map[string]error{
 	"ErrInvalidRelationship":        mwanachamataskmanager.ErrInvalidRelationship,
 	"ErrInvalidImport":              mwanachamataskmanager.ErrInvalidImport,
 	"ErrNotRootWorkflowRun":         mwanachamataskmanager.ErrNotRootWorkflowRun,
+	"ErrCaseNotFound":               mwanachamataskmanager.ErrCaseNotFound,
+	"ErrCaseNotOpen":                mwanachamataskmanager.ErrCaseNotOpen,
+	"ErrTaskAlreadyInCase":          mwanachamataskmanager.ErrTaskAlreadyInCase,
+	"ErrInvalidCase":                mwanachamataskmanager.ErrInvalidCase,
 }
 
 // AnonymousActions is empty on purpose: nothing on a work board is readable

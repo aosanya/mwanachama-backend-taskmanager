@@ -1113,6 +1113,119 @@
           "description": "The number the next code for that kind will carry."
         }
       ]
+    },
+    {
+      "role": "case",
+      "description": "One request somebody brought, worked through the tasks linked to it. Open until every linked task is completed or cancelled, then done.",
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "description": "Storage key, opaque to callers.",
+          "primary": true
+        },
+        {
+          "name": "requester_id",
+          "type": "string",
+          "description": "Who brought the request, taken from the caller who opened it.",
+          "required": true
+        },
+        {
+          "name": "subject_kind",
+          "type": "string",
+          "description": "What kind of thing the case is about, as the host names it. Opaque to this module."
+        },
+        {
+          "name": "subject_id",
+          "type": "string",
+          "description": "Which thing the case is about, as the host identifies it. Opaque to this module."
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "description": "A short human-readable label."
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "values": [
+            "open",
+            "done",
+            "cancelled"
+          ],
+          "description": "Where the case stands. Open until every linked task is completed or cancelled.",
+          "required": true
+        },
+        {
+          "name": "opened_at",
+          "type": "timestamp",
+          "description": "When the case was opened."
+        },
+        {
+          "name": "closed_at",
+          "type": "timestamp",
+          "description": "When the case left open, empty while it is open."
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp",
+          "description": "When the row was created."
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp",
+          "description": "When the row was last written."
+        }
+      ],
+      "indexes": [
+        {
+          "name": "requester",
+          "description": "Lists one requester's cases.",
+          "fields": [
+            "requester_id"
+          ]
+        },
+        {
+          "name": "subject",
+          "description": "Finds the cases about one thing.",
+          "fields": [
+            "subject_kind",
+            "subject_id"
+          ]
+        }
+      ]
+    },
+    {
+      "role": "case_task",
+      "description": "Records that one task is worked for one case. A task serves at most one case.",
+      "fields": [
+        {
+          "name": "task_id",
+          "type": "string",
+          "description": "The task worked for the case.",
+          "primary": true
+        },
+        {
+          "name": "case_id",
+          "type": "string",
+          "description": "The case it is worked for.",
+          "required": true
+        },
+        {
+          "name": "linked_at",
+          "type": "timestamp",
+          "description": "When it was linked."
+        }
+      ],
+      "indexes": [
+        {
+          "name": "case",
+          "description": "Reads one case's tasks.",
+          "fields": [
+            "case_id"
+          ]
+        }
+      ]
     }
   ]
 }

@@ -101,6 +101,18 @@
       "name": "code_sequence",
       "table": "code_sequences",
       "description": "The next number to mint for one kind of thing's stable code."
+    },
+    {
+      "role": "case",
+      "name": "case",
+      "table": "cases",
+      "description": "A request a resident or member brought to the agency, worked through the work items linked to it."
+    },
+    {
+      "role": "case_task",
+      "name": "case_work_item",
+      "table": "case_work_items",
+      "description": "Records that one work item is worked for one case."
     }
   ]
 }

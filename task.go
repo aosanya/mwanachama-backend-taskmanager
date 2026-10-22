@@ -155,6 +155,12 @@ type TaskManager interface {
 	// via outbound `member_of` edges.
 	ListProjectsForTask(ctx context.Context, taskID string) ([]Project, error)
 
+	OpenCase(ctx context.Context, requesterID string, c Case) (Case, error)
+	GetCase(ctx context.Context, caseID string) (Case, error)
+	ListCases(ctx context.Context, filter CaseFilter) ([]Case, error)
+	LinkCaseTask(ctx context.Context, caseID, taskID string) error
+	ListCaseTasks(ctx context.Context, caseID string) ([]Task, error)
+
 	// GetTaskByName retrieves a task by its project-scoped name (task_name)
 	// within a project (project_name). Returns [ErrTaskNotFound] if no task
 	// with that name exists in the project.

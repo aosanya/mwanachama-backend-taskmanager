@@ -24,6 +24,8 @@ const (
 	roleTagging            = "tagging"
 	roleCodeSequence       = "code_sequence"
 	roleAssignment         = "assignment"
+	roleCase               = "case"
+	roleCaseTask           = "case_task"
 )
 
 func roles() []string {
@@ -32,6 +34,7 @@ func roles() []string {
 		roleDeliverable, roleAcceptanceCriteria, roleWorkflowRun, roleImportJob,
 		roleBlocker, roleDependency, roleMembership, roleTagging, roleCodeSequence,
 		roleAssignment,
+		roleCase, roleCaseTask,
 	}
 }
 
@@ -52,6 +55,8 @@ func carriers() map[string]any {
 		roleTagging:            models.Tagging{},
 		roleCodeSequence:       models.CodeSequence{},
 		roleAssignment:         models.Assignment{},
+		roleCase:               models.Case{},
+		roleCaseTask:           models.CaseTask{},
 	}
 }
 

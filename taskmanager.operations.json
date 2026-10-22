@@ -504,10 +504,53 @@
       "args": [{"from": "path", "as": "taskOrTodoID", "description": "The task or step that stalled."},
                {"from": "path", "as": "runID", "description": "The run it belongs to."}],
       "returns": [{"body": true}]
+    },
+    "open_case": {
+      "method": "POST", "path": "/cases", "call": "OpenCase", "action": "taskmanager.case.open",
+      "status": 201,
+      "title": "Open case",
+      "description": "Open one case for the caller, about the subject the body names. Its id, status and timestamps are server-owned.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who brought the request, from the session."},
+               {"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "get_case": {
+      "method": "GET", "path": "/cases/{caseID}", "call": "GetCase", "action": "taskmanager.case.read",
+      "title": "Read case",
+      "description": "Read one case by its storage key.",
+      "args": [{"from": "path", "as": "caseID", "description": "The case to read."}],
+      "returns": [{"body": true}]
+    },
+    "list_cases": {
+      "method": "GET", "path": "/cases", "call": "ListCases", "action": "taskmanager.case.list",
+      "title": "List cases",
+      "description": "List cases, newest opened first, narrowed by requester, subject or status when given.",
+      "args": [{"from": "query", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "link_case_task": {
+      "method": "PUT", "path": "/cases/{caseID}/tasks/{taskID}", "call": "LinkCaseTask", "action": "taskmanager.case.link_task",
+      "status": 204,
+      "title": "Link task to case",
+      "description": "Work one task for one open case. A task serves at most one case.",
+      "args": [{"from": "path", "as": "caseID", "description": "The case."},
+               {"from": "path", "as": "taskID", "description": "The task."}],
+      "returns": [{"body": true}]
+    },
+    "list_case_tasks": {
+      "method": "GET", "path": "/cases/{caseID}/tasks", "call": "ListCaseTasks", "action": "taskmanager.case.list_tasks",
+      "title": "List case tasks",
+      "description": "List the tasks worked for one case.",
+      "args": [{"from": "path", "as": "caseID", "description": "The case."}],
+      "returns": [{"body": true}]
     }
   },
 
   "errors": {
+    "ErrCaseNotFound": 404,
+    "ErrCaseNotOpen": 409,
+    "ErrTaskAlreadyInCase": 409,
+    "ErrInvalidCase": 400,
     "ErrTaskNotFound": 404,
     "ErrInvalidAssignee": 400,
     "ErrAgentNotFound": 404,

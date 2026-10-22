@@ -155,6 +155,11 @@ func (m *taskManager) UpdateTask(ctx context.Context, task Task) (Task, error) {
 				WorkflowRunID:  out.WorkflowRunID,
 			})
 		}
+		if settlesCase(out.Status) {
+			if err := m.closeCaseIfSettled(ctx, out.ID); err != nil {
+				slog.WarnContext(ctx, "UpdateTask: closeCaseIfSettled", "task_id", out.ID, "err", err)
+			}
+		}
 	}
 	return out, nil
 }

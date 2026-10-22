@@ -130,6 +130,11 @@ func TestVocabularyMatchesTheBlueprint(t *testing.T) {
 			models.AcceptanceResultSkipped,
 			models.AcceptanceResultBlocked,
 		},
+		roleCase + ".status": {
+			string(models.CaseStatusOpen),
+			string(models.CaseStatusDone),
+			string(models.CaseStatusCancelled),
+		},
 	}
 
 	b, err := Blueprint()

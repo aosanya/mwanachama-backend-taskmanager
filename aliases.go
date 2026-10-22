@@ -31,6 +31,10 @@ type (
 	Dependency         = models.Dependency
 	Membership         = models.Membership
 	Tagging            = models.Tagging
+	Case               = models.Case
+	CaseStatus         = models.CaseStatus
+	CaseTask           = models.CaseTask
+	CaseFilter         = models.CaseFilter
 	CodeSequence       = models.CodeSequence
 )
 
