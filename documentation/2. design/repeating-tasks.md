@@ -73,10 +73,34 @@ commits, so a rolled-back tick announces nothing.
 `TestATickWhosePeriodRowFailsLeavesNoTaskBehind` refuses the period row's
 insert and checks no task is left; it fails against the three-write version.
 
+## Declared operations (third slice)
+
+Three addresses in `taskmanager.operations.json`, each gated on its own
+action:
+
+| Address | Call | Action |
+| --- | --- | --- |
+| `GET /repeating-tasks/{repeatingTaskID}` | `GetRepeatingTask` | `taskmanager.repeating_task.read` |
+| `GET /repeating-tasks` | `ListRepeatingTasks` (query `assignee_kind`, `assignee_id`) | `taskmanager.repeating_task.list` |
+| `POST /repeating-tasks/{repeatingTaskID}/stop` | `StopRepeatingTask` | `taskmanager.repeating_task.stop` |
+
+`ErrRepeatingTaskNotFound` answers 404 and `ErrInvalidRepeatingTask` 400.
+They are pinned over a real mux by
+`routes/repeating_task_test.go`.
+
 ## Not built yet
 
-- The declared operations (`taskmanager.operations.json`) to create, get,
-  list and stop a repeating task and to tick one.
+- **Create over the wire.** `CreateRepeatingTask` takes a `RepeatingTask`,
+  whose `recur.Schedule` has no JSON form (a `*recur.Rule`, `recur.Date`s and
+  a `*time.Location`). Declaring it needs a body shape — most likely the
+  stored record's own `schedule_rule`/`schedule_dates`/`schedule_start`/
+  `schedule_end`/`schedule_zone` strings, converted through
+  `RepeatingTaskFromRecord` — and a manager method taking that shape. Not
+  declared in this slice.
+- **The tick over the wire.** `MakeRepeatingTaskDue` takes a `time.Time` and
+  answers a period and a `made` flag. It is the host's timer, not a caller's
+  act, so whether it should be an address at all, and with which action, is
+  left to the host that runs the timer; nothing declares it yet.
 
 ## Open questions
 

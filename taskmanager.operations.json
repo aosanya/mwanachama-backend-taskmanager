@@ -528,6 +528,27 @@
       "args": [{"from": "query", "whole": true}],
       "returns": [{"body": true}]
     },
+    "get_repeating_task": {
+      "method": "GET", "path": "/repeating-tasks/{repeatingTaskID}", "call": "GetRepeatingTask", "action": "taskmanager.repeating_task.read",
+      "title": "Read repeating task",
+      "description": "Read one repeating task: its schedule, its assignee and whether it is stopped.",
+      "args": [{"from": "path", "as": "repeatingTaskID", "description": "The repeating task to read."}],
+      "returns": [{"body": true}]
+    },
+    "list_repeating_tasks": {
+      "method": "GET", "path": "/repeating-tasks", "call": "ListRepeatingTasks", "action": "taskmanager.repeating_task.list",
+      "title": "List repeating tasks",
+      "description": "List repeating tasks, oldest first, narrowed by assignee kind and id when given.",
+      "args": [{"from": "query", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "stop_repeating_task": {
+      "method": "POST", "path": "/repeating-tasks/{repeatingTaskID}/stop", "call": "StopRepeatingTask", "action": "taskmanager.repeating_task.stop",
+      "title": "Stop repeating task",
+      "description": "Stop one repeating task. It makes no further tasks and every task it already made is kept. Stopping it again changes nothing.",
+      "args": [{"from": "path", "as": "repeatingTaskID", "description": "The repeating task to stop."}],
+      "returns": [{"body": true}]
+    },
     "link_case_task": {
       "method": "PUT", "path": "/cases/{caseID}/tasks/{taskID}", "call": "LinkCaseTask", "action": "taskmanager.case.link_task",
       "status": 204,
@@ -548,6 +569,8 @@
 
   "errors": {
     "ErrCaseNotFound": 404,
+    "ErrRepeatingTaskNotFound": 404,
+    "ErrInvalidRepeatingTask": 400,
     "ErrCaseNotOpen": 409,
     "ErrTaskAlreadyInCase": 409,
     "ErrInvalidCase": 400,

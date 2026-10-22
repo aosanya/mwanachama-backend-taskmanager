@@ -47,6 +47,8 @@ var sentinels = map[string]error{
 	"ErrInvalidImport":              mwanachamataskmanager.ErrInvalidImport,
 	"ErrNotRootWorkflowRun":         mwanachamataskmanager.ErrNotRootWorkflowRun,
 	"ErrCaseNotFound":               mwanachamataskmanager.ErrCaseNotFound,
+	"ErrRepeatingTaskNotFound":      mwanachamataskmanager.ErrRepeatingTaskNotFound,
+	"ErrInvalidRepeatingTask":       mwanachamataskmanager.ErrInvalidRepeatingTask,
 	"ErrCaseNotOpen":                mwanachamataskmanager.ErrCaseNotOpen,
 	"ErrTaskAlreadyInCase":          mwanachamataskmanager.ErrTaskAlreadyInCase,
 	"ErrInvalidCase":                mwanachamataskmanager.ErrInvalidCase,
