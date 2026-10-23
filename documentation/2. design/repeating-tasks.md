@@ -151,10 +151,22 @@ Pinned by `repeating_dates_test.go`: the refusal, the last date's task due on
 the end, a sweep over 503 templates that skips the stopped one, and a rival
 tick run between the first read and the transaction.
 
-## Not built yet
+## The schedule body is shared's `recur.Wire`
 
-- The shared shape of a repeating schedule arrives with shared's S67, not in
-  this slice.
+Since shared's S67, a create body's `schedule` is `recur.Wire` — `start`,
+`end`, `zone`, `rule` or `dates`, and `open_days` — the same body forms and
+comm read, so the studio's one Repeat picker serves all three. The field
+names did not change and no address moved; taskmanager's own copy of the
+shape, `models.Schedule`, is gone.
+
+`RepeatingTaskFromNew` runs `Wire.Schedule()` first, so a list of dates with
+no end and every other malformed schedule is refused by the shared reader
+and answered as `ErrInvalidRepeatingTask`. `open_days` is refused when set:
+a repeating task's made task is due at its period's end, the record has no
+column for it, and storing a schedule that silently drops a field would lie.
+The stored record keeps its five `schedule_*` columns.
+
+Pinned by `repeating_wire_test.go`.
 
 ## Questions settled
 

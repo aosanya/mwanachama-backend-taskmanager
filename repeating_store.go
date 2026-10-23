@@ -99,6 +99,12 @@ func parseInstant(s string) (time.Time, error) {
 }
 
 func RepeatingTaskFromNew(n NewRepeatingTask) (RepeatingTask, error) {
+	if _, err := n.Schedule.Schedule(); err != nil {
+		return RepeatingTask{}, fmt.Errorf("%w: %v", ErrInvalidRepeatingTask, err)
+	}
+	if n.Schedule.OpenDays != 0 {
+		return RepeatingTask{}, fmt.Errorf("%w: open_days is not kept for a repeating task; its task is due at the period's end", ErrInvalidRepeatingTask)
+	}
 	return RepeatingTaskFromRecord(RepeatingTaskRecord{
 		Title:         n.Title,
 		Description:   n.Description,

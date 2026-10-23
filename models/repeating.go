@@ -1,5 +1,7 @@
 package models
 
+import "github.com/aosanya/mwanachama-backend-shared/recur"
+
 type RepeatingTaskRecord struct {
 	ID            string       `json:"id"`
 	Title         string       `json:"title"`
@@ -30,18 +32,10 @@ type RepeatingTaskFilter struct {
 	AssigneeID   string       `json:"assignee_id,omitempty"`
 }
 
-type Schedule struct {
-	Start string   `json:"start"`
-	End   string   `json:"end,omitempty"`
-	Zone  string   `json:"zone"`
-	Rule  string   `json:"rule,omitempty"`
-	Dates []string `json:"dates,omitempty"`
-}
-
 type NewRepeatingTask struct {
 	Title        string       `json:"title"`
 	Description  string       `json:"description,omitempty"`
-	Schedule     Schedule     `json:"schedule"`
+	Schedule     recur.Wire   `json:"schedule"`
 	AssigneeKind AssigneeKind `json:"assignee_kind"`
 	AssigneeID   string       `json:"assignee_id"`
 }
