@@ -167,6 +167,17 @@ func (m *taskManager) ListRepeatingTasks(ctx context.Context, filter RepeatingTa
 	return out, nil
 }
 
+func (m *taskManager) ListRunningRepeatingTasks(ctx context.Context) ([]RepeatingTaskRecord, error) {
+	q := m.store.Query(ctx, roleRepeatingTask).
+		Where(m.store.Unset(roleRepeatingTask, "StoppedAt")).
+		Order("created_at").Order("id")
+	out, err := specstore.List[RepeatingTaskRecord](m.store, q, roleRepeatingTask)
+	if err != nil {
+		return nil, fmt.Errorf("ListRunningRepeatingTasks: %w", err)
+	}
+	return out, nil
+}
+
 func (m *taskManager) StopRepeatingTask(ctx context.Context, id string) (RepeatingTaskRecord, error) {
 	rec, err := m.GetRepeatingTask(ctx, id)
 	if err != nil {
@@ -198,13 +209,9 @@ func (m *taskManager) MakeRepeatingTaskDue(ctx context.Context, id string, at ti
 	if err != nil || !ok {
 		return RepeatingTaskPeriod{}, false, err
 	}
-	var made RepeatingTaskPeriod
-	q := m.store.Query(ctx, roleRepeatingPeriod).Where("period_key = ?", occ.PeriodKey)
-	switch err := m.store.Take(q, roleRepeatingPeriod, &made, ErrRepeatingTaskNotFound); {
-	case err == nil:
-		return made, false, nil
-	case !errors.Is(err, ErrRepeatingTaskNotFound):
-		return RepeatingTaskPeriod{}, false, fmt.Errorf("MakeRepeatingTaskDue: %w", err)
+	made, found, err := m.periodMade(ctx, occ.PeriodKey)
+	if err != nil || found {
+		return made, false, err
 	}
 	var held heldEvents
 	txErr := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -234,12 +241,28 @@ func (m *taskManager) MakeRepeatingTaskDue(ctx context.Context, id string, at ti
 		return nil
 	})
 	if txErr != nil {
+		if already, found, err := m.periodMade(ctx, occ.PeriodKey); err == nil && found {
+			return already, false, nil
+		}
 		return RepeatingTaskPeriod{}, false, txErr
 	}
 	for _, e := range held {
 		m.publish(ctx, e.topic, e.payload)
 	}
 	return made, true, nil
+}
+
+func (m *taskManager) periodMade(ctx context.Context, periodKey string) (RepeatingTaskPeriod, bool, error) {
+	var made RepeatingTaskPeriod
+	q := m.store.Query(ctx, roleRepeatingPeriod).Where("period_key = ?", periodKey)
+	switch err := m.store.Take(q, roleRepeatingPeriod, &made, ErrRepeatingTaskNotFound); {
+	case err == nil:
+		return made, true, nil
+	case errors.Is(err, ErrRepeatingTaskNotFound):
+		return RepeatingTaskPeriod{}, false, nil
+	default:
+		return RepeatingTaskPeriod{}, false, fmt.Errorf("MakeRepeatingTaskDue: %w", err)
+	}
 }
 
 type heldEvent struct {

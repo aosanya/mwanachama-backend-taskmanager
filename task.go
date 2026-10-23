@@ -105,6 +105,7 @@ type TaskManager interface {
 	StartRepeatingTask(ctx context.Context, n NewRepeatingTask) (RepeatingTaskRecord, error)
 	GetRepeatingTask(ctx context.Context, id string) (RepeatingTaskRecord, error)
 	ListRepeatingTasks(ctx context.Context, filter RepeatingTaskFilter) ([]RepeatingTaskRecord, error)
+	ListRunningRepeatingTasks(ctx context.Context) ([]RepeatingTaskRecord, error)
 	StopRepeatingTask(ctx context.Context, id string) (RepeatingTaskRecord, error)
 	MakeRepeatingTaskDue(ctx context.Context, id string, at time.Time) (RepeatingTaskPeriod, bool, error)
 	ListTaskAssignments(ctx context.Context, taskID string) ([]Assignment, error)

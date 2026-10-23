@@ -85,7 +85,7 @@ func TestARepeatingTaskIsCreatedOverTheMuxWithTheFormsScheduleShape(t *testing.T
 
 	dated := wk11Post(t, m, "/repeating-tasks", map[string]any{
 		"title":         "Term report",
-		"schedule":      map[string]any{"start": "2026-01-05T00:00:00Z", "zone": "UTC", "dates": []string{"2026-01-05", "2026-04-20", "2026-09-07"}},
+		"schedule":      map[string]any{"start": "2026-01-05T00:00:00Z", "zone": "UTC", "end": "2026-12-18T00:00:00Z", "dates": []string{"2026-01-05", "2026-04-20", "2026-09-07"}},
 		"assignee_kind": "actor",
 		"assignee_id":   "actor-1",
 	})

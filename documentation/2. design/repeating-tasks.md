@@ -119,19 +119,44 @@ grant `taskmanager.repeating_task.create` before anyone can reach it.
 Unlike forms, an empty `zone` is not refused here: `time.LoadLocation("")`
 is UTC, which is what the stored form already did.
 
+## Settled by the owner (fifth slice, decisions 362, 363, 366, 367)
+
+- **A list of dates needs an end.** `Validate` refuses a schedule of dates
+  with no `end` (`ErrInvalidRepeatingTask`, 400 over the wire). The last
+  date's period runs to the end, so its task is made and is due on the end;
+  before this the last date's period had no due time and its task was never
+  made. A rule with no end is still accepted: every period of it has a next
+  occurrence to end on. A template stored before this change, with dates and
+  no end, now answers the tick with `ErrInvalidRepeatingTask`.
+- **Stop is final.** There is no resume (as built).
+- **No back-fill.** Only the period the tick's moment falls in is made
+  (as built).
+- **The tick stays the host's Go call**, with no address (as built).
+- **A role assignee stays on the role** (as built).
+
+### For the host's sweep (wakala-api WK203)
+
+- `ListRunningRepeatingTasks(ctx) ([]RepeatingTaskRecord, error)` on
+  `TaskManager` reads every template whose `stopped_at` is unset, oldest
+  first, with no page cap; `ListRepeatingTasks` keeps its cap of 500. It is
+  not declared as an operation: it is for the host's timer, not a caller.
+- **A lost race answers "already made".** Two ticks for the same period both
+  pass the first read; the loser's period row collides with the winner's on
+  the primary key and its transaction rolls back. `MakeRepeatingTaskDue` then
+  reads the period again and, finding the winner's row, answers it with
+  `made = false` and no error, exactly as a tick that came second would. Any
+  other failure is still returned.
+
+Pinned by `repeating_dates_test.go`: the refusal, the last date's task due on
+the end, a sweep over 503 templates that skips the stopped one, and a rival
+tick run between the first read and the transaction.
+
 ## Not built yet
 
-- **The tick over the wire.** `MakeRepeatingTaskDue` takes a `time.Time` and
-  answers a period and a `made` flag. It is the host's timer, not a caller's
-  act, so whether it should be an address at all, and with which action, is
-  left to the host that runs the timer; nothing declares it yet.
+- The shared shape of a repeating schedule arrives with shared's S67, not in
+  this slice.
 
-## Open questions
+## Questions settled
 
-- A schedule's last period when the schedule has no end after it: no due time
-  can be derived. This slice makes no task; the owner may want one due at the
-  schedule's end or with no due time.
-- Whether a stopped template may be resumed, and if so whether periods missed
-  while stopped are made.
-- When a role is the assignee, whether the task stays on the role or goes to
-  one holder of it.
+The three questions this page used to carry (the last period with no end,
+resuming a stopped template, a role assignee) are answered above.

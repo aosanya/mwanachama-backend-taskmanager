@@ -41,6 +41,9 @@ func (r RepeatingTask) Validate() error {
 	if err := r.Schedule.Validate(); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidRepeatingTask, err)
 	}
+	if len(r.Schedule.Dates) > 0 && r.Schedule.End.IsZero() {
+		return fmt.Errorf("%w: a list of dates needs an end, which is when the last date's task is due", ErrInvalidRepeatingTask)
+	}
 	return nil
 }
 
