@@ -102,6 +102,9 @@ func (m *taskManager) UpdateTask(ctx context.Context, task Task) (Task, error) {
 		task.CompletedAt = now
 	}
 	task.AssignedTo = current.AssignedTo
+	if task.Status != TaskStatusBlocked {
+		task.HeldBy = ""
+	}
 	if task.WorkflowRunID == "" {
 		task.WorkflowRunID = current.WorkflowRunID
 	}
@@ -190,6 +193,9 @@ func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task,
 	}
 	if filter.WorkflowRunID != "" {
 		q = q.Where("workflow_run_id = ?", filter.WorkflowRunID)
+	}
+	if filter.HeldBy != "" {
+		q = q.Where("held_by = ?", filter.HeldBy)
 	}
 
 	limit := filter.Limit

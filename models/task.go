@@ -157,6 +157,8 @@ type Task struct {
 	// Empty for root tasks.
 	ParentTaskID string `json:"parent_task_id,omitempty"`
 
+	HeldBy string `json:"held_by,omitempty"`
+
 	LinkedRef string `json:"linked_ref,omitempty"`
 
 	Deleted bool `json:"deleted"`
@@ -168,6 +170,7 @@ type TaskFilter struct {
 	Status        TaskStatus   `query:"status"`
 	Priority      TaskPriority `query:"priority"`
 	WorkflowRunID string       `query:"workflow_run_id"`
+	HeldBy        string       `query:"held_by"`
 
 	// Limit caps the number of tasks returned, up to maxListPage. 0 (or
 	// anything above maxListPage) falls back to maxListPage.

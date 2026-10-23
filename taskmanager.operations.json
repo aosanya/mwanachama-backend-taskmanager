@@ -11,7 +11,7 @@
     "list_tasks": {
       "method": "GET", "path": "/tasks", "call": "ListTasks", "action": "taskmanager.task.list",
       "title": "List tasks",
-      "description": "List the tasks matching the filter. Narrow by status, priority or run, and pass a limit unless you genuinely need the whole board.",
+      "description": "List the tasks matching the filter. Narrow by status, priority, run or the outside holder of blocked work (held_by), and pass a limit unless you genuinely need the whole board.",
       "args": [{"from": "query", "whole": true}],
       "returns": [{"body": true}]
     },

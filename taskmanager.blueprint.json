@@ -140,6 +140,11 @@
           "description": "The task that was split to produce this one. Empty for a root task."
         },
         {
+          "name": "held_by",
+          "type": "string",
+          "description": "Who outside the board holds a blocked task, as an opaque label or reference the module stores and never resolves. Empty when nothing outside holds it. Kept only while the task is blocked; any other status clears it."
+        },
+        {
           "name": "linked_ref",
           "type": "string",
           "description": "An opaque reference to something another module owns that this task points at, such as the questionnaire it asks its assignee to answer. Empty when the task points at nothing. The module stores it and reads it back; it never resolves it."
@@ -163,6 +168,13 @@
           "description": "Finds one worker's open tasks.",
           "fields": [
             "assigned_to"
+          ]
+        },
+        {
+          "name": "held_by",
+          "description": "Finds the blocked work one outside holder has.",
+          "fields": [
+            "held_by"
           ]
         },
         {
