@@ -23,8 +23,23 @@ an empty `state`. Whether they should fold into one of the five is open.
 the blueprint has no column for it. The status stays authoritative and every
 write still goes through `CanTransitionTo`.
 
+## The setting
+
+The blueprint declares the S64 setting `task_states` (type `json`): an
+ordered list of `{name, statuses}`, defaulting to the five above.
+`models.ParseTaskStates` reads a value of it and refuses, prefixed
+`task states:`, an empty list, a state with no name or declared twice, a
+status that is not one of the eight, a status mapped by two states, and an
+unknown field. A status no state covers reads with no state, which is what
+`failed` and `split` do by default.
+
+`NewTaskManager` resolves the setting once through `spec.Resolve` and keeps
+the result; a blueprint default that does not parse fails construction.
+
 ## Not built
 
-Where an agency declares its own states. W32 names S64 module settings as
-the place; until that lands `taskManager.taskStates` answers the default five
-for every instance. When it does, it is the one function to change.
+The definition layer (what an agency's template sets) and the owner's
+override layer are not passed in yet: S64 has not settled where an agency's
+two layers are stored. Until it does, `moduleTaskStates` resolves with no
+definition and no override, so every instance reads the module default.
+When storage lands, those two layers are its only change.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/aosanya/mwanachama-backend-shared/events"
 	"github.com/aosanya/mwanachama-backend-shared/spec"
+	"github.com/aosanya/mwanachama-backend-taskmanager/models"
 )
 
 // TaskManager is the primary interface for task lifecycle management.
@@ -415,6 +416,7 @@ type taskManager struct {
 	db        *gorm.DB
 	store     *store
 	publisher events.Publisher
+	states    []models.TaskState
 }
 
 func NewTaskManager(db *gorm.DB, s *spec.Spec, pub events.Publisher) (TaskManager, error) {
@@ -428,7 +430,11 @@ func NewTaskManager(db *gorm.DB, s *spec.Spec, pub events.Publisher) (TaskManage
 	if err != nil {
 		return nil, fmt.Errorf("NewTaskManager: %w", err)
 	}
-	return &taskManager{db: db, store: st, publisher: pub}, nil
+	states, err := moduleTaskStates(s)
+	if err != nil {
+		return nil, fmt.Errorf("NewTaskManager: %w", err)
+	}
+	return &taskManager{db: db, store: st, publisher: pub, states: states}, nil
 }
 
 func Unbound() TaskManager { return (*taskManager)(nil) }

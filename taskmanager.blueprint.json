@@ -1401,5 +1401,19 @@
         }
       ]
     }
+  ],
+  "settings": [
+    {
+      "name": "task_states",
+      "type": "json",
+      "description": "The states an agency's tasks are read in, in order, each with the lifecycle statuses it covers. A status may sit in one state at most; a status no state covers reads with no state.",
+      "default": [
+        {"name": "To do", "statuses": ["pending"]},
+        {"name": "Doing", "statuses": ["in_progress"]},
+        {"name": "Waiting", "statuses": ["blocked", "awaiting-direction"]},
+        {"name": "Done", "statuses": ["completed"]},
+        {"name": "Cancelled", "statuses": ["cancelled"]}
+      ]
+    }
   ]
 }
