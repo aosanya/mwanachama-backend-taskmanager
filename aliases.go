@@ -10,6 +10,8 @@ type (
 	TaskStatus         = models.TaskStatus
 	TaskPriority       = models.TaskPriority
 	TaskFilter         = models.TaskFilter
+	OverdueFilter      = models.OverdueFilter
+	OverdueTask        = models.OverdueTask
 	Assignment         = models.Assignment
 	AssigneeKind       = models.AssigneeKind
 	HolderTasksQuery   = models.HolderTasksQuery

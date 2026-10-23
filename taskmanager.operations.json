@@ -15,6 +15,13 @@
       "args": [{"from": "query", "whole": true}],
       "returns": [{"body": true}]
     },
+    "list_overdue_tasks": {
+      "method": "GET", "path": "/overdue-tasks", "call": "ListOverdueTasks", "action": "taskmanager.task.list_overdue",
+      "title": "List overdue tasks",
+      "description": "List the open tasks whose due date passed more than the agency's overdue_grace_hours ago, the longest overdue first, each with how many whole hours it is overdue. as_of reads the board at another instant (RFC 3339); a scheduled routine opens follow-up work from this list.",
+      "args": [{"from": "query", "whole": true}],
+      "returns": [{"body": true}]
+    },
     "get_task": {
       "method": "GET", "path": "/tasks/{taskID}", "call": "GetTask", "action": "taskmanager.task.read",
       "title": "Read task",
@@ -583,6 +590,7 @@
     "ErrTaskAlreadyInCase": 409,
     "ErrInvalidCase": 400,
     "ErrTaskNotFound": 404,
+    "ErrInvalidOverdueFilter": 400,
     "ErrInvalidAssignee": 400,
     "ErrAgentNotFound": 404,
     "ErrProjectNotFound": 404,

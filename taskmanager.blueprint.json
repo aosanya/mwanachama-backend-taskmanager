@@ -1426,6 +1426,12 @@
         {"name": "Done", "statuses": ["completed"]},
         {"name": "Cancelled", "statuses": ["cancelled"]}
       ]
+    },
+    {
+      "name": "overdue_grace_hours",
+      "type": "int",
+      "description": "How many whole hours past its due date an open task may run before the overdue list carries it. Zero carries a task the moment its due date passes.",
+      "default": 0
     }
   ]
 }

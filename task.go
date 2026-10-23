@@ -37,6 +37,8 @@ type TaskManager interface {
 	// an empty slice (not an error) when no tasks match.
 	ListTasks(ctx context.Context, filter TaskFilter) ([]Task, error)
 
+	ListOverdueTasks(ctx context.Context, filter OverdueFilter) ([]OverdueTask, error)
+
 	// CreateRelationship creates a directed edge between two Work vertices.
 	// rel.Label must be one of the RelLabel* constants and the (FromID, ToID)
 	// vertex types must match the label's whitelist entry, otherwise
@@ -414,10 +416,11 @@ type Publisher = events.Publisher
 
 // taskManager is the concrete implementation of [TaskManager].
 type taskManager struct {
-	db        *gorm.DB
-	store     *store
-	publisher events.Publisher
-	states    []models.TaskState
+	db           *gorm.DB
+	store        *store
+	publisher    events.Publisher
+	states       []models.TaskState
+	overdueGrace time.Duration
 }
 
 func NewTaskManager(db *gorm.DB, s *spec.Spec, pub events.Publisher) (TaskManager, error) {
@@ -435,7 +438,11 @@ func NewTaskManager(db *gorm.DB, s *spec.Spec, pub events.Publisher) (TaskManage
 	if err != nil {
 		return nil, fmt.Errorf("NewTaskManager: %w", err)
 	}
-	return &taskManager{db: db, store: st, publisher: pub, states: states}, nil
+	grace, err := moduleOverdueGrace(s)
+	if err != nil {
+		return nil, fmt.Errorf("NewTaskManager: %w", err)
+	}
+	return &taskManager{db: db, store: st, publisher: pub, states: states, overdueGrace: grace}, nil
 }
 
 func Unbound() TaskManager { return (*taskManager)(nil) }
