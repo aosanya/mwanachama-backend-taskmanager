@@ -9,6 +9,7 @@ import (
 
 	"github.com/aosanya/mwanachama-backend-shared/spec"
 	"github.com/aosanya/mwanachama-backend-shared/specstore"
+	"github.com/aosanya/mwanachama-backend-taskmanager/models"
 )
 
 const overdueGraceSetting = "overdue_grace_hours"
@@ -54,6 +55,10 @@ func (m *taskManager) ListOverdueTasks(ctx context.Context, filter OverdueFilter
 	if err != nil {
 		return nil, fmt.Errorf("ListOverdueTasks: %w", err)
 	}
+	states, err := m.taskStates(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("ListOverdueTasks: %w", err)
+	}
 	cutoff := asOf.Add(-m.overdueGrace)
 	var overdue []OverdueTask
 	dueAt := map[string]time.Time{}
@@ -63,7 +68,7 @@ func (m *taskManager) ListOverdueTasks(ctx context.Context, filter OverdueFilter
 			continue
 		}
 		dueAt[t.ID] = due
-		t.State = m.stateNameFor(t.Status)
+		t.State = models.StateNameFor(states, t.Status)
 		overdue = append(overdue, OverdueTask{Task: t, OverdueHours: int(math.Floor(asOf.Sub(due).Hours()))})
 	}
 	sort.SliceStable(overdue, func(i, j int) bool {

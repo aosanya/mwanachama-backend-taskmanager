@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/aosanya/mwanachama-backend-shared/specstore"
+	"github.com/aosanya/mwanachama-backend-taskmanager/models"
 )
 
 // CreateTask creates a Task row.
@@ -21,6 +22,10 @@ import (
 // [TaskManager.AssignTask]'s chain-through behaviour). The edge write is
 // best-effort: a failure is logged but does not roll back the task creation.
 func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
+	states, err := m.taskStates(ctx)
+	if err != nil {
+		return Task{}, fmt.Errorf("CreateTask: %w", err)
+	}
 	task.ID = newSpecID()
 	now := time.Now().UTC().Format(time.RFC3339)
 	task.Status = TaskStatusPending
@@ -49,7 +54,7 @@ func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
 		}
 	}
 	out.Tags = m.loadTagNames(ctx, out.ID)
-	out.State = m.stateNameFor(out.Status)
+	out.State = models.StateNameFor(states, out.Status)
 	m.publish(ctx, TopicTaskCreated, TaskCreatedPayload{
 		TaskID:        out.ID,
 		Priority:      out.Priority,
@@ -68,8 +73,12 @@ func (m *taskManager) GetTask(ctx context.Context, taskID string) (Task, error) 
 		}
 		return Task{}, fmt.Errorf("GetTask: %w", err)
 	}
+	states, err := m.taskStates(ctx)
+	if err != nil {
+		return Task{}, fmt.Errorf("GetTask: %w", err)
+	}
 	t.Tags = m.loadTagNames(ctx, t.ID)
-	t.State = m.stateNameFor(t.Status)
+	t.State = models.StateNameFor(states, t.Status)
 	return t, nil
 }
 
@@ -127,7 +136,11 @@ func (m *taskManager) UpdateTask(ctx context.Context, task Task) (Task, error) {
 
 	out := task
 	out.Tags = m.loadTagNames(ctx, out.ID)
-	out.State = m.stateNameFor(out.Status)
+	states, err := m.taskStates(ctx)
+	if err != nil {
+		return Task{}, fmt.Errorf("UpdateTask: %w", err)
+	}
+	out.State = models.StateNameFor(states, out.Status)
 
 	if out.WorkflowRunID != "" && current.WorkflowRunID == "" {
 		if err := m.LinkTaskToRun(ctx, out.WorkflowRunID, out.ID); err != nil {
@@ -206,9 +219,13 @@ func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task,
 	if err != nil {
 		return nil, fmt.Errorf("ListTasks: %w", err)
 	}
+	states, err := m.taskStates(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("ListTasks: %w", err)
+	}
 	for i := range tasks {
 		tasks[i].Tags = m.loadTagNames(ctx, tasks[i].ID)
-		tasks[i].State = m.stateNameFor(tasks[i].Status)
+		tasks[i].State = models.StateNameFor(states, tasks[i].Status)
 	}
 	return tasks, nil
 }

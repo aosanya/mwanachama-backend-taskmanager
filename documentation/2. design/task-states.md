@@ -33,13 +33,39 @@ status that is not one of the eight, a status mapped by two states, and an
 unknown field. A status no state covers reads with no state, which is what
 `failed` and `split` do by default.
 
-`NewTaskManager` resolves the setting once through `spec.Resolve` and keeps
-the result; a blueprint default that does not parse fails construction.
+`NewTaskManager` checks that the blueprint default parses and fails
+construction when it does not.
 
-## Not built
+## The stored layers
 
-The definition layer (what an agency's template sets) and the owner's
-override layer are not passed in yet: S64 has not settled where an agency's
-two layers are stored. Until it does, `moduleTaskStates` resolves with no
-definition and no override, so every instance reads the module default.
-When storage lands, those two layers are its only change.
+An agency's two layers live in the settings tables `spec.Migrate` provisions
+in the module's own table set (shared's S64:
+`spec_settings_definition`, `spec_settings_override`,
+`spec_settings_change`). Every read that answers `state` — `CreateTask`,
+`GetTask`, `UpdateTask`, `ListTasks`, `ListOverdueTasks` — resolves
+`task_states` through `spec.ResolveStored`, module default then the
+definition then the owner's override, and runs `ParseTaskStates` on the
+result. The value is resolved per call, not cached in the manager, so an
+override takes effect on the next read without rebuilding the manager. A
+stored value that does not parse fails the read with the `task states:`
+error rather than falling back to the five.
+
+A host writes the layers through four package functions, each holding the
+value to `ParseTaskStates` before anything is stored:
+
+| Function | Does |
+| --- | --- |
+| `StoredTaskStates(db, spec)` | the effective list, as reads see it |
+| `DefineTaskStates(db, spec, value)` | sets the template's definition, keeping every other defined setting (`PutDefinitionSettings` replaces the whole layer, so the current definition is read and written back with `task_states` set) |
+| `OverrideTaskStates(db, spec, value, by, at)` | sets the owner's override; the change is recorded by the engine |
+| `ClearTaskStatesOverride(db, spec, by, at)` | removes the override, falling back to the definition; recorded too |
+
+`by` and `at` are the host's: the module does not know who the owner is.
+They are package functions rather than `TaskManager` methods and are not
+declared in `taskmanager.operations.json`; whether an override becomes an
+address, and who may call it, is the host's to decide.
+
+## Still open
+
+Whether `failed` and `split` fold into a state, and whether a move may name
+a target state rather than a status, are unchanged and undecided.
