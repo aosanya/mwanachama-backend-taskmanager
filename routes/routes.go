@@ -51,6 +51,8 @@ var sentinels = map[string]error{
 	"ErrRepeatingTaskNotFound":      mwanachamataskmanager.ErrRepeatingTaskNotFound,
 	"ErrInvalidRepeatingTask":       mwanachamataskmanager.ErrInvalidRepeatingTask,
 	"ErrInvalidSourcedTasks":        mwanachamataskmanager.ErrInvalidSourcedTasks,
+	"ErrInvalidGeneratedTasks":      mwanachamataskmanager.ErrInvalidGeneratedTasks,
+	"ErrTooManySubjects":            mwanachamataskmanager.ErrTooManySubjects,
 	"ErrCaseNotOpen":                mwanachamataskmanager.ErrCaseNotOpen,
 	"ErrTaskAlreadyInCase":          mwanachamataskmanager.ErrTaskAlreadyInCase,
 	"ErrInvalidCase":                mwanachamataskmanager.ErrInvalidCase,

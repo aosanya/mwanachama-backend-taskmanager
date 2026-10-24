@@ -131,6 +131,12 @@
       "name": "sourced_work_item",
       "table": "sourced_work_items",
       "description": "One item a source listed, and the task opened for it."
+    },
+    {
+      "role": "generated_task",
+      "name": "generated_work_item",
+      "table": "generated_work_items",
+      "description": "One subject a run generated a task for, and that task."
     }
   ]
 }

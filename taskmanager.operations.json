@@ -542,6 +542,13 @@
       "args": [{"from": "body", "whole": true}],
       "returns": [{"body": true}]
     },
+    "generate_tasks": {
+      "method": "POST", "path": "/generated-tasks", "call": "GenerateTasks", "action": "taskmanager.generated_task.create",
+      "title": "Generate tasks over a list of subjects",
+      "description": "Create one task per subject key from one template, all in one transaction: a run (an opaque name the host gives this generation), a template (title, optional description, priority, RFC 3339 due time and estimated hours) and subjects, the opaque keys the host listed, such as the groups or register records a query returned. Each task carries its subject key as its linked_ref. A subject already generated under the same run creates nothing again, so a replay is safe. At most 5000 subjects in one call; a blank or repeated subject refuses the whole call.",
+      "args": [{"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
     "create_repeating_task": {
       "method": "POST", "path": "/repeating-tasks", "call": "StartRepeatingTask", "action": "taskmanager.repeating_task.create",
       "status": 201,
@@ -594,6 +601,8 @@
     "ErrRepeatingTaskNotFound": 404,
     "ErrInvalidRepeatingTask": 400,
     "ErrInvalidSourcedTasks": 400,
+    "ErrInvalidGeneratedTasks": 400,
+    "ErrTooManySubjects": 413,
     "ErrCaseNotOpen": 409,
     "ErrTaskAlreadyInCase": 409,
     "ErrInvalidCase": 400,

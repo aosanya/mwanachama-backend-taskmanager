@@ -1429,6 +1429,21 @@
         {"name": "source", "description": "Lists the tasks one source has opened.", "fields": ["source"]}
       ]
     }
+,
+    {
+      "role": "generated_task",
+      "description": "One task generated from a template for one subject key of a run. The subject key is the primary key, so a subject gets its task once per run however often the run is replayed.",
+      "fields": [
+        {"name": "subject_key", "type": "string", "description": "A digest of the run and the subject, unique per subject of a run.", "primary": true},
+        {"name": "run", "type": "string", "description": "The opaque name the host gave this generation. The module stores it and never resolves it.", "required": true},
+        {"name": "subject", "type": "string", "description": "The opaque key the task was generated for, as the host listed it. The module never resolves what it names.", "required": true},
+        {"name": "task_id", "type": "string", "description": "The task generated for the subject.", "required": true},
+        {"name": "generated_at", "type": "timestamp", "description": "When the task was generated."}
+      ],
+      "indexes": [
+        {"name": "run", "description": "Lists the tasks one run has generated.", "fields": ["run"]}
+      ]
+    }
   ],
   "settings": [
     {
