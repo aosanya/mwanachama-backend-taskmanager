@@ -43,8 +43,18 @@ func TestEveryDefaultStateMapsOnlyOntoDeclaredStatuses(t *testing.T) {
 }
 
 func TestStateNameForAnUnmappedStatusIsEmpty(t *testing.T) {
-	if got := models.StateNameFor(models.DefaultTaskStates(), models.TaskStatusFailed); got != "" {
+	states := []models.TaskState{{Name: "Open", Statuses: []models.TaskStatus{models.TaskStatusPending}}}
+	if got := models.StateNameFor(states, models.TaskStatusFailed); got != "" {
 		t.Errorf("failed maps to %q, want empty", got)
+	}
+}
+
+func TestFailedReadsAsWaitingAndSplitAsDoingByDefault(t *testing.T) {
+	if got := models.StateNameFor(models.DefaultTaskStates(), models.TaskStatusFailed); got != "Waiting" {
+		t.Errorf("failed maps to %q, want Waiting", got)
+	}
+	if got := models.StateNameFor(models.DefaultTaskStates(), models.TaskStatusSplit); got != "Doing" {
+		t.Errorf("split maps to %q, want Doing", got)
 	}
 }
 

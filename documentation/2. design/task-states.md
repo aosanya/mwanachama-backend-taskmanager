@@ -10,13 +10,14 @@ is the five:
 | State | Statuses |
 | --- | --- |
 | To do | `pending` |
-| Doing | `in_progress` |
-| Waiting | `blocked`, `awaiting-direction` |
+| Doing | `in_progress`, `split` |
+| Waiting | `blocked`, `awaiting-direction`, `failed` |
 | Done | `completed` |
 | Cancelled | `cancelled` |
 
-`failed` and `split` belong to no default state; a task in either reads with
-an empty `state`. Whether they should fold into one of the five is open.
+`failed` reads as Waiting and `split` as Doing (owner, decision 417,
+2026-10-24): a failed task waits on direction to recover, and a split task is
+still being worked through its children.
 
 `Task.State` is derived on every read (`CreateTask`, `GetTask`,
 `UpdateTask`, `ListTasks`) and is never stored — it carries `spec:"-"`, so
@@ -30,8 +31,8 @@ ordered list of `{name, statuses}`, defaulting to the five above.
 `models.ParseTaskStates` reads a value of it and refuses, prefixed
 `task states:`, an empty list, a state with no name or declared twice, a
 status that is not one of the eight, a status mapped by two states, and an
-unknown field. A status no state covers reads with no state, which is what
-`failed` and `split` do by default.
+unknown field. A status no state covers reads with no state; the default five
+cover all eight.
 
 `NewTaskManager` checks that the blueprint default parses and fails
 construction when it does not.
@@ -65,7 +66,34 @@ They are package functions rather than `TaskManager` methods and are not
 declared in `taskmanager.operations.json`; whether an override becomes an
 address, and who may call it, is the host's to decide.
 
-## Still open
+## Reading the states
 
-Whether `failed` and `split` fold into a state, and whether a move may name
-a target state rather than a status, are unchanged and undecided.
+`GET /task-states` (`ListTaskStates`, action `taskmanager.task_state.list`)
+answers `{"items": [...]}`: the agency's effective states in their declared
+order, each with the statuses it covers, resolved the same way a task read
+resolves them. It is what a board draws its columns from.
+
+## Moving a task by state
+
+`POST /tasks/{taskID}/move` with `{"state": "<name>"}` (`MoveTaskToState`,
+action `taskmanager.task.move`; decision 417). The status stays
+authoritative, so a move is a walk over `CanTransitionTo`:
+
+- A task whose status is already in the named state is returned unchanged.
+- Otherwise `StatusPathToState` searches breadth-first from the current
+  status and stops at the shallowest depth that reaches a status of the
+  state; when several are reached at that depth, the one listed first in the
+  state wins. To do → Done is `in_progress`, `completed`; Doing → Waiting is
+  `awaiting-direction`.
+- Each step is written through `UpdateTask`, so every rule an ordinary status
+  change meets still applies — a blocked pending task refused on the way to
+  `in_progress` answers `ErrBlocked` (409), and the timestamps, events and
+  case close-out each step triggers happen as they would by hand. The steps
+  are not one transaction: a refusal part-way leaves the task at the last
+  status it legally reached.
+- A name the agency's states do not hold is `ErrUnknownTaskState` (400).
+- A state no legal path reaches — anything out of `completed` or
+  `cancelled` — is `ErrNoPathToState` (409), and the message names the
+  current status and the state it could not reach.
+
+`UpdateTask` with a status is unchanged and still works.

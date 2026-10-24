@@ -37,6 +37,20 @@
                {"from": "path", "as": "taskID", "into": "ID", "description": "The task to update."}],
       "returns": [{"body": true}]
     },
+    "list_task_states": {
+      "method": "GET", "path": "/task-states", "call": "ListTaskStates", "action": "taskmanager.task_state.list",
+      "title": "List task states",
+      "description": "List the agency's task states in order, each with the lifecycle statuses it covers, so a board can draw one column per state.",
+      "returns": [{"body": true}]
+    },
+    "move_task_to_state": {
+      "method": "POST", "path": "/tasks/{taskID}/move", "call": "MoveTaskToState", "action": "taskmanager.task.move",
+      "title": "Move task to state",
+      "description": "Move one task into a named state. The task walks the shortest legal path of lifecycle statuses into that state; a task already in it is left alone, and a state it cannot reach is refused with the reason.",
+      "args": [{"from": "path", "as": "taskID", "description": "The task to move."},
+               {"from": "body", "as": "state", "required": true, "description": "The name of the state to move it into, as the agency's task states list it."}],
+      "returns": [{"body": true}]
+    },
     "delete_task": {
       "method": "DELETE", "path": "/tasks/{taskID}", "call": "DeleteTask", "action": "taskmanager.task.delete",
       "status": 204,
@@ -614,6 +628,8 @@
   },
 
   "errors": {
+    "ErrUnknownTaskState": 400,
+    "ErrNoPathToState": 409,
     "ErrCaseNotFound": 404,
     "ErrRepeatingTaskNotFound": 404,
     "ErrInvalidRepeatingTask": 400,

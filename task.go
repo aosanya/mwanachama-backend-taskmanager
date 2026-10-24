@@ -38,6 +38,10 @@ type TaskManager interface {
 
 	ListOverdueTasks(ctx context.Context, filter OverdueFilter) ([]OverdueTask, error)
 
+	ListTaskStates(ctx context.Context) (TaskStateList, error)
+
+	MoveTaskToState(ctx context.Context, taskID, state string) (Task, error)
+
 	// CreateRelationship creates a directed edge between two Work vertices.
 	// rel.Label must be one of the RelLabel* constants and the (FromID, ToID)
 	// vertex types must match the label's whitelist entry, otherwise

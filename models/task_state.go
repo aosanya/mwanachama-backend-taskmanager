@@ -15,8 +15,8 @@ type TaskState struct {
 func DefaultTaskStates() []TaskState {
 	return []TaskState{
 		{Name: "To do", Statuses: []TaskStatus{TaskStatusPending}},
-		{Name: "Doing", Statuses: []TaskStatus{TaskStatusInProgress}},
-		{Name: "Waiting", Statuses: []TaskStatus{TaskStatusBlocked, TaskStatusAwaitingDirection}},
+		{Name: "Doing", Statuses: []TaskStatus{TaskStatusInProgress, TaskStatusSplit}},
+		{Name: "Waiting", Statuses: []TaskStatus{TaskStatusBlocked, TaskStatusAwaitingDirection, TaskStatusFailed}},
 		{Name: "Done", Statuses: []TaskStatus{TaskStatusCompleted}},
 		{Name: "Cancelled", Statuses: []TaskStatus{TaskStatusCancelled}},
 	}
