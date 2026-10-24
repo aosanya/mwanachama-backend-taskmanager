@@ -535,6 +535,13 @@
       "args": [{"from": "query", "whole": true}],
       "returns": [{"body": true}]
     },
+    "open_sourced_tasks": {
+      "method": "POST", "path": "/sourced-tasks", "call": "OpenSourcedTasks", "action": "taskmanager.sourced_task.open",
+      "title": "Open tasks from a source",
+      "description": "Open one dated task per item a source lists, all in one transaction: a source (an opaque reference the host passes, such as the raw key of what listed the items) and items, each with a title, an optional description, an RFC 3339 due time and an optional key (the title when absent). An item already opened from the same source opens nothing again, so a replay is safe; each item comes back with its task id and whether this call opened it.",
+      "args": [{"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
     "create_repeating_task": {
       "method": "POST", "path": "/repeating-tasks", "call": "StartRepeatingTask", "action": "taskmanager.repeating_task.create",
       "status": 201,
@@ -586,6 +593,7 @@
     "ErrCaseNotFound": 404,
     "ErrRepeatingTaskNotFound": 404,
     "ErrInvalidRepeatingTask": 400,
+    "ErrInvalidSourcedTasks": 400,
     "ErrCaseNotOpen": 409,
     "ErrTaskAlreadyInCase": 409,
     "ErrInvalidCase": 400,

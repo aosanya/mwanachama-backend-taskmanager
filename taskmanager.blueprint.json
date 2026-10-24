@@ -1413,6 +1413,22 @@
         }
       ]
     }
+,
+    {
+      "role": "sourced_task",
+      "description": "One task opened from one item a source listed. The item key is the primary key, so an item opens its task once however often the source is replayed.",
+      "fields": [
+        {"name": "item_key", "type": "string", "description": "A digest of the source and the item's key, unique per item of a source.", "primary": true},
+        {"name": "source", "type": "string", "description": "The opaque reference the host passed for whatever listed the items. The module stores it and never resolves it.", "required": true},
+        {"name": "key", "type": "string", "description": "The item's key within its source: the one the host gave, or its title when it gave none.", "required": true},
+        {"name": "task_id", "type": "string", "description": "The task opened for the item.", "required": true},
+        {"name": "due_at", "type": "timestamp", "description": "The due time the source gave the item, which is the opened task's due time."},
+        {"name": "opened_at", "type": "timestamp", "description": "When the task was opened."}
+      ],
+      "indexes": [
+        {"name": "source", "description": "Lists the tasks one source has opened.", "fields": ["source"]}
+      ]
+    }
   ],
   "settings": [
     {

@@ -125,6 +125,12 @@
       "name": "repeating_work_item_period",
       "table": "repeating_work_item_periods",
       "description": "One period a repeating template has made its work item for."
+    },
+    {
+      "role": "sourced_task",
+      "name": "sourced_work_item",
+      "table": "sourced_work_items",
+      "description": "One item a source listed, and the task opened for it."
     }
   ]
 }

@@ -28,6 +28,7 @@ const (
 	roleCaseTask           = "case_task"
 	roleRepeatingTask      = "repeating_task"
 	roleRepeatingPeriod    = "repeating_task_period"
+	roleSourcedTask        = "sourced_task"
 )
 
 func roles() []string {
@@ -38,6 +39,7 @@ func roles() []string {
 		roleAssignment,
 		roleCase, roleCaseTask,
 		roleRepeatingTask, roleRepeatingPeriod,
+		roleSourcedTask,
 	}
 }
 
@@ -62,6 +64,7 @@ func carriers() map[string]any {
 		roleCaseTask:           models.CaseTask{},
 		roleRepeatingTask:      models.RepeatingTaskRecord{},
 		roleRepeatingPeriod:    models.RepeatingTaskPeriod{},
+		roleSourcedTask:        models.SourcedTask{},
 	}
 }
 

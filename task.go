@@ -110,6 +110,7 @@ type TaskManager interface {
 	ListRunningRepeatingTasks(ctx context.Context) ([]RepeatingTaskRecord, error)
 	StopRepeatingTask(ctx context.Context, id string) (RepeatingTaskRecord, error)
 	MakeRepeatingTaskDue(ctx context.Context, id string, at time.Time) (RepeatingTaskPeriod, bool, error)
+	OpenSourcedTasks(ctx context.Context, req OpenSourcedTasks) (SourcedTasksOpened, error)
 	ListTaskAssignments(ctx context.Context, taskID string) ([]Assignment, error)
 	ListHeldTasks(ctx context.Context, query HolderTasksQuery) ([]Task, error)
 
