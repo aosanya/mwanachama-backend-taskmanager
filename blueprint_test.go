@@ -294,8 +294,6 @@ func TestTheModuleSegmentKeepsTwoModulesApart(t *testing.T) {
 	}
 }
 
-// A process runs the migration at every start, so running it twice has to be
-// a no-op.
 func TestShippedExampleMigratesIdempotently(t *testing.T) {
 	db := openSpecTestDB(t)
 	s, err := LoadSpec(workExamplePath)
@@ -307,8 +305,9 @@ func TestShippedExampleMigratesIdempotently(t *testing.T) {
 			t.Fatalf("migrate %d: %v", i, err)
 		}
 	}
-	if n := len(tableNames(t, db)); n != len(roles()) {
-		t.Errorf("tables = %d, want %d", n, len(roles()))
+	want := len(roles()) + len(s.SettingsTables())
+	if n := len(tableNames(t, db)); n != want {
+		t.Errorf("tables = %d, want %d", n, want)
 	}
 }
 
@@ -435,6 +434,7 @@ func declaredTables(specs ...*spec.Spec) []string {
 		for _, o := range s.Objects {
 			out = append(out, s.TableFor(o))
 		}
+		out = append(out, s.SettingsTables()...)
 	}
 	sort.Strings(out)
 	return out
