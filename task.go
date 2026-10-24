@@ -171,6 +171,8 @@ type TaskManager interface {
 	ListCases(ctx context.Context, filter CaseFilter) ([]Case, error)
 	LinkCaseTask(ctx context.Context, caseID, taskID string) error
 	ListCaseTasks(ctx context.Context, caseID string) ([]Task, error)
+	EndCase(ctx context.Context, caseID string, status CaseStatus, reply string) (Case, error)
+	ListMyCases(ctx context.Context, requesterID string, filter CaseFilter) ([]Case, error)
 
 	// GetTaskByName retrieves a task by its project-scoped name (task_name)
 	// within a project (project_name). Returns [ErrTaskNotFound] if no task

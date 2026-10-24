@@ -17,6 +17,7 @@ type Case struct {
 	Status      CaseStatus `json:"status"`
 	OpenedAt    string     `json:"opened_at"`
 	ClosedAt    string     `json:"closed_at,omitempty"`
+	Reply       string     `json:"reply,omitempty"`
 	CreatedAt   string     `json:"created_at"`
 	UpdatedAt   string     `json:"updated_at"`
 }

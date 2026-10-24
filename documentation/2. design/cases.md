@@ -63,18 +63,44 @@ linking a task already serving another case is refused
 | Topic | When | Payload |
 | --- | --- | --- |
 | `case.opened` | `OpenCase` stored the row | `case_id`, `requester_id`, `subject_kind`, `subject_id` |
-| `case.closed` | the last open task settled | `case_id`, `status`, `closed_at` |
+| `case.closed` | the last open task settled, or `EndCase` | `case_id`, `status`, `closed_at` |
+
+## Ending a case by hand (W73, decisions 416 and 419)
+
+`POST /cases/{caseID}/end` (`EndCase`, action `taskmanager.case.end`) takes
+`status` (`done` or `cancelled`) and an optional `reply`, stored on the case
+as what the requester is told. It works on a case with no tasks, which
+otherwise stays open until ended.
+
+- `done` is refused with `ErrCaseHasOpenTask` (409) while any live linked
+  task is neither completed nor cancelled.
+- `cancelled` moves the case first, under `status = open`, then cancels every
+  open linked task through the same path the run cascade uses; because the
+  case is no longer open, those cancellations cannot turn it into `done`.
+- Anything else is `ErrInvalidCase` (400); a case already ended is
+  `ErrCaseNotOpen` (409). Both publish `case.closed` with the status given.
+- A rollback never reopens a done case and a failed task does not settle one;
+  both were already so and are unchanged.
+
+`GET /cases/mine` (`ListMyCases`, action `taskmanager.case.list_mine`) lists
+the cases the caller opened, the requester bound `from: caller`, so a
+`requester_id` in the query is overwritten. `GET /cases` stays the staff list.
+
+`DeleteTask` re-checks the task's case after the soft delete, and the check
+closes a case only when at least one live linked task remains and every one
+is settled. Deleting a case's only task leaves it open; deleting its last
+open task beside a settled one closes it `done`.
+
+Freeing an appointment when a case is cancelled is the host's (wakala-api
+WK198), not this module's.
 
 ## Addresses
 
 `POST /cases`, `GET /cases`, `GET /cases/{caseID}`,
 `PUT /cases/{caseID}/tasks/{taskID}`, `GET /cases/{caseID}/tasks`, gated by the
 actions `taskmanager.case.open`, `.list`, `.read`, `.link_task` and
-`.list_tasks`.
+`.list_tasks`; `POST /cases/{caseID}/end` and `GET /cases/mine` by `.end`
+and `.list_mine`.
 
 ## Not built
 
-- Nothing moves a case to `cancelled`; the value is declared, no operation
-  sets it.
-- `GET /cases` is not narrowed to the caller; a host wanting a requester to see
-  only their own cases has to bind the filter.

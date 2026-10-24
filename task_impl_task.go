@@ -192,6 +192,9 @@ func (m *taskManager) DeleteTask(ctx context.Context, taskID string) error {
 		UpdateColumn("deleted", true).Error; err != nil {
 		return fmt.Errorf("DeleteTask: %w", err)
 	}
+	if err := m.closeCaseIfSettled(ctx, taskID); err != nil {
+		slog.WarnContext(ctx, "DeleteTask: closeCaseIfSettled", "task_id", taskID, "err", err)
+	}
 	return nil
 }
 

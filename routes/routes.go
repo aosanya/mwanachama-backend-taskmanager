@@ -56,6 +56,7 @@ var sentinels = map[string]error{
 	"ErrCaseNotOpen":                mwanachamataskmanager.ErrCaseNotOpen,
 	"ErrTaskAlreadyInCase":          mwanachamataskmanager.ErrTaskAlreadyInCase,
 	"ErrInvalidCase":                mwanachamataskmanager.ErrInvalidCase,
+	"ErrCaseHasOpenTask":            mwanachamataskmanager.ErrCaseHasOpenTask,
 }
 
 // AnonymousActions is empty on purpose: nothing on a work board is readable

@@ -21,6 +21,7 @@ var (
 	ErrCaseNotOpen       = errors.New("case is not open")
 	ErrTaskAlreadyInCase = errors.New("task already serves another case")
 	ErrInvalidCase       = errors.New("invalid case")
+	ErrCaseHasOpenTask   = errors.New("case still has an open task")
 )
 
 const (
@@ -179,18 +180,14 @@ func (m *taskManager) closeCaseIfSettled(ctx context.Context, taskID string) err
 	if err != nil || !found {
 		return err
 	}
-	links, err := m.caseLinks(ctx, caseID)
+	tasks, err := m.liveCaseTasks(ctx, caseID)
 	if err != nil {
 		return err
 	}
-	for _, l := range links {
-		t, err := m.GetTask(ctx, l.TaskID)
-		if errors.Is(err, ErrTaskNotFound) {
-			continue
-		}
-		if err != nil {
-			return err
-		}
+	if len(tasks) == 0 {
+		return nil
+	}
+	for _, t := range tasks {
 		if !settlesCase(t.Status) {
 			return nil
 		}
@@ -206,4 +203,77 @@ func (m *taskManager) closeCaseIfSettled(ctx context.Context, taskID string) err
 		m.publish(ctx, TopicCaseClosed, CaseClosedPayload{CaseID: caseID, Status: CaseStatusDone, ClosedAt: now})
 	}
 	return nil
+}
+
+func (m *taskManager) liveCaseTasks(ctx context.Context, caseID string) ([]Task, error) {
+	links, err := m.caseLinks(ctx, caseID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Task, 0, len(links))
+	for _, l := range links {
+		t, err := m.GetTask(ctx, l.TaskID)
+		if errors.Is(err, ErrTaskNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+func (m *taskManager) ListMyCases(ctx context.Context, requesterID string, filter CaseFilter) ([]Case, error) {
+	if requesterID == "" {
+		return nil, fmt.Errorf("%w: listing one's own cases needs a caller", ErrInvalidCase)
+	}
+	filter.RequesterID = requesterID
+	return m.ListCases(ctx, filter)
+}
+
+func (m *taskManager) EndCase(ctx context.Context, caseID string, status CaseStatus, reply string) (Case, error) {
+	if status != CaseStatusDone && status != CaseStatusCancelled {
+		return Case{}, fmt.Errorf("%w: a case ends done or cancelled", ErrInvalidCase)
+	}
+	c, err := m.GetCase(ctx, caseID)
+	if err != nil {
+		return Case{}, err
+	}
+	if c.Status != CaseStatusOpen {
+		return Case{}, ErrCaseNotOpen
+	}
+	tasks, err := m.liveCaseTasks(ctx, caseID)
+	if err != nil {
+		return Case{}, fmt.Errorf("EndCase: %w", err)
+	}
+	if status == CaseStatusDone {
+		for _, t := range tasks {
+			if !settlesCase(t.Status) {
+				return Case{}, ErrCaseHasOpenTask
+			}
+		}
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	res := m.store.Query(ctx, roleCase).
+		Where("id = ? AND status = ?", caseID, string(CaseStatusOpen)).
+		Updates(map[string]any{"status": string(status), "reply": reply, "closed_at": now, "updated_at": now})
+	if res.Error != nil {
+		return Case{}, fmt.Errorf("EndCase: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return Case{}, ErrCaseNotOpen
+	}
+	if status == CaseStatusCancelled {
+		for _, t := range tasks {
+			if settlesCase(t.Status) {
+				continue
+			}
+			if err := m.cancelTask(ctx, t, "case cancelled"); err != nil {
+				return Case{}, fmt.Errorf("EndCase: %w", err)
+			}
+		}
+	}
+	m.publish(ctx, TopicCaseClosed, CaseClosedPayload{CaseID: caseID, Status: status, ClosedAt: now})
+	return m.GetCase(ctx, caseID)
 }

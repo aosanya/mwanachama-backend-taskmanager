@@ -1167,7 +1167,7 @@
     },
     {
       "role": "case",
-      "description": "One request somebody brought, worked through the tasks linked to it. Open until every linked task is completed or cancelled, then done.",
+      "description": "One request somebody brought, worked through the tasks linked to it. Open until every linked task is completed or cancelled, then done, or until staff end it by hand.",
       "fields": [
         {
           "name": "id",
@@ -1216,6 +1216,11 @@
           "name": "closed_at",
           "type": "timestamp",
           "description": "When the case left open, empty while it is open."
+        },
+        {
+          "name": "reply",
+          "type": "string",
+          "description": "What the requester was told when staff ended the case by hand, empty otherwise."
         },
         {
           "name": "created_at",

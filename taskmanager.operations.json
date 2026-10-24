@@ -593,6 +593,23 @@
       "description": "List the tasks worked for one case.",
       "args": [{"from": "path", "as": "caseID", "description": "The case."}],
       "returns": [{"body": true}]
+    },
+    "end_case": {
+      "method": "POST", "path": "/cases/{caseID}/end", "call": "EndCase", "action": "taskmanager.case.end",
+      "title": "End case",
+      "description": "End one open case by hand, done or cancelled, with a reply to its requester, even when it has no tasks. Cancelling also cancels its open tasks; done is refused while a task is still open.",
+      "args": [{"from": "path", "as": "caseID", "description": "The case to end."},
+               {"from": "body", "as": "status", "required": true, "description": "done or cancelled."},
+               {"from": "body", "as": "reply", "description": "What the requester is told."}],
+      "returns": [{"body": true}]
+    },
+    "list_my_cases": {
+      "method": "GET", "path": "/cases/mine", "call": "ListMyCases", "action": "taskmanager.case.list_mine",
+      "title": "List my cases",
+      "description": "List the cases the caller opened, newest opened first, narrowed by subject or status when given.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Whose cases, from the session."},
+               {"from": "query", "whole": true}],
+      "returns": [{"body": true}]
     }
   },
 
@@ -606,6 +623,7 @@
     "ErrCaseNotOpen": 409,
     "ErrTaskAlreadyInCase": 409,
     "ErrInvalidCase": 400,
+    "ErrCaseHasOpenTask": 409,
     "ErrTaskNotFound": 404,
     "ErrInvalidOverdueFilter": 400,
     "ErrInvalidAssignee": 400,
