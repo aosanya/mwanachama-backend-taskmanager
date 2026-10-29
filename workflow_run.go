@@ -260,6 +260,9 @@ func (m *taskManager) GetWorkflowRunClosure(ctx context.Context, runID string) (
 // Valid transitions are defined by [WorkflowRunStatus.CanTransitionTo]; any
 // other request returns [ErrInvalidRunStatusTransition].
 func (m *taskManager) UpdateWorkflowRunStatus(ctx context.Context, runID string, newStatus WorkflowRunStatus, reason string) (WorkflowRun, error) {
+	if newStatus == WorkflowRunStatusClosed {
+		return WorkflowRun{}, fmt.Errorf("%w: closed is reached when a step's time limit passes, not by setting it", ErrInvalidRunStatusTransition)
+	}
 	if rollbackOwned[newStatus] {
 		return WorkflowRun{}, fmt.Errorf("%w: %s is reached by rolling a run back, not by setting it", ErrInvalidRunStatusTransition, newStatus)
 	}
@@ -359,6 +362,15 @@ func (m *taskManager) publishRunStatusEvent(ctx context.Context, run WorkflowRun
 			CancelledAt:   run.CompletedAt,
 			Reason:        run.CancelReason,
 			CancelledBy:   run.CancelledBy,
+		}
+	case WorkflowRunStatusClosed:
+		topic = TopicRunClosed
+		payload = WorkflowRunClosedPayload{
+			WorkflowRunID: run.ID,
+			ClosedAt:      run.CompletedAt,
+			StepID:        run.CurrentStepID,
+			StepDueAt:     run.StepDueAt,
+			CancelRunID:   run.CancelRunID,
 		}
 	default:
 		return

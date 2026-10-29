@@ -231,7 +231,7 @@ func TestStopWorkflowRun_NoWorkflowToStartAgainStopsNothing(t *testing.T) {
 func TestUnderWayIndex_IsOneIndexOnlyTheRunsStillGoing(t *testing.T) {
 	_, db, tables := newTestManagerWithDB(t, nil)
 	var defs []string
-	if err := db.Raw(`select sql from sqlite_master where type='index' and tbl_name = ? and sql like '%under_way%'`, tables.WorkflowRuns).Scan(&defs).Error; err != nil {
+	if err := db.Raw(`select sql from sqlite_master where type='index' and tbl_name = ? and sql like '%under_way_workflow%'`, tables.WorkflowRuns).Scan(&defs).Error; err != nil {
 		t.Fatal(err)
 	}
 	if len(defs) != 1 {

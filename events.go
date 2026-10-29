@@ -320,6 +320,8 @@ const (
 	// transitions a WorkflowRun from cancelling to the cancelled terminal state.
 	TopicRunCancelled = "run.cancelled"
 
+	TopicRunClosed = "run.closed"
+
 	// TopicRunTimeout fires when the watchdog detects a WorkflowRun has been
 	// in_progress for longer than its inactivity timeout without any event.
 	// This package subscribes and flips the run to failed.
@@ -390,6 +392,14 @@ type WorkflowRunCancelledPayload struct {
 	CancelledAt   string `json:"cancelled_at"`
 	Reason        string `json:"reason,omitempty"`
 	CancelledBy   string `json:"cancelled_by,omitempty"`
+}
+
+type WorkflowRunClosedPayload struct {
+	WorkflowRunID string `json:"workflow_run_id"`
+	ClosedAt      string `json:"closed_at"`
+	StepID        string `json:"step_id,omitempty"`
+	StepDueAt     string `json:"step_due_at"`
+	CancelRunID   string `json:"cancel_run_id"`
 }
 
 // TaskCancelledPayload is the Publish payload for [TopicTaskCancelled].

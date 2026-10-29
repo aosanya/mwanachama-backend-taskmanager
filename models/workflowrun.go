@@ -42,6 +42,8 @@ const (
 	// WorkflowRunStatusPaused is a non-terminal hold state entered when at
 	// least one Task transitions to awaiting-direction or blocked.
 	WorkflowRunStatusPaused WorkflowRunStatus = "paused"
+
+	WorkflowRunStatusClosed WorkflowRunStatus = "closed"
 )
 
 // CanTransitionTo reports whether moving from the current status to next is
@@ -57,16 +59,18 @@ const (
 func (s WorkflowRunStatus) CanTransitionTo(next WorkflowRunStatus) bool {
 	switch s {
 	case WorkflowRunStatusPending:
-		return next == WorkflowRunStatusInProgress
+		return next == WorkflowRunStatusInProgress || next == WorkflowRunStatusClosed
 	case WorkflowRunStatusInProgress:
 		return next == WorkflowRunStatusCompleted ||
 			next == WorkflowRunStatusFailed ||
 			next == WorkflowRunStatusPaused ||
-			next == WorkflowRunStatusCancelling
+			next == WorkflowRunStatusCancelling ||
+			next == WorkflowRunStatusClosed
 	case WorkflowRunStatusPaused:
 		return next == WorkflowRunStatusInProgress ||
 			next == WorkflowRunStatusFailed ||
-			next == WorkflowRunStatusCancelling
+			next == WorkflowRunStatusCancelling ||
+			next == WorkflowRunStatusClosed
 	case WorkflowRunStatusCancelling:
 		return next == WorkflowRunStatusCancelled
 	case WorkflowRunStatusFailed, WorkflowRunStatusCompleted, WorkflowRunStatusCancelled:
@@ -86,7 +90,7 @@ func (s WorkflowRunStatus) IsTerminal() bool {
 	switch s {
 	case WorkflowRunStatusCompleted, WorkflowRunStatusFailed,
 		WorkflowRunStatusRolledBack, WorkflowRunStatusRollbackFailed,
-		WorkflowRunStatusCancelled:
+		WorkflowRunStatusCancelled, WorkflowRunStatusClosed:
 		return true
 	}
 	return false
@@ -187,6 +191,12 @@ type WorkflowRun struct {
 	UnderWay bool `json:"under_way,omitempty"`
 
 	RestartedFromRunID string `json:"restarted_from_run_id,omitempty"`
+
+	StepDueAt string `json:"step_due_at,omitempty"`
+
+	StepCancelWorkflowCode string `json:"step_cancel_workflow_code,omitempty"`
+
+	CancelRunID string `json:"cancel_run_id,omitempty"`
 }
 
 type WorkflowRunStop struct {

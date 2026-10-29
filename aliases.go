@@ -72,6 +72,7 @@ const (
 	WorkflowRunStatusRollbackFailed = models.WorkflowRunStatusRollbackFailed
 	WorkflowRunStatusCancelling     = models.WorkflowRunStatusCancelling
 	WorkflowRunStatusCancelled      = models.WorkflowRunStatusCancelled
+	WorkflowRunStatusClosed         = models.WorkflowRunStatusClosed
 	WorkflowRunStatusPaused         = models.WorkflowRunStatusPaused
 
 	DirectionInbound  = models.DirectionInbound

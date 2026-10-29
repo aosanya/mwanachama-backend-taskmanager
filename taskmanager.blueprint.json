@@ -761,7 +761,7 @@
         {
           "name": "status",
           "type": "enum",
-          "description": "Where the run sits in its lifecycle. Paused is a hold rather than an end; rolled_back is where a compensated run finishes.",
+          "description": "Where the run sits in its lifecycle. Paused is a hold rather than an end; rolled_back is where a compensated run finishes; closed is where a run finishes when the time limit on the step it waited at passed with no answer.",
           "default": "pending",
           "values": [
             "pending",
@@ -773,7 +773,8 @@
             "rollback_failed",
             "cancelling",
             "cancelled",
-            "paused"
+            "paused",
+            "closed"
           ]
         },
         {
@@ -920,6 +921,21 @@
           "name": "restarted_from_run_id",
           "type": "string",
           "description": "The stopped run this one picks up again on another version. Empty on a run that began fresh."
+        },
+        {
+          "name": "step_due_at",
+          "type": "string",
+          "description": "When, as an RFC 3339 instant in UTC, the time limit on the step the run waits at passes. Empty when the step has no limit. Kept on a closed run so a screen can say when it closed."
+        },
+        {
+          "name": "step_cancel_workflow_code",
+          "type": "string",
+          "description": "The cancel workflow, by its code, that opens when the limit on the current step passes."
+        },
+        {
+          "name": "cancel_run_id",
+          "type": "string",
+          "description": "The run of the cancel workflow that was opened when this run closed. Empty on a run that did not close."
         }
       ],
       "indexes": [
@@ -970,6 +986,23 @@
             {
               "field": "under_way",
               "op": "is_true"
+            }
+          ]
+        },
+        {
+          "name": "step_due",
+          "description": "The limit sweep: reads, oldest first, the runs under way whose step has a time limit, and nothing else.",
+          "fields": [
+            "step_due_at"
+          ],
+          "where": [
+            {
+              "field": "under_way",
+              "op": "is_true"
+            },
+            {
+              "field": "step_due_at",
+              "op": "not_empty"
             }
           ]
         }

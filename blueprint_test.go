@@ -111,6 +111,7 @@ func TestVocabularyMatchesTheBlueprint(t *testing.T) {
 			string(models.WorkflowRunStatusCancelling),
 			string(models.WorkflowRunStatusCancelled),
 			string(models.WorkflowRunStatusPaused),
+			string(models.WorkflowRunStatusClosed),
 		},
 		roleImportJob + ".status": {
 			models.ImportJobStatusPending,

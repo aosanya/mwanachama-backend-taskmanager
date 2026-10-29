@@ -391,6 +391,30 @@
                {"from": "body", "as": "restart_on_version", "description": "The version to start again on. Leave out to only stop."}],
       "returns": [{"body": true}]
     },
+    "begin_workflow_run_step": {
+      "method": "POST", "path": "/workflow-runs/{runID}/step", "call": "BeginWorkflowRunStep", "action": "taskmanager.workflow_run.begin_step",
+      "title": "Begin step",
+      "description": "Record the step a run now waits at. Give limit_minutes and the cancel workflow's code to close the run, and open that workflow, when the time passes with no answer.",
+      "args": [{"from": "path", "as": "runID", "description": "The run that reached the step."},
+               {"from": "body", "as": "step_code", "required": true, "description": "The step the run waits at, by its code."},
+               {"from": "body", "as": "limit_minutes", "description": "How long the step may wait. Leave out for a step with no limit."},
+               {"from": "body", "as": "cancel_workflow_code", "description": "The cancel workflow to run when the limit passes. Required with limit_minutes."}],
+      "returns": [{"body": true}]
+    },
+    "answer_workflow_run_step": {
+      "method": "POST", "path": "/workflow-runs/{runID}/step/answered", "call": "AnswerWorkflowRunStep", "action": "taskmanager.workflow_run.answer_step",
+      "title": "Answer step",
+      "description": "Record that the person the run waited on answered, so the time limit no longer applies.",
+      "args": [{"from": "path", "as": "runID", "description": "The run whose step was answered."}],
+      "returns": [{"body": true}]
+    },
+    "close_workflow_runs_past_limit": {
+      "method": "POST", "path": "/workflow-runs/close-past-limit", "call": "CloseWorkflowRunsPastLimit", "action": "taskmanager.workflow_run.close_past_limit",
+      "title": "Close orders past their limit",
+      "description": "Close every run still waiting at a step whose time limit has passed, and open the cancel workflow each step named. Returns the runs closed.",
+      "args": [{"from": "body", "as": "as_of", "description": "The instant to judge the limits at, as an RFC 3339 string. Leave out for now."}],
+      "returns": [{"body": true}]
+    },
     "create_recovery_workflow_run": {
       "method": "POST", "path": "/workflow-runs/recovery", "call": "CreateRecoveryWorkflowRun", "action": "taskmanager.workflow_run.create_recovery",
       "status": 201,
