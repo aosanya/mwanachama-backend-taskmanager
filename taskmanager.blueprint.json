@@ -900,6 +900,26 @@
           "name": "failure_reason",
           "type": "text",
           "description": "What went wrong, written when the run fails or its rollback does. Written for whoever reads the row outside this module."
+        },
+        {
+          "name": "workflow_code",
+          "type": "string",
+          "description": "The workflow this run carries out, by the code the agency gave it."
+        },
+        {
+          "name": "workflow_version",
+          "type": "int",
+          "description": "The published version of that workflow the run began on and finishes on, whatever is published after."
+        },
+        {
+          "name": "under_way",
+          "type": "bool",
+          "description": "Whether the run is still going: true from the moment it is opened until it reaches an end status."
+        },
+        {
+          "name": "restarted_from_run_id",
+          "type": "string",
+          "description": "The stopped run this one picks up again on another version. Empty on a run that began fresh."
         }
       ],
       "indexes": [
@@ -937,6 +957,20 @@
           "description": "The watchdog's sweep, which reads every run quiet for too long.",
           "fields": [
             "last_event_at"
+          ]
+        },
+        {
+          "name": "under_way_by_workflow",
+          "description": "Lists the runs still going for one workflow with the version each is on, and finds which versions are still in use.",
+          "fields": [
+            "workflow_code",
+            "workflow_version"
+          ],
+          "where": [
+            {
+              "field": "under_way",
+              "op": "is_true"
+            }
           ]
         }
       ]

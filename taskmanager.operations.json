@@ -362,6 +362,35 @@
                {"from": "body", "as": "initiator", "description": "Who or what asked for it."}],
       "returns": [{"body": true}]
     },
+    "start_workflow_run": {
+      "method": "POST", "path": "/workflow-runs/start", "call": "StartWorkflowRun", "action": "taskmanager.workflow_run.start",
+      "status": 201,
+      "title": "Start order",
+      "description": "Open one run of a workflow on the published version it names. The run keeps that version until it ends.",
+      "args": [{"from": "body", "as": "name", "description": "The run's label. Generated when empty."},
+               {"from": "body", "as": "workflow_code", "required": true, "description": "The workflow the run carries out."},
+               {"from": "body", "as": "workflow_version", "required": true, "description": "The published version it begins on."},
+               {"from": "body", "as": "trigger_event", "description": "What started the run."},
+               {"from": "body", "as": "initiator", "description": "Who or what asked for it."}],
+      "returns": [{"body": true}]
+    },
+    "list_workflow_runs_under_way": {
+      "method": "GET", "path": "/workflow-runs/under-way", "call": "ListWorkflowRunsUnderWay", "action": "taskmanager.workflow_run.list_under_way",
+      "title": "List orders under way",
+      "description": "List the runs that have not ended, newest first, each with the workflow and the version it began on.",
+      "args": [{"from": "query", "as": "workflow_code", "description": "Keep only the runs of this workflow."}],
+      "returns": [{"body": true}]
+    },
+    "stop_workflow_run": {
+      "method": "POST", "path": "/workflow-runs/{runID}/stop", "call": "StopWorkflowRun", "action": "taskmanager.workflow_run.stop",
+      "title": "Stop order",
+      "description": "End one run at once, cancelling the tasks it holds that have not finished. Give restart_on_version to start it again on that version of the same workflow.",
+      "args": [{"from": "path", "as": "runID", "description": "The run to stop."},
+               {"from": "caller", "as": "stopped_by", "description": "Who stopped it, from the session."},
+               {"from": "body", "as": "reason", "description": "Why it is being stopped."},
+               {"from": "body", "as": "restart_on_version", "description": "The version to start again on. Leave out to only stop."}],
+      "returns": [{"body": true}]
+    },
     "create_recovery_workflow_run": {
       "method": "POST", "path": "/workflow-runs/recovery", "call": "CreateRecoveryWorkflowRun", "action": "taskmanager.workflow_run.create_recovery",
       "status": 201,

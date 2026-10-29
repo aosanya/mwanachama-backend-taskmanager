@@ -7,6 +7,7 @@
 | [concurrency-and-sequence.md](concurrency-and-sequence.md) | Why a write re-checks what its read assumed, why the code counter is advanced by the database, and why a rollback has one entry point. |
 | [held-by.md](held-by.md) | `held_by`: who outside the board holds a blocked task, cleared when it leaves blocked, and the `held_by` filter (W36). |
 | [repeating-tasks.md](repeating-tasks.md) | A repeating task's template, the period it is due in, the key that makes one task per period, and what is left to build (W72). |
+| [run-versions.md](run-versions.md) | A run keeps the workflow version it began on, the one partial index on runs still going, and Stop with a start again on the good version (HS300). |
 
 Both pages describe the shape this repo took on 2026-09-28, when it moved off
 hand-written row structs and hand-written handlers onto

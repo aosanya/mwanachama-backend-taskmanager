@@ -25,6 +25,7 @@ type (
 	WorkflowRun        = models.WorkflowRun
 	WorkflowRunStatus  = models.WorkflowRunStatus
 	WorkflowRunClosure = models.WorkflowRunClosure
+	WorkflowRunStop    = models.WorkflowRunStop
 	ImportResult       = models.ImportResult
 	ImportProjectJob   = models.ImportProjectJob
 	Relationship       = models.Relationship

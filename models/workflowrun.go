@@ -179,6 +179,19 @@ type WorkflowRun struct {
 	CurrentStepStartedAt string `json:"current_step_started_at,omitempty"`
 
 	FailureReason string `json:"failure_reason,omitempty"`
+
+	WorkflowCode string `json:"workflow_code,omitempty"`
+
+	WorkflowVersion int `json:"workflow_version,omitempty"`
+
+	UnderWay bool `json:"under_way,omitempty"`
+
+	RestartedFromRunID string `json:"restarted_from_run_id,omitempty"`
+}
+
+type WorkflowRunStop struct {
+	Stopped   WorkflowRun  `json:"stopped"`
+	Restarted *WorkflowRun `json:"restarted,omitempty"`
 }
 
 // WorkflowRunClosure is the full read returned by GetWorkflowRunClosure —

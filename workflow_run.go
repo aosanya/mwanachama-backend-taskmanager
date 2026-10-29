@@ -31,6 +31,11 @@ const runNameSuffixBytes = 3
 // exists — names are immutable, so the caller should append a
 // discriminator and retry.
 func (m *taskManager) CreateWorkflowRun(ctx context.Context, name, triggerEvent, initiator string) (WorkflowRun, error) {
+	return m.openWorkflowRun(ctx, WorkflowRun{Name: name, TriggerEvent: triggerEvent, Initiator: initiator})
+}
+
+func (m *taskManager) openWorkflowRun(ctx context.Context, run WorkflowRun) (WorkflowRun, error) {
+	name := run.Name
 	if name != "" && strings.TrimSpace(name) != name {
 		return WorkflowRun{}, fmt.Errorf("%w: WorkflowRun.Name must not have leading/trailing whitespace", ErrInvalidTask)
 	}
@@ -43,16 +48,13 @@ func (m *taskManager) CreateWorkflowRun(ctx context.Context, name, triggerEvent,
 	} else if err != nil && !errors.Is(err, ErrWorkflowRunNotFound) {
 		return WorkflowRun{}, fmt.Errorf("CreateWorkflowRun: name precheck: %w", err)
 	}
-	run := WorkflowRun{
-		Name:         name,
-		Status:       WorkflowRunStatusPending,
-		TriggerEvent: triggerEvent,
-		Initiator:    initiator,
-		StartedAt:    now.Format(time.RFC3339),
-		CreatedAt:    now.Format(time.RFC3339),
-		UpdatedAt:    now.Format(time.RFC3339),
-		LastEventAt:  now.Format(time.RFC3339),
-	}
+	run.Name = name
+	run.Status = WorkflowRunStatusPending
+	run.UnderWay = true
+	run.StartedAt = now.Format(time.RFC3339)
+	run.CreatedAt = now.Format(time.RFC3339)
+	run.UpdatedAt = now.Format(time.RFC3339)
+	run.LastEventAt = now.Format(time.RFC3339)
 	run.ID = newSpecID()
 	if err := m.store.Insert(ctx, roleWorkflowRun, run); err != nil {
 		return WorkflowRun{}, fmt.Errorf("CreateWorkflowRun: %w", err)
@@ -305,6 +307,7 @@ func (m *taskManager) setRunStatus(ctx context.Context, runID string, newStatus 
 }
 
 func (m *taskManager) saveRun(ctx context.Context, run WorkflowRun) error {
+	run.UnderWay = !run.Status.IsTerminal()
 	row, err := encode(m.store.Object(roleWorkflowRun), run)
 	if err != nil {
 		return err

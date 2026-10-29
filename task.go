@@ -248,6 +248,12 @@ type TaskManager interface {
 	// with an existing run (otherwise [ErrWorkflowRunNameExists]).
 	CreateWorkflowRun(ctx context.Context, name, triggerEvent, initiator string) (WorkflowRun, error)
 
+	StartWorkflowRun(ctx context.Context, name, workflowCode string, workflowVersion int, triggerEvent, initiator string) (WorkflowRun, error)
+
+	ListWorkflowRunsUnderWay(ctx context.Context, workflowCode string) ([]WorkflowRun, error)
+
+	StopWorkflowRun(ctx context.Context, runID, stoppedBy, reason string, restartOnVersion int) (WorkflowRunStop, error)
+
 	// CreateRecoveryWorkflowRun mints a child WorkflowRun spawned by a
 	// failure dispatch. The child carries parent_workflow_run_id and
 	// root_workflow_run_id; the budget counter lives on the root and is
