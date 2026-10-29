@@ -6,6 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aosanya/mwanachama-backend-shared/spec"
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
@@ -260,4 +264,15 @@ func sameIDs(runs []mwanachamataskmanager.WorkflowRun, want ...string) bool {
 		}
 	}
 	return true
+}
+
+func TestUnderWayIndex_NameFitsUnderAnAgencyInstanceIDAndItsTestTwin(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	agencySpec, _ := specForInstance(t, "spec/examples/work.taskmanager.json", "agyd1662f9a")
+	if err := spec.Migrate(db, agencySpec); err != nil {
+		t.Fatalf("Migrate under a real agency instance id: %v", err)
+	}
 }

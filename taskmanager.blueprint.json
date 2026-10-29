@@ -960,7 +960,7 @@
           ]
         },
         {
-          "name": "under_way_by_workflow",
+          "name": "under_way_workflow",
           "description": "Lists the runs still going for one workflow with the version each is on, and finds which versions are still in use.",
           "fields": [
             "workflow_code",

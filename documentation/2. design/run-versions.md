@@ -22,7 +22,7 @@ nothing.
 
 ## The one index on runs still going
 
-`under_way_by_workflow` is a partial index on `(workflow_code,
+`under_way_workflow` is a partial index on `(workflow_code,
 workflow_version)` where `under_way` is true. It holds only the runs still
 going, so it stays small however many runs have ended, and answers both reads
 the Workflows page needs: the orders under way for one workflow with the
