@@ -66,6 +66,22 @@ A failure on one run is reported with its id and does not stop the others;
 the run is picked up again by the next sweep. Running the sweep twice closes
 a run once.
 
+## The closed list
+
+HS426. `ListWorkflowRunsUnderWay` never returns a closed run, because a
+closed run has `under_way` false. `ListWorkflowRunsClosed`
+(`GET /workflow-runs/closed`, action `taskmanager.workflow_run.list_closed`,
+tool `taskmanager_workflow_run_list_closed`) returns the runs whose status is
+`closed`, the latest closing first, narrowed to one workflow by the optional
+`workflow_code`. Each row is the whole run, so a screen reads `status`,
+`completed_at` (the instant the sweep closed it), `step_due_at`,
+`cancel_run_id`, `cancel_reason`, `workflow_code` and `workflow_version` from
+it. Only the sweep makes a run `closed`, so a run stopped by a person
+(`cancelled`), completed or failed never appears here. The cancel run itself is
+an ordinary run under way and is listed by `ListWorkflowRunsUnderWay`. The list
+holds at most one page (`maxListPage`) and reads the `status` index. The
+mounting service needs no change: it builds its tools from the operations file.
+
 ## The index, and why not the old watchdog
 
 `step_due` is a partial index on `step_due_at` where `under_way` is true and

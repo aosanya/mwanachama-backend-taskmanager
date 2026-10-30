@@ -381,6 +381,13 @@
       "args": [{"from": "query", "as": "workflow_code", "description": "Keep only the runs of this workflow."}],
       "returns": [{"body": true}]
     },
+    "list_workflow_runs_closed": {
+      "method": "GET", "path": "/workflow-runs/closed", "call": "ListWorkflowRunsClosed", "action": "taskmanager.workflow_run.list_closed",
+      "title": "List orders closed",
+      "description": "List the runs that closed because the time limit on their waiting step passed, latest closing first, each with the cancel run that followed.",
+      "args": [{"from": "query", "as": "workflow_code", "description": "Keep only the runs of this workflow."}],
+      "returns": [{"body": true}]
+    },
     "stop_workflow_run": {
       "method": "POST", "path": "/workflow-runs/{runID}/stop", "call": "StopWorkflowRun", "action": "taskmanager.workflow_run.stop",
       "title": "Stop order",

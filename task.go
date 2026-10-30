@@ -252,6 +252,8 @@ type TaskManager interface {
 
 	ListWorkflowRunsUnderWay(ctx context.Context, workflowCode string) ([]WorkflowRun, error)
 
+	ListWorkflowRunsClosed(ctx context.Context, workflowCode string) ([]WorkflowRun, error)
+
 	StopWorkflowRun(ctx context.Context, runID, stoppedBy, reason string, restartOnVersion int) (WorkflowRunStop, error)
 
 	BeginWorkflowRunStep(ctx context.Context, runID, stepCode string, limitMinutes int, cancelWorkflowCode string) (WorkflowRun, error)

@@ -36,6 +36,18 @@ func (m *taskManager) ListWorkflowRunsUnderWay(ctx context.Context, workflowCode
 	return out, nil
 }
 
+func (m *taskManager) ListWorkflowRunsClosed(ctx context.Context, workflowCode string) ([]WorkflowRun, error) {
+	q := m.store.Query(ctx, roleWorkflowRun).Where("status = ?", string(WorkflowRunStatusClosed))
+	if workflowCode != "" {
+		q = q.Where("workflow_code = ?", workflowCode)
+	}
+	out, err := specstore.List[WorkflowRun](m.store, q.Order("completed_at DESC").Limit(maxListPage), roleWorkflowRun)
+	if err != nil {
+		return nil, fmt.Errorf("ListWorkflowRunsClosed: %w", err)
+	}
+	return out, nil
+}
+
 func (m *taskManager) StopWorkflowRun(ctx context.Context, runID, stoppedBy, reason string, restartOnVersion int) (WorkflowRunStop, error) {
 	run, err := m.GetWorkflowRun(ctx, runID)
 	if err != nil {
