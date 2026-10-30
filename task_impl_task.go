@@ -237,13 +237,12 @@ func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task,
 // Errors are silently swallowed — a missing or unreadable tag is omitted
 // rather than failing the parent call.
 func (m *taskManager) loadTagNames(ctx context.Context, taskID string) []string {
-	tagging, tags := m.store.Table(roleTagging), m.store.Table(roleTag)
+	var tagIDs []string
+	if err := m.store.Query(ctx, roleTagging).Where("task_id = ?", taskID).Pluck("tag_id", &tagIDs).Error; err != nil || len(tagIDs) == 0 {
+		return nil
+	}
 	var names []string
-	err := m.store.Query(ctx, roleTagging).
-		Joins("JOIN "+tags+" ON "+tags+".id = "+tagging+".tag_id").
-		Where(tagging+".task_id = ?", taskID).
-		Pluck(tags+".name", &names).Error
-	if err != nil {
+	if err := m.store.Query(ctx, roleTag).Where("id IN ?", tagIDs).Pluck("name", &names).Error; err != nil {
 		return nil
 	}
 	return names
