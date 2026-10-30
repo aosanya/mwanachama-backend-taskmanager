@@ -11,7 +11,7 @@ import (
 func (m *taskManager) nextCode(ctx context.Context, tx *gorm.DB, entityType, prefix string) (string, error) {
 	table := m.store.Table(roleCodeSequence)
 
-	seed, err := encode(m.store.Object(roleCodeSequence), CodeSequence{EntityType: entityType, NextNumber: 1})
+	seed, err := m.store.Row(roleCodeSequence, CodeSequence{EntityType: entityType, NextNumber: 1})
 	if err != nil {
 		return "", fmt.Errorf("nextCode: %w", err)
 	}
@@ -20,7 +20,7 @@ func (m *taskManager) nextCode(ctx context.Context, tx *gorm.DB, entityType, pre
 		return "", fmt.Errorf("nextCode: seed the %s counter: %w", entityType, err)
 	}
 
-	res := tx.WithContext(ctx).Table(table).Where("entity_type = ?", entityType).
+	res := m.within(tx.WithContext(ctx), roleCodeSequence).Where("entity_type = ?", entityType).
 		UpdateColumn("next_number", gorm.Expr("next_number + 1"))
 	if res.Error != nil {
 		return "", fmt.Errorf("nextCode: claim a %s number: %w", entityType, res.Error)
@@ -30,7 +30,7 @@ func (m *taskManager) nextCode(ctx context.Context, tx *gorm.DB, entityType, pre
 	}
 
 	var rows []map[string]any
-	if err := tx.WithContext(ctx).Table(table).Where("entity_type = ?", entityType).
+	if err := m.within(tx.WithContext(ctx), roleCodeSequence).Where("entity_type = ?", entityType).
 		Limit(1).Find(&rows).Error; err != nil {
 		return "", fmt.Errorf("nextCode: read the %s counter back: %w", entityType, err)
 	}

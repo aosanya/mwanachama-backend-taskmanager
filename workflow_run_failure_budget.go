@@ -26,7 +26,7 @@ func (m *taskManager) SetFailureBudget(ctx context.Context, runID string, budget
 	if run.FailurePipelineBudget != 0 {
 		return WorkflowRun{}, fmt.Errorf("%w: run %s has budget %d", ErrFailureBudgetAlreadySet, runID, run.FailurePipelineBudget)
 	}
-	if err := m.db.WithContext(ctx).Table(m.store.Table(roleWorkflowRun)).Where("id = ?", runID).
+	if err := m.store.Query(ctx, roleWorkflowRun).Where("id = ?", runID).
 		Updates(map[string]any{
 			"failure_pipeline_budget": budget,
 			// Root runs default their root pointer to their own id so
@@ -72,7 +72,7 @@ func (m *taskManager) IncrementFailureBudget(ctx context.Context, rootRunID, chi
 		// a second caller that read the same value writes nothing and goes
 		// round again rather than overwriting the increment that landed
 		// first.
-		res := m.db.WithContext(ctx).Table(m.store.Table(roleWorkflowRun)).
+		res := m.store.Query(ctx, roleWorkflowRun).
 			Where("id = ? AND failure_pipelines_used = ?", rootRunID, run.FailurePipelinesUsed).
 			Updates(map[string]any{
 				"failure_pipelines_used": newUsed,
@@ -128,7 +128,7 @@ func (m *taskManager) CreateRecoveryWorkflowRun(ctx context.Context, name, trigg
 	if err != nil {
 		return WorkflowRun{}, err
 	}
-	if err := m.db.WithContext(ctx).Table(m.store.Table(roleWorkflowRun)).Where("id = ?", run.ID).
+	if err := m.store.Query(ctx, roleWorkflowRun).Where("id = ?", run.ID).
 		Updates(map[string]any{
 			"parent_workflow_run_id": parentRunID,
 			"root_workflow_run_id":   rootRunID,

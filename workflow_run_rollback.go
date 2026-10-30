@@ -91,7 +91,7 @@ func (m *taskManager) DeleteWorkflowRunArtifacts(ctx context.Context, runID stri
 	var resetTaskIDs []string
 	txErr := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		tasks, err := specstore.List[Task](m.store,
-			tx.Table(m.store.Table(roleTask)).Where("workflow_run_id = ? AND deleted = ?", runID, false),
+			m.within(tx, roleTask).Where("workflow_run_id = ? AND deleted = ?", runID, false),
 			roleTask)
 		if err != nil {
 			return fmt.Errorf("list tasks: %w", err)
@@ -100,14 +100,14 @@ func (m *taskManager) DeleteWorkflowRunArtifacts(ctx context.Context, runID stri
 		// Guard: check for Tasks in this run that are depended on by Tasks in OTHER runs.
 		for _, task := range tasks {
 			inbound, err := specstore.List[Dependency](m.store,
-				tx.Table(m.store.Table(roleDependency)).Where("to_task_id = ?", task.ID),
+				m.within(tx, roleDependency).Where("to_task_id = ?", task.ID),
 				roleDependency)
 			if err != nil {
 				return fmt.Errorf("list inbound deps for %s: %w", task.ID, err)
 			}
 			for _, rel := range inbound {
 				var fromTask Task
-				fromQ := tx.Table(m.store.Table(roleTask)).Where("id = ?", rel.FromTaskID)
+				fromQ := m.within(tx, roleTask).Where("id = ?", rel.FromTaskID)
 				if err := m.store.Take(fromQ, roleTask, &fromTask, ErrTaskNotFound); err != nil {
 					continue
 				}
@@ -124,7 +124,7 @@ func (m *taskManager) DeleteWorkflowRunArtifacts(ctx context.Context, runID stri
 		// started_task edge's removal — see file doc.
 		now := time.Now().UTC().Format(time.RFC3339)
 		for _, task := range tasks {
-			if err := tx.Table(m.store.Table(roleTask)).Where("id = ?", task.ID).Updates(map[string]any{
+			if err := m.within(tx, roleTask).Where("id = ?", task.ID).Updates(map[string]any{
 				"status":          string(TaskStatusPending),
 				"workflow_run_id": "",
 				"completed_at":    "",
@@ -138,7 +138,7 @@ func (m *taskManager) DeleteWorkflowRunArtifacts(ctx context.Context, runID stri
 		// Soft-delete TaskTodos anchored to this run (ephemeral decomposition
 		// artifacts) — deleting the row also drops its has_todo/started_todo/
 		// todo_assigned_to columns, so no separate edge cleanup is needed.
-		if err := tx.Table(m.store.Table(roleTaskTodo)).Where("workflow_run_id = ? AND deleted = ?", runID, false).
+		if err := m.within(tx, roleTaskTodo).Where("workflow_run_id = ? AND deleted = ?", runID, false).
 			UpdateColumn("deleted", true).Error; err != nil {
 			return fmt.Errorf("delete todos: %w", err)
 		}

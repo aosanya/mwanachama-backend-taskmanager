@@ -62,7 +62,7 @@ func (m *taskManager) ListWorkflowRunsStepStaleSince(ctx context.Context, cutoff
 // MarkTimeoutPublished sets timeout_published=true so the sweeper skips the
 // run on subsequent ticks.
 func (m *taskManager) MarkTimeoutPublished(ctx context.Context, runID string) error {
-	return m.db.WithContext(ctx).Table(m.store.Table(roleWorkflowRun)).Where("id = ?", runID).
+	return m.store.Query(ctx, roleWorkflowRun).Where("id = ?", runID).
 		UpdateColumn("timeout_published", true).Error
 }
 

@@ -66,11 +66,10 @@ func (m *taskManager) OpenSourcedTasks(ctx context.Context, req OpenSourcedTasks
 	var out SourcedTasksOpened
 	var held heldEvents
 	txErr := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		txStore, err := newStore(tx, m.store.Spec(), carriers())
+		txm, err := m.inTx(tx, &held)
 		if err != nil {
 			return err
 		}
-		txm := &taskManager{db: tx, store: txStore, publisher: &held}
 		out = SourcedTasksOpened{Items: make([]SourcedTaskOutcome, 0, len(items))}
 		for _, it := range items {
 			itemKey := sourcedItemKey(req.Source, it.Key)
@@ -99,7 +98,7 @@ func (m *taskManager) OpenSourcedTasks(ctx context.Context, req OpenSourcedTasks
 				DueAt:    it.DueAt,
 				OpenedAt: time.Now().UTC().Format(time.RFC3339),
 			}
-			if err := txStore.Insert(ctx, roleSourcedTask, made); err != nil {
+			if err := txm.store.Insert(ctx, roleSourcedTask, made); err != nil {
 				return fmt.Errorf("OpenSourcedTasks: %w", err)
 			}
 			out.Items = append(out.Items, SourcedTaskOutcome{SourcedTask: made, Opened: true})

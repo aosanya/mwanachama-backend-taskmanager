@@ -39,7 +39,7 @@ func (m *taskManager) CreateTaskTodo(ctx context.Context, todo TaskTodo) (TaskTo
 			return err
 		}
 		todo.Code = code
-		row, err := encode(m.store.Object(roleTaskTodo), todo)
+		row, err := m.store.Row(roleTaskTodo, todo)
 		if err != nil {
 			return err
 		}

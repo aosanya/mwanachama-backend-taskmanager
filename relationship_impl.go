@@ -109,7 +109,7 @@ func (m *taskManager) relSpecs() map[string]relSpec {
 // rowExists reports whether a row with the given id exists in table.
 func (m *taskManager) rowExists(ctx context.Context, table, id string) (bool, error) {
 	var count int64
-	if err := m.db.WithContext(ctx).Table(table).Where("id = ?", id).Count(&count).Error; err != nil {
+	if err := m.onTable(m.db.WithContext(ctx), table).Where("id = ?", id).Count(&count).Error; err != nil {
 		return false, err
 	}
 	return count > 0, nil
@@ -173,14 +173,14 @@ func (m *taskManager) CreateRelationship(ctx context.Context, rel Relationship) 
 			return Relationship{}, err
 		}
 		var current string
-		if err := m.db.WithContext(ctx).Table(ownerTable).Where("id = ?", ownerID).
+		if err := m.onTable(m.db.WithContext(ctx), ownerTable).Where("id = ?", ownerID).
 			Select(spec.fkColumn).Row().Scan(&current); err != nil {
 			return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
 		}
 		wantValue := otherID
 		if current != wantValue {
 			now := time.Now().UTC().Format(time.RFC3339)
-			if err := m.db.WithContext(ctx).Table(ownerTable).Where("id = ?", ownerID).
+			if err := m.onTable(m.db.WithContext(ctx), ownerTable).Where("id = ?", ownerID).
 				UpdateColumn(spec.fkColumn, wantValue).Error; err != nil {
 				return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
 			}
@@ -200,7 +200,7 @@ func (m *taskManager) CreateRelationship(ctx context.Context, rel Relationship) 
 			return Relationship{}, err
 		}
 		var count int64
-		if err := m.db.WithContext(ctx).Table(spec.joinTable).
+		if err := m.onTable(m.db.WithContext(ctx), spec.joinTable).
 			Where(spec.joinFromCol+" = ? AND "+spec.joinToCol+" = ?", rel.FromID, rel.ToID).
 			Count(&count).Error; err != nil {
 			return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
@@ -211,7 +211,7 @@ func (m *taskManager) CreateRelationship(ctx context.Context, rel Relationship) 
 			if spec.joinExtraCol != "" {
 				row[spec.joinExtraCol] = now
 			}
-			if err := m.db.WithContext(ctx).Table(spec.joinTable).Create(row).Error; err != nil {
+			if err := m.db.WithContext(ctx).Table(spec.joinTable).Create(m.stamped(row)).Error; err != nil {
 				return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
 			}
 			rel.CreatedAt = now
@@ -235,7 +235,7 @@ func (m *taskManager) DeleteRelationship(ctx context.Context, fromID, toID, labe
 	case relFieldOnFrom, relFieldOnTo:
 		ownerTable, ownerID, otherID := m.fkOwnerFor(spec, fromID, toID)
 		var current string
-		if err := m.db.WithContext(ctx).Table(ownerTable).Where("id = ?", ownerID).
+		if err := m.onTable(m.db.WithContext(ctx), ownerTable).Where("id = ?", ownerID).
 			Select(spec.fkColumn).Row().Scan(&current); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrRelationshipNotFound
@@ -245,11 +245,11 @@ func (m *taskManager) DeleteRelationship(ctx context.Context, fromID, toID, labe
 		if current != otherID {
 			return ErrRelationshipNotFound
 		}
-		return m.db.WithContext(ctx).Table(ownerTable).Where("id = ?", ownerID).
+		return m.onTable(m.db.WithContext(ctx), ownerTable).Where("id = ?", ownerID).
 			UpdateColumn(spec.fkColumn, "").Error
 
 	case relFieldJoinTable:
-		res := m.db.WithContext(ctx).Table(spec.joinTable).
+		res := m.onTable(m.db.WithContext(ctx), spec.joinTable).
 			Where(spec.joinFromCol+" = ? AND "+spec.joinToCol+" = ?", fromID, toID).
 			Delete(nil)
 		if res.Error != nil {
@@ -291,7 +291,7 @@ func (m *taskManager) traverseFK(ctx context.Context, spec relSpec, vertexID str
 		// vertexID is the owning row; read its fk column.
 		ownerTable := spec.fkTable
 		var value string
-		err := m.db.WithContext(ctx).Table(ownerTable).Where("id = ?", vertexID).
+		err := m.onTable(m.db.WithContext(ctx), ownerTable).Where("id = ?", vertexID).
 			Select(spec.fkColumn).Row().Scan(&value)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -310,7 +310,7 @@ func (m *taskManager) traverseFK(ctx context.Context, spec relSpec, vertexID str
 	}
 	// vertexID is the value every matching row's fk column points at.
 	var ids []string
-	if err := m.db.WithContext(ctx).Table(spec.fkTable).Where(spec.fkColumn+" = ?", vertexID).
+	if err := m.onTable(m.db.WithContext(ctx), spec.fkTable).Where(spec.fkColumn+" = ?", vertexID).
 		Pluck("id", &ids).Error; err != nil {
 		return nil, fmt.Errorf("TraverseRelationships: %w", err)
 	}
@@ -336,7 +336,7 @@ func (m *taskManager) traverseJoin(ctx context.Context, spec relSpec, vertexID s
 		matchCol, otherCol = spec.joinToCol, spec.joinFromCol
 	}
 	var others []string
-	if err := m.db.WithContext(ctx).Table(spec.joinTable).Where(matchCol+" = ?", vertexID).
+	if err := m.onTable(m.db.WithContext(ctx), spec.joinTable).Where(matchCol+" = ?", vertexID).
 		Pluck(otherCol, &others).Error; err != nil {
 		return nil, fmt.Errorf("TraverseRelationships: %w", err)
 	}

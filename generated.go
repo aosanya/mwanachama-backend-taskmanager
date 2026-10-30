@@ -69,11 +69,10 @@ func (m *taskManager) GenerateTasks(ctx context.Context, req GenerateTasks) (Tas
 	var out TasksGenerated
 	var held heldEvents
 	txErr := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		txStore, err := newStore(tx, m.store.Spec(), carriers())
+		txm, err := m.inTx(tx, &held)
 		if err != nil {
 			return err
 		}
-		txm := &taskManager{db: tx, store: txStore, publisher: &held}
 		out = TasksGenerated{Items: make([]GeneratedTaskOutcome, 0, len(req.Subjects))}
 		for _, subject := range req.Subjects {
 			key := generatedSubjectKey(req.Run, subject)
@@ -103,7 +102,7 @@ func (m *taskManager) GenerateTasks(ctx context.Context, req GenerateTasks) (Tas
 				TaskID:      task.ID,
 				GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 			}
-			if err := txStore.Insert(ctx, roleGeneratedTask, made); err != nil {
+			if err := txm.store.Insert(ctx, roleGeneratedTask, made); err != nil {
 				return fmt.Errorf("GenerateTasks: %w", err)
 			}
 			out.Items = append(out.Items, GeneratedTaskOutcome{GeneratedTask: made, Created: true})

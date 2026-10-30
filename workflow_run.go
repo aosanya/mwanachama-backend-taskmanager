@@ -389,6 +389,6 @@ func (m *taskManager) TouchWorkflowRunLastEventAt(ctx context.Context, runID, ts
 	if err != nil {
 		return fmt.Errorf("%w: last_event_at must be an RFC 3339 timestamp", ErrInvalidTask)
 	}
-	return m.db.WithContext(ctx).Table(m.store.Table(roleWorkflowRun)).Where("id = ?", runID).
+	return m.store.Query(ctx, roleWorkflowRun).Where("id = ?", runID).
 		UpdateColumn("last_event_at", parsed.UTC().Format(time.RFC3339)).Error
 }

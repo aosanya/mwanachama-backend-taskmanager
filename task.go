@@ -17,6 +17,8 @@ import (
 type TaskManager interface {
 	identity.Owner
 
+	ForRun(runID string) (TaskManager, error)
+
 	// CreateTask creates a new task.
 	// The task is assigned a server-generated ID and starts in [TaskStatusPending].
 	CreateTask(ctx context.Context, task Task) (Task, error)

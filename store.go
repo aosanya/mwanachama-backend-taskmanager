@@ -87,3 +87,35 @@ func encode(o spec.Object, v any) (map[string]any, error) { return specstore.Enc
 func decode(o spec.Object, row map[string]any, out any) error {
 	return specstore.Decode(o, row, out)
 }
+
+func (m *taskManager) onTable(db *gorm.DB, table string) *gorm.DB {
+	q := db.Table(table)
+	if id := m.store.RunID(); id != "" {
+		q = q.Where(spec.RunIDColumn+" = ?", id)
+	}
+	return q
+}
+
+func (m *taskManager) within(db *gorm.DB, role string) *gorm.DB {
+	return m.onTable(db, m.store.Table(role))
+}
+
+func (m *taskManager) stamped(row map[string]any) map[string]any {
+	if id := m.store.RunID(); id != "" {
+		row[spec.RunIDColumn] = id
+	}
+	return row
+}
+
+func (m *taskManager) inTx(tx *gorm.DB, publisher *heldEvents) (*taskManager, error) {
+	txStore, err := newStore(tx, m.store.Spec(), carriers())
+	if err != nil {
+		return nil, err
+	}
+	if id := m.store.RunID(); id != "" {
+		if txStore, err = txStore.ForRun(id); err != nil {
+			return nil, err
+		}
+	}
+	return &taskManager{db: tx, store: txStore, publisher: publisher, spec: m.spec, overdueGrace: m.overdueGrace}, nil
+}

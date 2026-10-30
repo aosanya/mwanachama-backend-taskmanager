@@ -292,7 +292,7 @@ func (m *taskManager) upsertTagByName(ctx context.Context, name string) (string,
 			return err
 		}
 		tag.Code = code
-		row, err := encode(m.store.Object(roleTag), tag)
+		row, err := m.store.Row(roleTag, tag)
 		if err != nil {
 			return err
 		}

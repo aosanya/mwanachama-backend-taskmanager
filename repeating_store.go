@@ -221,11 +221,10 @@ func (m *taskManager) MakeRepeatingTaskDue(ctx context.Context, id string, at ti
 	}
 	var held heldEvents
 	txErr := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		txStore, err := newStore(tx, m.store.Spec(), carriers())
+		txm, err := m.inTx(tx, &held)
 		if err != nil {
 			return err
 		}
-		txm := &taskManager{db: tx, store: txStore, publisher: &held}
 		task, err := txm.CreateTask(ctx, occ.Task(r))
 		if err != nil {
 			return err
@@ -241,7 +240,7 @@ func (m *taskManager) MakeRepeatingTaskDue(ctx context.Context, id string, at ti
 			DueAt:           formatInstant(occ.Due),
 			MadeAt:          time.Now().UTC().Format(time.RFC3339),
 		}
-		if err := txStore.Insert(ctx, roleRepeatingPeriod, made); err != nil {
+		if err := txm.store.Insert(ctx, roleRepeatingPeriod, made); err != nil {
 			return fmt.Errorf("MakeRepeatingTaskDue: %w", err)
 		}
 		return nil
