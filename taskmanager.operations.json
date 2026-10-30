@@ -677,6 +677,38 @@
                {"from": "body", "as": "reply", "description": "What the requester is told."}],
       "returns": [{"body": true}]
     },
+    "vote_case": {
+      "method": "POST", "path": "/cases/{caseID}/votes", "call": "VoteCase", "action": "taskmanager.case.vote",
+      "title": "Vote on case",
+      "description": "Give one open case a member's vote. The member is the body's member_id, or the caller when none is given; the caller is recorded as who cast it, so a vote cast for a member who said so shows both. A member votes on a case once, however often it is cast. The requester already counts as the first vote. member_kind is member, or left out; owner or agent is refused. Returns the case with its votes.",
+      "args": [{"from": "path", "as": "caseID", "description": "The open case to vote on."},
+               {"from": "body", "as": "member_id", "description": "The member the vote counts for. The caller when left out."},
+               {"from": "caller", "as": "cast_by", "description": "Who casts the vote, from the session."},
+               {"from": "body", "as": "member_kind", "description": "What the voter is in the agency: member, owner or agent. Owners and agents are refused."}],
+      "returns": [{"body": true}]
+    },
+    "take_back_vote": {
+      "method": "DELETE", "path": "/cases/{caseID}/votes/{memberID}", "call": "TakeBackVote", "action": "taskmanager.case.take_back_vote",
+      "title": "Take back vote",
+      "description": "Take one member's vote off an open case. The requester's own vote, which counts as the first, stays. Returns the case with its votes.",
+      "args": [{"from": "path", "as": "caseID", "description": "The open case."},
+               {"from": "path", "as": "memberID", "description": "The member whose vote is taken back."}],
+      "returns": [{"body": true}]
+    },
+    "list_case_votes": {
+      "method": "GET", "path": "/cases/{caseID}/votes", "call": "ListCaseVotes", "action": "taskmanager.case.list_votes",
+      "title": "List case votes",
+      "description": "List the votes stored on one case, oldest first: the member each counts for and who cast it. The requester's own vote counts without being stored, so it is not listed.",
+      "args": [{"from": "path", "as": "caseID", "description": "The case."}],
+      "returns": [{"body": true}]
+    },
+    "list_cases_by_votes": {
+      "method": "GET", "path": "/cases/ranked", "call": "ListCasesByVotes", "action": "taskmanager.case.list_by_votes",
+      "title": "List cases by votes",
+      "description": "List open cases, most votes first and the earlier opened first among equals, each with its vote count. Narrowed by requester, subject or status when given; status defaults to open.",
+      "args": [{"from": "query", "whole": true}],
+      "returns": [{"body": true}]
+    },
     "list_my_cases": {
       "method": "GET", "path": "/cases/mine", "call": "ListMyCases", "action": "taskmanager.case.list_mine",
       "title": "List my cases",
@@ -700,6 +732,10 @@
     "ErrTaskAlreadyInCase": 409,
     "ErrInvalidCase": 400,
     "ErrCaseHasOpenTask": 409,
+    "ErrInvalidVote": 400,
+    "ErrVoterNotMember": 403,
+    "ErrVoteNotFound": 404,
+    "ErrRequesterVoteStays": 409,
     "ErrTaskNotFound": 404,
     "ErrInvalidOverdueFilter": 400,
     "ErrInvalidAssignee": 400,

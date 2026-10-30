@@ -115,6 +115,12 @@
       "description": "Records that one work item is worked for one case."
     },
     {
+      "role": "case_vote",
+      "name": "case_vote",
+      "table": "case_votes",
+      "description": "One member's vote on one case, and who cast it."
+    },
+    {
       "role": "repeating_task",
       "name": "repeating_work_item",
       "table": "repeating_work_items",

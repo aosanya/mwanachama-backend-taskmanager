@@ -1351,6 +1351,20 @@
       ]
     },
     {
+      "role": "case_vote",
+      "description": "One member's vote on one case. The key is a digest of the case and the member, so a member votes on a case once however often the vote is cast. The requester's own vote is never stored: it counts by being the requester.",
+      "fields": [
+        {"name": "vote_key", "type": "string", "description": "A digest of the case and the member, unique per member of a case.", "primary": true},
+        {"name": "case_id", "type": "string", "description": "The case voted on.", "required": true},
+        {"name": "member_id", "type": "string", "description": "The member the vote counts for.", "required": true},
+        {"name": "cast_by", "type": "string", "description": "Who cast it: the member, or the agent that cast it for the member who said so.", "required": true},
+        {"name": "voted_at", "type": "timestamp", "description": "When the vote was cast."}
+      ],
+      "indexes": [
+        {"name": "case", "description": "Counts and lists one case's votes.", "fields": ["case_id"]}
+      ]
+    },
+    {
       "role": "repeating_task",
       "description": "A task template made again at the start of every period of its schedule, each made task due by that period's end. Stopping it keeps every task it already made.",
       "fields": [

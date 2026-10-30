@@ -177,6 +177,10 @@ type TaskManager interface {
 	ListCaseTasks(ctx context.Context, caseID string) ([]Task, error)
 	EndCase(ctx context.Context, caseID string, status CaseStatus, reply string) (Case, error)
 	ListMyCases(ctx context.Context, requesterID string, filter CaseFilter) ([]Case, error)
+	VoteCase(ctx context.Context, caseID, memberID, castBy, memberKind string) (RankedCase, error)
+	TakeBackVote(ctx context.Context, caseID, memberID string) (RankedCase, error)
+	ListCaseVotes(ctx context.Context, caseID string) ([]CaseVote, error)
+	ListCasesByVotes(ctx context.Context, filter CaseFilter) ([]RankedCase, error)
 
 	// GetTaskByName retrieves a task by its project-scoped name (task_name)
 	// within a project (project_name). Returns [ErrTaskNotFound] if no task

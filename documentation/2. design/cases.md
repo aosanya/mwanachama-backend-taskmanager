@@ -94,6 +94,40 @@ open task beside a settled one closes it `done`.
 Freeing an appointment when a case is cancelled is the host's (wakala-api
 WK198), not this module's.
 
+## Votes (HS52, hub decision 17)
+
+Members rank open cases by voting on them. A third role, `case_vote`, holds one
+row per member per case: `vote_key` (a digest of the case and the member, the
+primary key, so the database itself allows a member one vote per case),
+`case_id`, `member_id`, `cast_by` and `voted_at`.
+
+| Rule | How it holds |
+| --- | --- |
+| One vote per member per open case | the key; voting again changes nothing and the first `cast_by` stands |
+| A member can take the vote back | `TakeBackVote` deletes the row; a second take back is `ErrVoteNotFound` (404), and a later vote is a fresh one |
+| The requester counts as the first vote | not stored: every case reads as stored votes plus one. Voting as the requester adds nothing; taking it back is refused with `ErrRequesterVoteStays` (409), a reading of the rule the owner has not confirmed |
+| Owners and agents are refused | `member_kind` is `member` or left out; anything else is `ErrVoterNotMember` (403). This module has no auth model and cannot tell what a member is, so the host fills `member_kind` from the member's role in the agency and must not take it from the caller's body |
+| A vote records the member and who cast it | `member_id` is the body's member, or the caller when none is given; `cast_by` is always the caller. Hub Steward casting for the member who said "me too" shows `member_id` = the member and `cast_by` = Hub Steward |
+| Only open cases take or lose votes | `ErrCaseNotOpen` (409) on a case that is done or cancelled |
+
+Addresses, each answering with the case and its `votes` (a ranked case) except the list of votes:
+
+| Address | Call | Action |
+| --- | --- | --- |
+| `POST /cases/{caseID}/votes` | `VoteCase` | `taskmanager.case.vote` |
+| `DELETE /cases/{caseID}/votes/{memberID}` | `TakeBackVote` | `taskmanager.case.take_back_vote` |
+| `GET /cases/{caseID}/votes` | `ListCaseVotes` | `taskmanager.case.list_votes` |
+| `GET /cases/ranked` | `ListCasesByVotes` | `taskmanager.case.list_by_votes` |
+
+`ListCasesByVotes` takes the same narrowing as `GET /cases`, defaults `status`
+to `open`, and orders by votes (most first), then the earlier opened, then id.
+It ranks within the 500 most recently opened cases the filter matches, the
+page every list in this module is capped at.
+
+The action gate is the host's place to say who may vote at all and who may cast
+for someone else: both go through `taskmanager.case.vote`, so a host that wants
+the second restricted must check `member_id` against the caller itself.
+
 ## Addresses
 
 `POST /cases`, `GET /cases`, `GET /cases/{caseID}`,

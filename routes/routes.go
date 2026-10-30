@@ -57,6 +57,10 @@ var sentinels = map[string]error{
 	"ErrTaskAlreadyInCase":          mwanachamataskmanager.ErrTaskAlreadyInCase,
 	"ErrInvalidCase":                mwanachamataskmanager.ErrInvalidCase,
 	"ErrCaseHasOpenTask":            mwanachamataskmanager.ErrCaseHasOpenTask,
+	"ErrInvalidVote":                mwanachamataskmanager.ErrInvalidVote,
+	"ErrVoterNotMember":             mwanachamataskmanager.ErrVoterNotMember,
+	"ErrVoteNotFound":               mwanachamataskmanager.ErrVoteNotFound,
+	"ErrRequesterVoteStays":         mwanachamataskmanager.ErrRequesterVoteStays,
 	"ErrUnknownTaskState":           mwanachamataskmanager.ErrUnknownTaskState,
 	"ErrNoPathToState":              mwanachamataskmanager.ErrNoPathToState,
 }

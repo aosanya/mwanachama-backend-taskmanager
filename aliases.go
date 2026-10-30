@@ -38,6 +38,8 @@ type (
 	CaseStatus         = models.CaseStatus
 	CaseTask           = models.CaseTask
 	CaseFilter         = models.CaseFilter
+	CaseVote           = models.CaseVote
+	RankedCase         = models.RankedCase
 	CodeSequence       = models.CodeSequence
 )
 
