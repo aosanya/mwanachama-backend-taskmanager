@@ -51,6 +51,15 @@
                {"from": "body", "as": "state", "required": true, "description": "The name of the state to move it into, as the agency's task states list it."}],
       "returns": [{"body": true}]
     },
+    "place_task": {
+      "method": "POST", "path": "/tasks/{taskID}/place", "call": "PlaceTask", "action": "taskmanager.task.place",
+      "title": "Place task",
+      "description": "Put one task at a chosen place in the board's order: directly after the task named in after, directly before the one named in before, or between them when both are given. Name at least one; the task is refused as its own neighbour, and after must sit above before.",
+      "args": [{"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task to place."},
+               {"from": "body", "as": "after", "description": "The task it goes directly below."},
+               {"from": "body", "as": "before", "description": "The task it goes directly above."}],
+      "returns": [{"body": true}]
+    },
     "delete_task": {
       "method": "DELETE", "path": "/tasks/{taskID}", "call": "DeleteTask", "action": "taskmanager.task.delete",
       "status": 204,
@@ -722,6 +731,7 @@
   "errors": {
     "ErrUnknownTaskState": 400,
     "ErrNoPathToState": 409,
+    "ErrInvalidPlacement": 400,
     "ErrCaseNotFound": 404,
     "ErrRepeatingTaskNotFound": 404,
     "ErrInvalidRepeatingTask": 400,

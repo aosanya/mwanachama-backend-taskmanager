@@ -47,6 +47,8 @@ type TaskManager interface {
 
 	MoveTaskToState(ctx context.Context, taskID, state string) (Task, error)
 
+	PlaceTask(ctx context.Context, taskID, afterID, beforeID string) (Task, error)
+
 	// CreateRelationship creates a directed edge between two Work vertices.
 	// rel.Label must be one of the RelLabel* constants and the (FromID, ToID)
 	// vertex types must match the label's whitelist entry, otherwise

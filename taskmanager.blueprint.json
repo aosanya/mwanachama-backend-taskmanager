@@ -150,12 +150,24 @@
           "description": "An opaque reference to something another module owns that this task points at, such as the questionnaire it asks its assignee to answer. Empty when the task points at nothing. The module stores it and reads it back; it never resolves it."
         },
         {
+          "name": "rank",
+          "type": "int",
+          "description": "The card's place in the board's order, lowest first. Minted at the bottom on creation and changed only by placing the card; an update never touches it. Ties read in creation order."
+        },
+        {
           "name": "deleted",
           "type": "bool",
           "description": "Soft delete. A deleted row is invisible to every read."
         }
       ],
       "indexes": [
+        {
+          "name": "rank",
+          "description": "Reads the board in the order a person arranged it.",
+          "fields": [
+            "rank"
+          ]
+        },
         {
           "name": "status",
           "description": "Filters the queue by lifecycle state, which is every listing's first narrowing.",

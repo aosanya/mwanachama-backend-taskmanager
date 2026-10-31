@@ -63,6 +63,7 @@ var sentinels = map[string]error{
 	"ErrRequesterVoteStays":         mwanachamataskmanager.ErrRequesterVoteStays,
 	"ErrUnknownTaskState":           mwanachamataskmanager.ErrUnknownTaskState,
 	"ErrNoPathToState":              mwanachamataskmanager.ErrNoPathToState,
+	"ErrInvalidPlacement":           mwanachamataskmanager.ErrInvalidPlacement,
 }
 
 // AnonymousActions is empty on purpose: nothing on a work board is readable

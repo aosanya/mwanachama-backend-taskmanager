@@ -5,6 +5,8 @@ import "errors"
 // ErrTaskNotFound is returned when a task does not exist for the given
 // taskID.
 var ErrTaskNotFound = errors.New("task not found")
+var ErrInvalidPlacement = errors.New("invalid card placement")
+
 var ErrInvalidOverdueFilter = errors.New("invalid overdue filter")
 
 var ErrInvalidAssignee = errors.New("an assignee is an actor or a role with an id")
