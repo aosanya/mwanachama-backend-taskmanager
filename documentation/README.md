@@ -25,8 +25,8 @@ lifecycle, dependency/blocker tracking, and the `WorkflowRun`
 orchestration-and-rollback state machine.
 
 Since 2026-09-28 its objects and its routes are both declared in JSON and run
-on [mwanachama-backend-shared](../mwanachama-backend-shared)'s `spec`,
+on [mwanachama-backend-shared](../../mwanachama-backend-shared)'s `spec`,
 `specstore` and `dispatch` — `mwanachama-backend-catalog`'s format. There is
 no service to run and no gRPC: whatever mounts it imports the package
-directly. [mwanachama-wakala-api](../mwanachama-wakala-api) mounts it per
+directly. [mwanachama-wakala-api](../../mwanachama-wakala-api) mounts it per
 registered agency.
