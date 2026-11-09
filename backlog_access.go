@@ -193,7 +193,12 @@ func (m *taskManager) ListBacklogAccess(ctx context.Context, backlogID string) (
 }
 
 func (m *taskManager) changeGrants(ctx context.Context, change func(grants []models.BacklogGrant, owner string) ([]models.BacklogGrant, error)) error {
+	backlogSaves.Lock()
+	defer backlogSaves.Unlock()
 	return m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := m.lockBacklogs(tx); err != nil {
+			return fmt.Errorf("%s: %w", accessSetting, err)
+		}
 		grants, err := m.grantsIn(tx)
 		if err != nil {
 			return err
@@ -286,15 +291,28 @@ func (m *taskManager) SetBacklogOwnerGroup(ctx context.Context, groupID string) 
 }
 
 func (m *taskManager) pruneGrants(ctx context.Context, kept []models.Backlog) error {
-	grants, err := m.storedGrants(ctx)
-	if err != nil || len(grants) == 0 {
-		return err
-	}
-	pruned := models.GrantsKept(grants, kept)
-	if len(pruned) == len(grants) {
+	var pruned []models.BacklogGrant
+	var grants []models.BacklogGrant
+	err := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := m.lockBacklogs(tx); err != nil {
+			return fmt.Errorf("%s: %w", accessSetting, err)
+		}
+		var err error
+		grants, err = m.grantsIn(tx)
+		if err != nil || len(grants) == 0 {
+			return err
+		}
+		pruned = models.GrantsKept(grants, kept)
+		if len(pruned) == len(grants) {
+			return nil
+		}
+		now := time.Now().UTC().Format(time.RFC3339)
+		if _, err := spec.StoreOverride(tx, m.spec, accessSetting, pruned, "taskmanager", now); err != nil {
+			return fmt.Errorf("%s: %w", accessSetting, err)
+		}
 		return nil
-	}
-	if err := m.storeSetting(ctx, accessSetting, pruned); err != nil {
+	})
+	if err != nil || len(grants) == 0 || len(pruned) == len(grants) {
 		return err
 	}
 	return m.syncGroupRoles(ctx, grants)

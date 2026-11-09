@@ -79,7 +79,7 @@ live in the `backlog_access` setting and the owner group in
 | A call with no person (a loader, an agent) is not narrowed. | `requester_id` empty |
 | On a hub with an owner group or grants, a person whose groups cannot be looked up, or a module with no lookup set, sees and writes nothing. | `backlogVisibility` |
 | `give` and `take` run in one transaction, so eight groups given access at once all keep their grant. A grant to a group that no longer exists is listed with `gone` and counts for nothing. Grants of a deleted backlog are dropped when the backlogs are saved. | `changeGrants`, `pruneGrants` |
-| Saving the `backlogs` setting takes a package mutex and, on Postgres, a transaction-level advisory lock keyed on the task table and the setting, so two simultaneous edits both survive. | `saveBacklogs`, `lockBacklogs` |
+| Saving the `backlogs` setting, giving or taking a group's access and pruning the grants of a deleted backlog all take the same package mutex and, on Postgres, the same transaction-level advisory lock keyed on the task table and the setting, so two simultaneous edits both survive and no grant is lost. The group role sync after a change runs outside the lock. | `saveBacklogs`, `changeGrants`, `pruneGrants`, `lockBacklogs` |
 | An issue that names a backlog that no longer exists reads in the first backlog and stays visible to whoever sees it. | `narrowToVisible` |
 
 The module does not know about groups itself. The hub that mounts it hands in
