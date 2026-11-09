@@ -144,14 +144,14 @@
     "list_backlog_access": {
       "method": "GET", "path": "/backlogs/{backlogID}/access", "call": "ListBacklogAccess", "action": "taskmanager.backlog_access.list",
       "title": "List who can use a backlog",
-      "description": "List the groups that have access to a backlog and what each may do: Can see or Can move. The Product owner group always has Can move.",
+      "description": "List the groups that have access to a backlog and what each may do: Can see or Can move. The Product owner group always has Can move. Each group also says which agency roles it holds (roles), no_role when none of them lets its members read tasks (so they still see nothing), and role_too_small when the group has Can move but no role lets its members edit tasks (so they can only look).",
       "args": [{"from": "path", "as": "backlogID", "description": "The backlog to read."}],
       "returns": [{"body": true}]
     },
     "give_backlog_access": {
       "method": "PUT", "path": "/backlogs/{backlogID}/access/{groupID}", "call": "GiveBacklogAccess", "action": "taskmanager.backlog_access.give",
       "title": "Give a group access to a backlog",
-      "description": "Let a group see a backlog or move its issues. Giving a group that already has access changes its level.",
+      "description": "Let a group see a backlog or move its issues. Giving a group that already has access changes its level. The group also gets the matching agency role in the same step, so its members can open the Backlogs at once: Backlog member for Can see, Backlog worker for Can move (the higher of its levels across all backlogs); an agency that has not defined those roles gives none, and the access list then says no_role.",
       "args": [{"from": "path", "as": "backlogID", "description": "The backlog to give access to."},
                {"from": "path", "as": "groupID", "description": "The group that gets the access."},
                {"from": "body", "as": "level", "required": true, "description": "see for Can see, move for Can move."}],
@@ -160,7 +160,7 @@
     "take_backlog_access": {
       "method": "DELETE", "path": "/backlogs/{backlogID}/access/{groupID}", "call": "TakeBacklogAccess", "action": "taskmanager.backlog_access.take",
       "title": "Take a group's access to a backlog away",
-      "description": "Stop a group seeing a backlog. The Product owner group's access cannot be taken away.",
+      "description": "Stop a group seeing a backlog. The Product owner group's access cannot be taken away. When it was the group's last access the group also loses its Backlog member or Backlog worker role.",
       "args": [{"from": "path", "as": "backlogID", "description": "The backlog to take access from."},
                {"from": "path", "as": "groupID", "description": "The group that loses the access."}],
       "returns": [{"body": true}]
@@ -193,10 +193,11 @@
       "returns": [{"body": true}]
     },
     "unblock_task": {
-      "method": "POST", "path": "/tasks/{taskID}/unblock", "call": "UnblockTask", "action": "taskmanager.task.unblock",
+      "method": "POST", "path": "/tasks/{taskID}/unblock", "call": "UnblockTaskAs", "action": "taskmanager.task.unblock",
       "title": "Unblock task",
-      "description": "Release one task from its hold and record why.",
-      "args": [{"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task to release."},
+      "description": "Release one task from its hold and record why. A person needs Can move on the backlog the issue is in.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task to release."},
                {"from": "body", "as": "note", "description": "Why it is being released."}],
       "returns": [{"body": true}]
     },
@@ -210,39 +211,43 @@
       "returns": [{"body": true}]
     },
     "create_task_in_project": {
-      "method": "POST", "path": "/projects/{projectName}/tasks", "call": "CreateTaskInProject", "action": "taskmanager.task.create_in_project",
+      "method": "POST", "path": "/projects/{projectName}/tasks", "call": "CreateTaskInProjectAs", "action": "taskmanager.task.create_in_project",
       "status": 201,
       "title": "Create task in project",
-      "description": "Create one task inside a project, minting its project-scoped name from the project's prefix and writing the membership.",
-      "args": [{"from": "path", "as": "projectName", "description": "The project to create it in."},
+      "description": "Create one task inside a project, minting its project-scoped name from the project's prefix and writing the membership. A person needs Can move on the backlog the issue lands in.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue lands in."},
+               {"from": "path", "as": "projectName", "description": "The project to create it in."},
                {"from": "body", "whole": true}],
       "returns": [{"body": true}]
     },
 
     "assign_task": {
-      "method": "POST", "path": "/tasks/{taskID}/assign", "call": "AssignTask", "action": "taskmanager.task.assign",
+      "method": "POST", "path": "/tasks/{taskID}/assign", "call": "AssignTaskAs", "action": "taskmanager.task.assign",
       "status": 204,
       "title": "Assign task",
-      "description": "Hand one task to a worker. A task whose dependencies are unmet is held rather than dispatched.",
-      "args": [{"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task to hand over."},
+      "description": "Hand one task to a worker. A task whose dependencies are unmet is held rather than dispatched. A person needs Can move on the backlog the issue is in.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task to hand over."},
                {"from": "body", "as": "agent_id", "refers": "taskmanager.agent", "required": true, "description": "The worker to hand it to."},
                {"from": "body", "as": "workflow_run_id", "refers": "taskmanager.workflow_run", "description": "The run this assignment belongs to."}],
       "returns": [{"body": true}]
     },
     "unassign_task": {
-      "method": "POST", "path": "/tasks/{taskID}/unassign", "call": "UnassignTask", "action": "taskmanager.task.unassign",
+      "method": "POST", "path": "/tasks/{taskID}/unassign", "call": "UnassignTaskAs", "action": "taskmanager.task.unassign",
       "status": 204,
       "title": "Unassign task",
-      "description": "Take one task back off whoever holds it.",
-      "args": [{"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task to take back."}],
+      "description": "Take one task back off whoever holds it. A person needs Can move on the backlog the issue is in.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task to take back."}],
       "returns": [{"body": true}]
     },
     "assign_task_to_holder": {
-      "method": "POST", "path": "/tasks/{taskID}/assign-holder", "call": "AssignTaskToHolder", "action": "taskmanager.task.assign_holder",
+      "method": "POST", "path": "/tasks/{taskID}/assign-holder", "call": "AssignTaskToHolderAs", "action": "taskmanager.task.assign_holder",
       "status": 204,
       "title": "Assign task to a person or a role",
-      "description": "Hand one task to a person or a role, named by the host's own id. A role's task is picked up by whoever holds it. The previous holder's stretch is closed and kept.",
-      "args": [{"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task to hand over."},
+      "description": "Hand one task to a person or a role, named by the host's own id. A role's task is picked up by whoever holds it. The previous holder's stretch is closed and kept. A person needs Can move on the backlog the issue is in.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task to hand over."},
                {"from": "body", "as": "assignee_kind", "required": true, "description": "actor for a person, role for a role."},
                {"from": "body", "as": "assignee_id", "required": true, "description": "The person's or the role's id, as the host knows it."}],
       "returns": [{"body": true}]
@@ -257,11 +262,12 @@
       "returns": [{"body": true}]
     },
     "unblock_dependents": {
-      "method": "POST", "path": "/tasks/{taskID}/unblock-dependents", "call": "UnblockDependents", "action": "taskmanager.task.unblock_dependents",
+      "method": "POST", "path": "/tasks/{taskID}/unblock-dependents", "call": "UnblockDependentsAs", "action": "taskmanager.task.unblock_dependents",
       "status": 204,
       "title": "Unblock dependents",
-      "description": "Sweep everything waiting on one finished task and release whatever has nothing left to wait for.",
-      "args": [{"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task that just finished."}],
+      "description": "Sweep everything waiting on one finished task and release whatever has nothing left to wait for. A person needs Can move on the backlog the finished issue is in.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the finished issue is in."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task that just finished."}],
       "returns": [{"body": true}]
     },
 
@@ -339,20 +345,22 @@
       "returns": [{"body": true}]
     },
     "add_task_to_project": {
-      "method": "POST", "path": "/projects/{projectID}/tasks/{taskID}", "call": "AddTaskToProject", "action": "taskmanager.project.add_task",
+      "method": "POST", "path": "/projects/{projectID}/tasks/{taskID}", "call": "AddTaskToProjectAs", "action": "taskmanager.project.add_task",
       "status": 204,
       "title": "Add task to project",
-      "description": "Record that one task belongs to one project. A task may belong to several.",
-      "args": [{"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task to add."},
+      "description": "Record that one task belongs to one project. A task may belong to several. A person needs Can move on the backlog the issue is in.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task to add."},
                {"from": "path", "as": "projectID", "refers": "taskmanager.project", "description": "The project to add it to."}],
       "returns": [{"body": true}]
     },
     "remove_task_from_project": {
-      "method": "DELETE", "path": "/projects/{projectID}/tasks/{taskID}", "call": "RemoveTaskFromProject", "action": "taskmanager.project.remove_task",
+      "method": "DELETE", "path": "/projects/{projectID}/tasks/{taskID}", "call": "RemoveTaskFromProjectAs", "action": "taskmanager.project.remove_task",
       "status": 204,
       "title": "Remove task from project",
-      "description": "Drop one task's membership of one project. The task itself is left alone.",
-      "args": [{"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task to remove."},
+      "description": "Drop one task's membership of one project. The task itself is left alone. A person needs Can move on the backlog the issue is in.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task to remove."},
                {"from": "path", "as": "projectID", "refers": "taskmanager.project", "description": "The project to remove it from."}],
       "returns": [{"body": true}]
     },
@@ -626,11 +634,12 @@
       "returns": [{"body": true}]
     },
     "link_task_to_run": {
-      "method": "POST", "path": "/workflow-runs/{runID}/tasks/{taskID}/link", "call": "LinkTaskToRun", "action": "taskmanager.workflow_run.link_task",
+      "method": "POST", "path": "/workflow-runs/{runID}/tasks/{taskID}/link", "call": "LinkTaskToRunAs", "action": "taskmanager.workflow_run.link_task",
       "status": 204,
       "title": "Link task to run",
-      "description": "Record that one task belongs to one run, so rolling the run back reaches it.",
-      "args": [{"from": "path", "as": "runID", "refers": "taskmanager.workflow_run", "description": "The run."},
+      "description": "Record that one task belongs to one run, so rolling the run back reaches it. A person needs Can move on the backlog the issue is in.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "path", "as": "runID", "refers": "taskmanager.workflow_run", "description": "The run."},
                {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task to link."}],
       "returns": [{"body": true}]
     },
@@ -660,10 +669,11 @@
       "returns": [{"as": "used"}, {"as": "budget"}, {"as": "exhausted"}]
     },
     "rollback_workflow_run": {
-      "method": "POST", "path": "/workflow-runs/{runID}/rollback", "call": "RollbackWorkflowRun", "action": "taskmanager.workflow_run.rollback",
+      "method": "POST", "path": "/workflow-runs/{runID}/rollback", "call": "RollbackWorkflowRunAs", "action": "taskmanager.workflow_run.rollback",
       "title": "Roll run back",
-      "description": "Undo one run: move it to rolling_back, compensate what it produced, then finish it as rolled_back.",
-      "args": [{"from": "path", "as": "runID", "refers": "taskmanager.workflow_run", "description": "The run to undo."},
+      "description": "Undo one run: move it to rolling_back, compensate what it produced, then finish it as rolled_back. A person needs Can move on the backlog the issue of the run is in.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue of the run is in."},
+               {"from": "path", "as": "runID", "refers": "taskmanager.workflow_run", "description": "The run to undo."},
                {"from": "body", "as": "reason", "description": "Why it is being undone."}],
       "returns": [{"body": true}]
     },
@@ -676,10 +686,11 @@
       "returns": [{"body": true}]
     },
     "cancel_workflow_run": {
-      "method": "POST", "path": "/workflow-runs/{runID}/cancel", "call": "CancelWorkflowRun", "action": "taskmanager.workflow_run.cancel",
+      "method": "POST", "path": "/workflow-runs/{runID}/cancel", "call": "CancelWorkflowRunAs", "action": "taskmanager.workflow_run.cancel",
       "title": "Cancel run",
-      "description": "Begin cancelling one run, giving in-flight work until the deadline to quiesce, and cancel every task it holds that has not finished.",
-      "args": [{"from": "path", "as": "runID", "refers": "taskmanager.workflow_run", "description": "The run to cancel."},
+      "description": "Begin cancelling one run, giving in-flight work until the deadline to quiesce, and cancel every task it holds that has not finished. A person needs Can move on the backlog the issue of the run is in.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue of the run is in."},
+               {"from": "path", "as": "runID", "refers": "taskmanager.workflow_run", "description": "The run to cancel."},
                {"from": "body", "as": "reason", "description": "Why it is being cancelled."},
                {"from": "body", "as": "cancelled_by", "description": "Who issued the cancel."},
                {"from": "body", "as": "quiesce_deadline", "required": true, "description": "When in-flight work must have stopped by, as an RFC 3339 string."}],
@@ -793,11 +804,12 @@
       "returns": [{"body": true}]
     },
     "link_case_task": {
-      "method": "PUT", "path": "/cases/{caseID}/tasks/{taskID}", "call": "LinkCaseTask", "action": "taskmanager.case.link_task",
+      "method": "PUT", "path": "/cases/{caseID}/tasks/{taskID}", "call": "LinkCaseTaskAs", "action": "taskmanager.case.link_task",
       "status": 204,
       "title": "Link task to case",
-      "description": "Work one task for one open case. A task serves at most one case.",
-      "args": [{"from": "path", "as": "caseID", "refers": "taskmanager.case", "description": "The case."},
+      "description": "Work one task for one open case. A task serves at most one case. A person needs Can move on the backlog the issue is in.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "path", "as": "caseID", "refers": "taskmanager.case", "description": "The case."},
                {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task."}],
       "returns": [{"body": true}]
     },
@@ -810,10 +822,11 @@
       "returns": [{"body": true}]
     },
     "end_case": {
-      "method": "POST", "path": "/cases/{caseID}/end", "call": "EndCase", "action": "taskmanager.case.end",
+      "method": "POST", "path": "/cases/{caseID}/end", "call": "EndCaseAs", "action": "taskmanager.case.end",
       "title": "End case",
-      "description": "End one open case by hand, done or cancelled, with a reply to its requester, even when it has no tasks. Cancelling also cancels its open tasks; done is refused while a task is still open.",
-      "args": [{"from": "path", "as": "caseID", "refers": "taskmanager.case", "description": "The case to end."},
+      "description": "End one open case by hand, done or cancelled, with a reply to its requester, even when it has no tasks. Cancelling also cancels its open tasks; done is refused while a task is still open. When it cancels the case, a person needs Can move on the backlog of every issue of the case.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue of the case is in."},
+               {"from": "path", "as": "caseID", "refers": "taskmanager.case", "description": "The case to end."},
                {"from": "body", "as": "status", "required": true, "description": "done or cancelled."},
                {"from": "body", "as": "reply", "description": "What the requester is told."}],
       "returns": [{"body": true}]

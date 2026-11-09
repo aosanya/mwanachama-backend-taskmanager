@@ -77,6 +77,19 @@ type TaskManager interface {
 	MoveTaskToStateAs(ctx context.Context, requesterID, taskID, state string) (Task, error)
 	PlaceTaskAs(ctx context.Context, requesterID, taskID, afterID, beforeID string) (Task, error)
 	DeleteTaskAs(ctx context.Context, requesterID, taskID string) error
+	AssignTaskAs(ctx context.Context, requesterID, taskID, agentID, workflowRunID string) error
+	UnassignTaskAs(ctx context.Context, requesterID, taskID string) error
+	AssignTaskToHolderAs(ctx context.Context, requesterID, taskID string, kind AssigneeKind, assigneeID string) error
+	UnblockTaskAs(ctx context.Context, requesterID, taskID, note string) (Task, error)
+	UnblockDependentsAs(ctx context.Context, requesterID, completedTaskID string) error
+	AddTaskToProjectAs(ctx context.Context, requesterID, taskID, projectID string) error
+	RemoveTaskFromProjectAs(ctx context.Context, requesterID, taskID, projectID string) error
+	CreateTaskInProjectAs(ctx context.Context, requesterID, projectName string, task Task) (Task, error)
+	LinkTaskToRunAs(ctx context.Context, requesterID, runID, taskID string) error
+	LinkCaseTaskAs(ctx context.Context, requesterID, caseID, taskID string) error
+	CancelWorkflowRunAs(ctx context.Context, requesterID, runID, reason, cancelledBy string, quiesceDeadline time.Time) (WorkflowRun, error)
+	RollbackWorkflowRunAs(ctx context.Context, requesterID, runID, reason string) (WorkflowRun, error)
+	EndCaseAs(ctx context.Context, requesterID, caseID string, status CaseStatus, reply string) (Case, error)
 	CreateRelationshipAs(ctx context.Context, requesterID string, rel Relationship) (Relationship, error)
 	DeleteRelationshipAs(ctx context.Context, requesterID, fromID, toID, label string) error
 

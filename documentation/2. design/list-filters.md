@@ -1,7 +1,7 @@
 # Narrowing the task list (hub-steward SW19)
 
 `GET /tasks` (`list_tasks`) narrows by `status`, `priority`, `workflow_run_id`
-and `held_by`, and since hub-steward SW19 also by the five below. Every filter
+and `held_by`, and since hub-steward SW19 also by the six below. Every filter
 that is given must hold; none given lists every task up to the limit.
 
 | Filter | Meaning |
@@ -11,6 +11,7 @@ that is given must hold; none given lists every task up to the limit.
 | `backlog` | The task is in this backlog, given by id or name without regard to case. A task with no stored place, or whose stored backlog id names no backlog, counts as in the first backlog, whose id is `backlog`. An unknown backlog is `ErrUnknownBacklog`, status 400. |
 | `step` | The task is at this step, given by id or name without regard to case, of the `backlog` given or of the first backlog when none is given. A task with no stored place, or a stale one, counts as at the step of the first backlog that covers its status, and at no step when none does. An unknown step is `ErrUnknownBacklogStep`, status 400. |
 | `untouched_days` | The task has not changed for more than this many days. A negative number is `ErrInvalidFilter`, status 400; 0 or absent does not narrow. |
+| `offset` | Skip this many tasks of the filtered list, in rank order, so a list longer than the 500-task page can be read in pages: ask with `offset` 0, 500, 1000 until a page comes back short. A negative number is `ErrInvalidFilter`, status 400; 0 or absent does not skip. |
 
 ## Why it is shaped like this
 

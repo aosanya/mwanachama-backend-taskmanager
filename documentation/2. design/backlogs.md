@@ -75,7 +75,7 @@ live in the `backlog_access` setting and the owner group in
 | The first `give_backlog_access` is refused with 409 (`ErrOwnerGroupNotSet`) until `set_backlog_owner_group` has named a group, so a restricted hub cannot hide every backlog from its managers. | `GiveBacklogAccess` |
 | `set_backlog_owner_group` refuses an empty or unknown group, and refuses when the hub's groups cannot be looked up. | `SetBacklogOwnerGroup` |
 | Reads: list_tasks, list_backlogs, read one task, read by name, a task's assignments, a project's, a run's and a case's tasks, the overdue list and what a task waits on show a person only issues in backlogs they can see. A hidden issue answers not found; edges to hidden issues are left out of the reply. | `readScope`, `narrowToVisible` |
-| Writes: create (in the backlog it lands in, the first when none is named), update (and the backlog it is updated into), move to a state, place, delete and move to a step need Can move; an edge needs Can move on the issue it starts from and Can see on the one it points to. A person with Can see gets 403 (`ErrBacklogForbidden`). | `backlog_access_writes.go` |
+| Writes: create (in the backlog it lands in, the first when none is named), update (and the backlog it is updated into), move to a state, place, delete and move to a step need Can move; an edge needs Can move on the issue it starts from and Can see on the one it points to. The other writes on an issue need Can move on its backlog too: assign, unassign, hand to a holder, unblock, unblock dependents, add to or remove from a project, create in a project (in the backlog it lands in), link to a run or a case, and cancel or roll back a run or cancel a case, which need it on every issue of the run or case. A person with Can see gets 403 (`ErrBacklogForbidden`). Stopping a run, a run's step calls, timeouts and ending a case as done are the run engine's and are not checked. | `backlog_access_writes.go`, `backlog_access_writes_more.go` |
 | A call with no person (a loader, an agent) is not narrowed. | `requester_id` empty |
 | On a hub with an owner group or grants, a person whose groups cannot be looked up, or a module with no lookup set, sees and writes nothing. | `backlogVisibility` |
 | `give` and `take` run in one transaction, so eight groups given access at once all keep their grant. A grant to a group that no longer exists is listed with `gone` and counts for nothing. Grants of a deleted backlog are dropped when the backlogs are saved. | `changeGrants`, `pruneGrants` |
@@ -104,8 +104,6 @@ The four operations:
 ## Not here yet
 
 - A backlog filter that treats an issue with a stale backlog id as being in the
-  first backlog (hub-steward SW48), and the other write paths: `assign`,
-  `assign_holder`, `block`, `unblock`, `complete` and the case and run calls do
-  not check Can move yet (hub-steward SW49).
+  first backlog (hub-steward SW48).
 - The hub's group roles (a group holding a role in the agency) are hub work and
   are not part of this module.

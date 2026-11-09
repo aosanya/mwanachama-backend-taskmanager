@@ -21,6 +21,9 @@ func (m *taskManager) narrowList(ctx context.Context, q *gorm.DB, filter TaskFil
 	if filter.UntouchedDays < 0 {
 		return nil, fmt.Errorf("%w: untouched_days %d is negative", ErrInvalidFilter, filter.UntouchedDays)
 	}
+	if filter.Offset < 0 {
+		return nil, fmt.Errorf("%w: offset %d is negative", ErrInvalidFilter, filter.Offset)
+	}
 	if filter.Repo != "" {
 		q = q.Where("project_name = ?", filter.Repo)
 	}
@@ -41,6 +44,9 @@ func (m *taskManager) narrowList(ctx context.Context, q *gorm.DB, filter TaskFil
 	if filter.UntouchedDays > 0 {
 		cutoff := now.AddDate(0, 0, -filter.UntouchedDays).Format(time.RFC3339)
 		q = q.Where("updated_at < ?", cutoff)
+	}
+	if filter.Offset > 0 {
+		q = q.Offset(filter.Offset)
 	}
 	return q, nil
 }
