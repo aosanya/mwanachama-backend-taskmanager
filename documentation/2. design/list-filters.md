@@ -8,8 +8,8 @@ that is given must hold; none given lists every task up to the limit.
 | --- | --- |
 | `tag` | A task carries this tag. Repeat it (`?tag=Docs&tag=Blocked`) to require every tag. Names match without regard to case. |
 | `repo` | The task's `project_name` is exactly this. |
-| `backlog` | The task is in this backlog. Only `default` exists until the backlogs port lands; any other name is `ErrUnknownBacklog`, status 400. |
-| `step` | The task is at the step of this name, matched without regard to case. Until the backlogs port lands the steps are the task states; an unknown name is `ErrUnknownTaskState`, status 400. |
+| `backlog` | The task is in this backlog, given by id or name without regard to case. A task with no stored place counts as in the first backlog, whose id is `backlog`. An unknown backlog is `ErrUnknownBacklog`, status 400. |
+| `step` | The task is at this step, given by id or name without regard to case, of the `backlog` given or of the first backlog when none is given. A task with no stored place counts as at the step of the first backlog that covers its status. An unknown step is `ErrUnknownBacklogStep`, status 400. |
 | `untouched_days` | The task has not changed for more than this many days. A negative number is `ErrInvalidFilter`, status 400; 0 or absent does not narrow. |
 
 ## Why it is shaped like this

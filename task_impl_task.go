@@ -95,6 +95,10 @@ func (m *taskManager) GetTask(ctx context.Context, taskID string) (Task, error) 
 // rule: any inbound `blocks` edge whose source task has not reached a
 // terminal status returns a *BlockedError listing the offending blocker task IDs.
 func (m *taskManager) UpdateTask(ctx context.Context, task Task) (Task, error) {
+	return m.updateTask(ctx, task, true)
+}
+
+func (m *taskManager) updateTask(ctx context.Context, task Task, replace bool) (Task, error) {
 	current, err := m.GetTask(ctx, task.ID)
 	if err != nil {
 		return Task{}, err
@@ -118,6 +122,11 @@ func (m *taskManager) UpdateTask(ctx context.Context, task Task) (Task, error) {
 	}
 	task.AssignedTo = current.AssignedTo
 	task.Backlog, task.Step = m.storedPlace(ctx, task.ID)
+	if replace && current.Status != task.Status {
+		if task.Backlog, task.Step, err = m.placeAfterStatusChange(ctx, task); err != nil {
+			return Task{}, fmt.Errorf("UpdateTask: %w", err)
+		}
+	}
 	if task.Status != TaskStatusBlocked {
 		task.HeldBy = ""
 	}
@@ -224,7 +233,7 @@ func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task,
 	if err != nil {
 		return nil, fmt.Errorf("ListTasks: %w", err)
 	}
-	q, err = m.narrowList(ctx, q, filter, states, time.Now().UTC())
+	q, err = m.narrowList(ctx, q, filter, time.Now().UTC())
 	if err != nil {
 		return nil, fmt.Errorf("ListTasks: %w", err)
 	}

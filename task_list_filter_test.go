@@ -76,17 +76,17 @@ func TestListTasks_NarrowsByStep(t *testing.T) {
 	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Step: "doing"}), "being done")
 
 	_, err := mgr.ListTasks(ctx, mwanachamataskmanager.TaskFilter{Step: "Imaginary"})
-	if !errors.Is(err, mwanachamataskmanager.ErrUnknownTaskState) {
+	if !errors.Is(err, mwanachamataskmanager.ErrUnknownBacklogStep) {
 		t.Fatalf("unknown step error = %v, want ErrUnknownTaskState", err)
 	}
 }
 
-func TestListTasks_OnlyTheDefaultBacklogExistsForNow(t *testing.T) {
+func TestListTasks_BacklogIsTheFirstOneUntilMoreExist(t *testing.T) {
 	mgr := newTestManager(t)
 	createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "only"})
 
-	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "default"}), "only")
-	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "DEFAULT"}), "only")
+	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "backlog"}), "only")
+	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "BACKLOG"}), "only")
 	_, err := mgr.ListTasks(context.Background(), mwanachamataskmanager.TaskFilter{Backlog: "Other"})
 	if !errors.Is(err, mwanachamataskmanager.ErrUnknownBacklog) {
 		t.Fatalf("unknown backlog error = %v, want ErrUnknownBacklog", err)
@@ -140,4 +140,23 @@ func TestListTasks_NegativeUntouchedDaysIsRefused(t *testing.T) {
 	if !errors.Is(err, mwanachamataskmanager.ErrInvalidFilter) {
 		t.Fatalf("negative untouched_days error = %v, want ErrInvalidFilter", err)
 	}
+}
+
+func TestListTasks_BacklogAndStepFollowTheStoredPlace(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+	if _, err := mgr.CreateBacklog(ctx, "Release", []string{"Plan", "Ship"}); err != nil {
+		t.Fatalf("CreateBacklog: %v", err)
+	}
+	createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "unplaced"})
+	moved := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "moved"})
+	if _, err := mgr.MoveTaskToStep(ctx, moved.ID, "release", "ship"); err != nil {
+		t.Fatalf("MoveTaskToStep: %v", err)
+	}
+
+	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "Release"}), "moved")
+	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "Release", Step: "ship"}), "moved")
+	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "Release", Step: "Plan"}))
+	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "backlog"}), "unplaced")
+	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "backlog", Step: "To do"}), "unplaced")
 }
