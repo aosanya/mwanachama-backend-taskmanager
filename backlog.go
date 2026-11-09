@@ -171,7 +171,8 @@ func (m *taskManager) taskPlaces(tx *gorm.DB) ([]taskPlaceRow, error) {
 }
 
 func (m *taskManager) saveBacklogs(ctx context.Context, change backlogChange) error {
-	return m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	var saved []models.Backlog
+	err := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		current, err := StoredBacklogs(tx, m.spec)
 		if err != nil {
 			return fmt.Errorf("backlogs: %w", err)
@@ -197,8 +198,13 @@ func (m *taskManager) saveBacklogs(ctx context.Context, change backlogChange) er
 		if _, err := spec.StoreOverride(tx, m.spec, backlogsSetting, next, "taskmanager", now); err != nil {
 			return fmt.Errorf("backlogs: %w", err)
 		}
+		saved = next
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	return m.pruneGrants(ctx, saved)
 }
 
 func (m *taskManager) pinMovedPlaces(tx *gorm.DB, current, next []models.Backlog, rows []taskPlaceRow) error {

@@ -57,6 +57,28 @@ type TaskManager interface {
 	RemoveBacklogStep(ctx context.Context, backlogID, stepID string) (BacklogSummary, error)
 	ReplaceBacklogs(ctx context.Context, backlogs []Backlog) (BacklogList, error)
 	MoveTaskToStep(ctx context.Context, taskID, backlogID, stepID string) (Task, error)
+	MoveTaskToStepAs(ctx context.Context, requesterID, taskID, backlogID, stepID string) (Task, error)
+	ListBacklogsFor(ctx context.Context, requesterID string) (BacklogList, error)
+	GetTaskFor(ctx context.Context, requesterID, taskID string) (Task, error)
+	GetTaskByNameFor(ctx context.Context, requesterID, projectName, taskName string) (Task, error)
+	ListTaskAssignmentsFor(ctx context.Context, requesterID, taskID string) ([]Assignment, error)
+	ListTasksInProjectFor(ctx context.Context, requesterID, projectID string) ([]Task, error)
+	ListTasksForRunFor(ctx context.Context, requesterID, runID string) ([]Task, error)
+	ListCaseTasksFor(ctx context.Context, requesterID, caseID string) ([]Task, error)
+	TraverseRelationshipsFor(ctx context.Context, requesterID, vertexID, label string, dir Direction) ([]Relationship, error)
+	ListBacklogAccess(ctx context.Context, backlogID string) (BacklogAccess, error)
+	GiveBacklogAccess(ctx context.Context, backlogID, groupID, level string) (BacklogAccess, error)
+	TakeBacklogAccess(ctx context.Context, backlogID, groupID string) (BacklogAccess, error)
+	SetBacklogOwnerGroup(ctx context.Context, groupID string) error
+	UseGroups(g Groups)
+	UseGroupExists(g GroupExists)
+	CreateTaskAs(ctx context.Context, requesterID string, task Task) (Task, error)
+	UpdateTaskAs(ctx context.Context, requesterID string, task Task) (Task, error)
+	MoveTaskToStateAs(ctx context.Context, requesterID, taskID, state string) (Task, error)
+	PlaceTaskAs(ctx context.Context, requesterID, taskID, afterID, beforeID string) (Task, error)
+	DeleteTaskAs(ctx context.Context, requesterID, taskID string) error
+	CreateRelationshipAs(ctx context.Context, requesterID string, rel Relationship) (Relationship, error)
+	DeleteRelationshipAs(ctx context.Context, requesterID, fromID, toID, label string) error
 
 	PlaceTask(ctx context.Context, taskID, afterID, beforeID string) (Task, error)
 
@@ -464,6 +486,8 @@ type taskManager struct {
 	publisher    events.Publisher
 	spec         *spec.Spec
 	overdueGrace time.Duration
+	groups       Groups
+	groupExists  GroupExists
 }
 
 func NewTaskManager(db *gorm.DB, s *spec.Spec, pub events.Publisher) (TaskManager, error) {

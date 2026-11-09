@@ -69,6 +69,8 @@ var sentinels = map[string]error{
 	"ErrUnknownBacklogStep":         mwanachamataskmanager.ErrUnknownBacklogStep,
 	"ErrInvalidBacklog":             mwanachamataskmanager.ErrInvalidBacklog,
 	"ErrBacklogHoldsIssues":         mwanachamataskmanager.ErrBacklogHoldsIssues,
+	"ErrBacklogForbidden":           mwanachamataskmanager.ErrBacklogForbidden,
+	"ErrOwnerGroupNotSet":           mwanachamataskmanager.ErrOwnerGroupNotSet,
 }
 
 // AnonymousActions is empty on purpose: nothing on a work board is readable

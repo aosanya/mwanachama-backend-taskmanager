@@ -55,6 +55,14 @@ func (m *taskManager) ListOverdueTasks(ctx context.Context, filter OverdueFilter
 	if err != nil {
 		return nil, fmt.Errorf("ListOverdueTasks: %w", err)
 	}
+	scope, err := m.readScope(ctx, filter.RequesterID)
+	if err != nil {
+		return nil, fmt.Errorf("ListOverdueTasks: %w", err)
+	}
+	if err := m.fillPlaces(ctx, tasks); err != nil {
+		return nil, fmt.Errorf("ListOverdueTasks: %w", err)
+	}
+	tasks = scope.keep(tasks)
 	states, err := m.taskStates(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("ListOverdueTasks: %w", err)

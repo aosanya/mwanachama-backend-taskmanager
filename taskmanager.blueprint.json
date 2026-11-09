@@ -1618,6 +1618,18 @@
       ]
     },
     {
+      "name": "backlog_access",
+      "type": "json",
+      "description": "Which groups may see or move the issues of which backlog: a list of grants, each with a backlog id, a group id and a level, see or move. While no grant and no owner group is set, every backlog is open to everyone; once either is set, a person sees only the backlogs one of their groups has a grant on, and the owner group sees and moves every backlog.",
+      "default": []
+    },
+    {
+      "name": "backlog_owner_group",
+      "type": "string",
+      "description": "The id of the group that always sees and moves every backlog, the Product owner group. Empty leaves the backlogs open until a grant is given.",
+      "default": ""
+    },
+    {
       "name": "overdue_grace_hours",
       "type": "int",
       "description": "How many whole hours past its due date an open task may run before the overdue list carries it. Zero carries a task the moment its due date passes.",

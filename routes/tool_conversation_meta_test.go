@@ -19,11 +19,11 @@ type conversationRecorder struct {
 	seen []string
 }
 
-func (r *conversationRecorder) GetTask(ctx context.Context, taskID string) (mwanachamataskmanager.Task, error) {
+func (r *conversationRecorder) GetTaskFor(ctx context.Context, requesterID, taskID string) (mwanachamataskmanager.Task, error) {
 	r.mu.Lock()
 	r.seen = append(r.seen, dispatch.ConversationOf(ctx))
 	r.mu.Unlock()
-	return r.TaskManager.GetTask(ctx, taskID)
+	return r.TaskManager.GetTaskFor(ctx, requesterID, taskID)
 }
 
 func getTaskTool(t *testing.T, recorder *conversationRecorder) routes.Tool {

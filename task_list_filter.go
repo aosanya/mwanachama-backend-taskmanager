@@ -28,6 +28,10 @@ func (m *taskManager) narrowList(ctx context.Context, q *gorm.DB, filter TaskFil
 	if err != nil {
 		return nil, err
 	}
+	q, err = m.narrowToVisible(ctx, q, filter.RequesterID)
+	if err != nil {
+		return nil, err
+	}
 	for _, tag := range filter.Tag {
 		if tag == "" {
 			continue
