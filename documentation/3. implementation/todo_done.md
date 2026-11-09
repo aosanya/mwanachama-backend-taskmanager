@@ -62,3 +62,4 @@ engine, and drop gRPC/proto/cmd/registrar/the event-dispatcher process.
 
 Full task breakdown and rationale: originally scoped in
 `/Users/tony/.claude/plans/kind-snacking-rose.md`.
+| W74 | 🔒 **Serialise saves of the `backlogs` setting** (SW41, found by take-up-55): the hub copy now takes a package mutex and a Postgres `pg_advisory_xact_lock` at the start of its backlog save so two simultaneous edits both survive (hub-steward `5548764`, `backlog_lock.go` and `backlog_lock_test.go`); port it to this repo's save path after take-up-46's access port lands | 2026-11-09 | 4376e11. Same tests, file-backed sqlite with eight concurrent `CreateBacklog` calls |
