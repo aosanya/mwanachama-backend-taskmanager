@@ -155,6 +155,7 @@ func (m *taskManager) ListTasksInProject(ctx context.Context, projectID string) 
 		}
 		out = append(out, t)
 	}
+	sortByRank(out)
 	return out, nil
 }
 

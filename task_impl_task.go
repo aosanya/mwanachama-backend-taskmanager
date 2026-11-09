@@ -38,6 +38,9 @@ func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
 		task.Priority = TaskPriorityMedium
 	}
 	task.CompletedAt = ""
+	if task.Rank, err = m.nextRank(ctx); err != nil {
+		return Task{}, fmt.Errorf("CreateTask: %w", err)
+	}
 
 	if err := m.store.Insert(ctx, roleTask, task); err != nil {
 		return Task{}, fmt.Errorf("CreateTask: %w", err)
@@ -242,7 +245,7 @@ func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task,
 	if limit <= 0 || limit > maxListPage {
 		limit = maxListPage
 	}
-	tasks, err := specstore.List[Task](m.store, q.Limit(limit), roleTask)
+	tasks, err := specstore.List[Task](m.store, q.Order(taskOrder).Limit(limit), roleTask)
 	if err != nil {
 		return nil, fmt.Errorf("ListTasks: %w", err)
 	}
