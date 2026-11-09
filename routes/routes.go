@@ -19,6 +19,8 @@ var operations = sync.OnceValues(func() (*dispatch.Spec, error) {
 
 var sentinels = map[string]error{
 	"ErrTaskNotFound":               mwanachamataskmanager.ErrTaskNotFound,
+	"ErrUnknownBacklog":             mwanachamataskmanager.ErrUnknownBacklog,
+	"ErrInvalidFilter":              mwanachamataskmanager.ErrInvalidFilter,
 	"ErrInvalidOverdueFilter":       mwanachamataskmanager.ErrInvalidOverdueFilter,
 	"ErrInvalidAssignee":            mwanachamataskmanager.ErrInvalidAssignee,
 	"ErrAgentNotFound":              mwanachamataskmanager.ErrAgentNotFound,
@@ -64,6 +66,9 @@ var sentinels = map[string]error{
 	"ErrUnknownTaskState":           mwanachamataskmanager.ErrUnknownTaskState,
 	"ErrNoPathToState":              mwanachamataskmanager.ErrNoPathToState,
 	"ErrInvalidPlacement":           mwanachamataskmanager.ErrInvalidPlacement,
+	"ErrUnknownBacklogStep":         mwanachamataskmanager.ErrUnknownBacklogStep,
+	"ErrInvalidBacklog":             mwanachamataskmanager.ErrInvalidBacklog,
+	"ErrBacklogHoldsIssues":         mwanachamataskmanager.ErrBacklogHoldsIssues,
 }
 
 // AnonymousActions is empty on purpose: nothing on a work board is readable

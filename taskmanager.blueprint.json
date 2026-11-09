@@ -150,6 +150,16 @@
           "description": "An opaque reference to something another module owns that this task points at, such as the questionnaire it asks its assignee to answer. Empty when the task points at nothing. The module stores it and reads it back; it never resolves it."
         },
         {
+          "name": "backlog",
+          "type": "string",
+          "description": "The id of the backlog this task sits in. Empty reads as the first backlog."
+        },
+        {
+          "name": "step",
+          "type": "string",
+          "description": "The id of the step of that backlog this task sits at. Empty reads as the step of the first backlog that covers the task's status."
+        },
+        {
           "name": "rank",
           "type": "int",
           "description": "The card's place in the board's order, lowest first. Minted at the bottom on creation and changed only by placing the card; an update never touches it. Ties read in creation order."
@@ -1554,6 +1564,57 @@
         {"name": "Waiting", "statuses": ["blocked", "awaiting-direction", "failed"]},
         {"name": "Done", "statuses": ["completed"]},
         {"name": "Cancelled", "statuses": ["cancelled"]}
+      ]
+    },
+    {
+      "name": "backlogs",
+      "type": "json",
+      "description": "The backlogs a hub keeps, in order, each an ordered list of steps with an id and a name. A step may name the lifecycle statuses it covers; a step that names none leaves a task's status alone. A task sits in one backlog at one step.",
+      "default": [
+        {
+          "id": "backlog",
+          "name": "Backlog",
+          "steps": [
+            {
+              "id": "to-do",
+              "name": "To do",
+              "statuses": [
+                "pending"
+              ]
+            },
+            {
+              "id": "doing",
+              "name": "Doing",
+              "statuses": [
+                "in_progress",
+                "split"
+              ]
+            },
+            {
+              "id": "waiting",
+              "name": "Waiting",
+              "statuses": [
+                "blocked",
+                "awaiting-direction",
+                "failed"
+              ]
+            },
+            {
+              "id": "done",
+              "name": "Done",
+              "statuses": [
+                "completed"
+              ]
+            },
+            {
+              "id": "cancelled",
+              "name": "Cancelled",
+              "statuses": [
+                "cancelled"
+              ]
+            }
+          ]
+        }
       ]
     },
     {

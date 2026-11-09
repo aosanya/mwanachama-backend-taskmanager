@@ -26,6 +26,9 @@ func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
 	if err != nil {
 		return Task{}, fmt.Errorf("CreateTask: %w", err)
 	}
+	if err := m.checkPlace(ctx, task.Backlog, task.Step); err != nil {
+		return Task{}, fmt.Errorf("CreateTask: %w", err)
+	}
 	task.ID = newSpecID()
 	now := time.Now().UTC().Format(time.RFC3339)
 	task.Status = TaskStatusPending
@@ -79,6 +82,9 @@ func (m *taskManager) GetTask(ctx context.Context, taskID string) (Task, error) 
 	}
 	t.Tags = m.loadTagNames(ctx, t.ID)
 	t.State = models.StateNameFor(states, t.Status)
+	if err := m.placeOne(ctx, &t); err != nil {
+		return Task{}, fmt.Errorf("GetTask: %w", err)
+	}
 	return t, nil
 }
 
@@ -111,6 +117,7 @@ func (m *taskManager) UpdateTask(ctx context.Context, task Task) (Task, error) {
 		task.CompletedAt = now
 	}
 	task.AssignedTo = current.AssignedTo
+	task.Backlog, task.Step = m.storedPlace(ctx, task.ID)
 	if task.Status != TaskStatusBlocked {
 		task.HeldBy = ""
 	}
@@ -213,6 +220,14 @@ func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task,
 	if filter.HeldBy != "" {
 		q = q.Where("held_by = ?", filter.HeldBy)
 	}
+	states, err := m.taskStates(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("ListTasks: %w", err)
+	}
+	q, err = m.narrowList(ctx, q, filter, states, time.Now().UTC())
+	if err != nil {
+		return nil, fmt.Errorf("ListTasks: %w", err)
+	}
 
 	limit := filter.Limit
 	if limit <= 0 || limit > maxListPage {
@@ -222,13 +237,12 @@ func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task,
 	if err != nil {
 		return nil, fmt.Errorf("ListTasks: %w", err)
 	}
-	states, err := m.taskStates(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("ListTasks: %w", err)
-	}
 	for i := range tasks {
 		tasks[i].Tags = m.loadTagNames(ctx, tasks[i].ID)
 		tasks[i].State = models.StateNameFor(states, tasks[i].Status)
+	}
+	if err := m.fillPlaces(ctx, tasks); err != nil {
+		return nil, fmt.Errorf("ListTasks: %w", err)
 	}
 	return tasks, nil
 }

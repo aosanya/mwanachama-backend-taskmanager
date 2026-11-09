@@ -11,7 +11,7 @@
     "list_tasks": {
       "method": "GET", "path": "/tasks", "call": "ListTasks", "action": "taskmanager.task.list",
       "title": "List tasks",
-      "description": "List the tasks matching the filter. Narrow by status, priority, run or the outside holder of blocked work (held_by), and pass a limit unless you genuinely need the whole board.",
+      "description": "List the tasks matching the filter. Narrow by status, priority, run, the outside holder of blocked work (held_by), tag (repeat it to require every tag; names match without regard to case), repo (the task's project_name), backlog, step (a task state name) or untouched_days (not changed for more than that many days, never negative), and pass a limit unless you genuinely need the whole board.",
       "args": [{"from": "query", "whole": true}],
       "returns": [{"body": true}]
     },
@@ -49,6 +49,88 @@
       "description": "Move one task into a named state. The task walks the shortest legal path of lifecycle statuses into that state; a task already in it is left alone, and a state it cannot reach is refused with the reason.",
       "args": [{"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task to move."},
                {"from": "body", "as": "state", "required": true, "description": "The name of the state to move it into, as the agency's task states list it."}],
+      "returns": [{"body": true}]
+    },
+    "list_backlogs": {
+      "method": "GET", "path": "/backlogs", "call": "ListBacklogs", "action": "taskmanager.backlog.list",
+      "title": "List backlogs",
+      "description": "List the hub's backlogs in order, each with its steps in order and the number of issues in the backlog and at each step, so a board can draw one column per step.",
+      "returns": [{"body": true}]
+    },
+    "create_backlog": {
+      "method": "POST", "path": "/backlogs", "call": "CreateBacklog", "action": "taskmanager.backlog.create",
+      "status": 201,
+      "title": "Create backlog",
+      "description": "Add a backlog with a name and its steps in order. The name must not belong to another backlog and at least one step is needed.",
+      "args": [{"from": "body", "as": "name", "required": true, "description": "The new backlog's name."},
+               {"from": "body", "as": "steps", "required": true, "description": "The names of its steps, in order."}],
+      "returns": [{"body": true}]
+    },
+    "rename_backlog": {
+      "method": "PUT", "path": "/backlogs/{backlogID}", "call": "RenameBacklog", "action": "taskmanager.backlog.rename",
+      "title": "Rename backlog",
+      "description": "Give a backlog another name. Its steps and issues stay as they are.",
+      "args": [{"from": "path", "as": "backlogID", "description": "The backlog to rename."},
+               {"from": "body", "as": "name", "required": true, "description": "The new name."}],
+      "returns": [{"body": true}]
+    },
+    "delete_backlog": {
+      "method": "DELETE", "path": "/backlogs/{backlogID}", "call": "DeleteBacklog", "action": "taskmanager.backlog.delete",
+      "status": 204,
+      "title": "Delete backlog",
+      "description": "Delete a backlog. A backlog that holds issues cannot be deleted; move the issues out first.",
+      "args": [{"from": "path", "as": "backlogID", "description": "The backlog to delete."}],
+      "returns": [{"body": true}]
+    },
+    "replace_backlogs": {
+      "method": "PUT", "path": "/backlogs", "call": "ReplaceBacklogs", "action": "taskmanager.backlog.manage",
+      "title": "Replace backlogs",
+      "description": "Set the whole list of backlogs and their steps in one call, as the app's edit screens do. A step or a backlog that holds issues cannot be left out of the list.",
+      "args": [{"from": "body", "as": "backlogs", "required": true, "description": "Every backlog with its id, name and steps in order."}],
+      "returns": [{"body": true}]
+    },
+    "add_backlog_step": {
+      "method": "POST", "path": "/backlogs/{backlogID}/steps", "call": "AddBacklogStep", "action": "taskmanager.backlog_step.add",
+      "status": 201,
+      "title": "Add backlog step",
+      "description": "Add a step to a backlog, directly after the step named in after, or last when after is left out.",
+      "args": [{"from": "path", "as": "backlogID", "description": "The backlog to add the step to."},
+               {"from": "body", "as": "name", "required": true, "description": "The new step's name."},
+               {"from": "body", "as": "after", "description": "The id of the step it goes after."}],
+      "returns": [{"body": true}]
+    },
+    "rename_backlog_step": {
+      "method": "PUT", "path": "/backlogs/{backlogID}/steps/{stepID}", "call": "RenameBacklogStep", "action": "taskmanager.backlog_step.rename",
+      "title": "Rename backlog step",
+      "description": "Give a step of a backlog another name. The issues at it stay there.",
+      "args": [{"from": "path", "as": "backlogID", "description": "The backlog the step belongs to."},
+               {"from": "path", "as": "stepID", "description": "The step to rename."},
+               {"from": "body", "as": "name", "required": true, "description": "The new name."}],
+      "returns": [{"body": true}]
+    },
+    "remove_backlog_step": {
+      "method": "DELETE", "path": "/backlogs/{backlogID}/steps/{stepID}", "call": "RemoveBacklogStep", "action": "taskmanager.backlog_step.remove",
+      "title": "Remove backlog step",
+      "description": "Remove a step from a backlog. A step that holds issues cannot be removed; move the issues out first.",
+      "args": [{"from": "path", "as": "backlogID", "description": "The backlog the step belongs to."},
+               {"from": "path", "as": "stepID", "description": "The step to remove."}],
+      "returns": [{"body": true}]
+    },
+    "reorder_backlog_steps": {
+      "method": "PUT", "path": "/backlogs/{backlogID}/step-order", "call": "ReorderBacklogSteps", "action": "taskmanager.backlog_step.reorder",
+      "title": "Reorder backlog steps",
+      "description": "Put the steps of a backlog in a new order. Name every step of the backlog once.",
+      "args": [{"from": "path", "as": "backlogID", "description": "The backlog to reorder."},
+               {"from": "body", "as": "steps", "required": true, "description": "The ids of its steps, in the new order."}],
+      "returns": [{"body": true}]
+    },
+    "move_task_to_step": {
+      "method": "POST", "path": "/tasks/{taskID}/move-to-step", "call": "MoveTaskToStep", "action": "taskmanager.task.move_to_step",
+      "title": "Move task to step",
+      "description": "Put one issue at a step of a backlog. Name the backlog and the step by id; moving to another backlog is done by naming a step of that backlog.",
+      "args": [{"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue to move."},
+               {"from": "body", "as": "backlog", "required": true, "description": "The id of the backlog."},
+               {"from": "body", "as": "step", "required": true, "description": "The id of the step in that backlog."}],
       "returns": [{"body": true}]
     },
     "place_task": {
@@ -730,6 +812,11 @@
 
   "errors": {
     "ErrUnknownTaskState": 400,
+    "ErrUnknownBacklog": 400,
+    "ErrInvalidFilter": 400,
+    "ErrUnknownBacklogStep": 400,
+    "ErrInvalidBacklog": 400,
+    "ErrBacklogHoldsIssues": 409,
     "ErrNoPathToState": 409,
     "ErrInvalidPlacement": 400,
     "ErrCaseNotFound": 404,

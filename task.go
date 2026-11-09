@@ -47,6 +47,17 @@ type TaskManager interface {
 
 	MoveTaskToState(ctx context.Context, taskID, state string) (Task, error)
 
+	ListBacklogs(ctx context.Context) (BacklogList, error)
+	CreateBacklog(ctx context.Context, name string, steps []string) (BacklogSummary, error)
+	RenameBacklog(ctx context.Context, backlogID, name string) (BacklogSummary, error)
+	DeleteBacklog(ctx context.Context, backlogID string) error
+	AddBacklogStep(ctx context.Context, backlogID, name, after string) (BacklogSummary, error)
+	RenameBacklogStep(ctx context.Context, backlogID, stepID, name string) (BacklogSummary, error)
+	ReorderBacklogSteps(ctx context.Context, backlogID string, steps []string) (BacklogSummary, error)
+	RemoveBacklogStep(ctx context.Context, backlogID, stepID string) (BacklogSummary, error)
+	ReplaceBacklogs(ctx context.Context, backlogs []Backlog) (BacklogList, error)
+	MoveTaskToStep(ctx context.Context, taskID, backlogID, stepID string) (Task, error)
+
 	PlaceTask(ctx context.Context, taskID, afterID, beforeID string) (Task, error)
 
 	// CreateRelationship creates a directed edge between two Work vertices.
