@@ -142,8 +142,11 @@ func FindStep(b Backlog, id string) (int, bool) {
 }
 
 func PlaceOf(backlogs []Backlog, t Task) (string, string) {
-	if t.Backlog != "" {
-		return t.Backlog, t.Step
+	if bi, ok := FindBacklog(backlogs, t.Backlog); ok {
+		if _, known := FindStep(backlogs[bi], t.Step); known {
+			return t.Backlog, t.Step
+		}
+		return t.Backlog, ""
 	}
 	first := backlogs[0]
 	for _, s := range first.Steps {
@@ -154,4 +157,30 @@ func PlaceOf(backlogs []Backlog, t Task) (string, string) {
 		}
 	}
 	return first.ID, ""
+}
+
+func StepAfterStatusChange(backlogs []Backlog, t Task) (string, string) {
+	bi, ok := FindBacklog(backlogs, t.Backlog)
+	if !ok {
+		return "", ""
+	}
+	b := backlogs[bi]
+	if si, held := FindStep(b, t.Step); held && (len(b.Steps[si].Statuses) == 0 || StepNamesStatus(b.Steps[si], t.Status)) {
+		return b.ID, t.Step
+	}
+	for _, s := range b.Steps {
+		if StepNamesStatus(s, t.Status) {
+			return b.ID, s.ID
+		}
+	}
+	return b.ID, ""
+}
+
+func StepNamesStatus(step BacklogStep, status TaskStatus) bool {
+	for _, s := range step.Statuses {
+		if s == status {
+			return true
+		}
+	}
+	return false
 }

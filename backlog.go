@@ -151,31 +151,79 @@ func (m *taskManager) summaryOf(ctx context.Context, backlogID string) (models.B
 	return models.BacklogSummary{}, fmt.Errorf("%w: %q", ErrUnknownBacklog, backlogID)
 }
 
-func (m *taskManager) saveBacklogs(ctx context.Context, current, next []models.Backlog) error {
-	if err := models.CheckBacklogs(next); err != nil {
-		return fmt.Errorf("%w: %s", ErrInvalidBacklog, err)
-	}
-	if err := m.refuseRemovalsHoldingIssues(ctx, current, next); err != nil {
-		return err
-	}
-	now := time.Now().UTC().Format(time.RFC3339)
-	if _, err := spec.StoreOverride(m.db.WithContext(ctx), m.spec, backlogsSetting, next, "taskmanager", now); err != nil {
-		return fmt.Errorf("backlogs: %w", err)
+type backlogChange func(current []models.Backlog) ([]models.Backlog, error)
+
+type taskPlaceRow struct {
+	ID      string            `gorm:"column:id"`
+	Status  models.TaskStatus `gorm:"column:status"`
+	Backlog string            `gorm:"column:backlog"`
+	Step    string            `gorm:"column:step"`
+}
+
+func (r taskPlaceRow) task() models.Task {
+	return models.Task{ID: r.ID, Status: r.Status, Backlog: r.Backlog, Step: r.Step}
+}
+
+func (m *taskManager) taskPlaces(tx *gorm.DB) ([]taskPlaceRow, error) {
+	var rows []taskPlaceRow
+	err := tx.Table(m.store.Table(roleTask)).Select("id", "status", "backlog", "step").Where("deleted = ?", false).Scan(&rows).Error
+	return rows, err
+}
+
+func (m *taskManager) saveBacklogs(ctx context.Context, change backlogChange) error {
+	return m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		current, err := StoredBacklogs(tx, m.spec)
+		if err != nil {
+			return fmt.Errorf("backlogs: %w", err)
+		}
+		next, err := change(current)
+		if err != nil {
+			return err
+		}
+		if err := models.CheckBacklogs(next); err != nil {
+			return fmt.Errorf("%w: %s", ErrInvalidBacklog, err)
+		}
+		rows, err := m.taskPlaces(tx)
+		if err != nil {
+			return fmt.Errorf("backlogs: %w", err)
+		}
+		if err := refuseRemovalsHoldingIssues(current, next, rows); err != nil {
+			return err
+		}
+		if err := m.pinMovedPlaces(tx, current, next, rows); err != nil {
+			return err
+		}
+		now := time.Now().UTC().Format(time.RFC3339)
+		if _, err := spec.StoreOverride(tx, m.spec, backlogsSetting, next, "taskmanager", now); err != nil {
+			return fmt.Errorf("backlogs: %w", err)
+		}
+		return nil
+	})
+}
+
+func (m *taskManager) pinMovedPlaces(tx *gorm.DB, current, next []models.Backlog, rows []taskPlaceRow) error {
+	for _, row := range rows {
+		t := row.task()
+		backlogID, stepID := models.PlaceOf(current, t)
+		nextBacklog, nextStep := models.PlaceOf(next, t)
+		if backlogID == nextBacklog && stepID == nextStep {
+			continue
+		}
+		update := tx.Table(m.store.Table(roleTask)).Where("id = ?", row.ID).Updates(map[string]any{"backlog": backlogID, "step": stepID})
+		if update.Error != nil {
+			return fmt.Errorf("backlogs: %w", update.Error)
+		}
 	}
 	return nil
 }
 
-func (m *taskManager) refuseRemovalsHoldingIssues(ctx context.Context, current, next []models.Backlog) error {
+func refuseRemovalsHoldingIssues(current, next []models.Backlog, rows []taskPlaceRow) error {
 	kept := map[string]map[string]bool{}
 	for _, b := range next {
 		kept[b.ID] = map[string]bool{}
 		for _, s := range b.Steps {
 			kept[b.ID][s.ID] = true
 		}
-	}
-	tasks, err := m.placedTasks(ctx)
-	if err != nil {
-		return fmt.Errorf("backlogs: %w", err)
 	}
 	names := map[string]string{}
 	for _, b := range current {
@@ -184,8 +232,8 @@ func (m *taskManager) refuseRemovalsHoldingIssues(ctx context.Context, current, 
 			names[b.ID+"/"+s.ID] = s.Name
 		}
 	}
-	for _, t := range tasks {
-		bid, sid := models.PlaceOf(current, t)
+	for _, row := range rows {
+		bid, sid := models.PlaceOf(current, row.task())
 		steps, backlogKept := kept[bid]
 		switch {
 		case !backlogKept:
@@ -198,11 +246,8 @@ func (m *taskManager) refuseRemovalsHoldingIssues(ctx context.Context, current, 
 }
 
 func (m *taskManager) ReplaceBacklogs(ctx context.Context, backlogs []models.Backlog) (models.BacklogList, error) {
-	current, err := m.backlogs(ctx)
+	err := m.saveBacklogs(ctx, func([]models.Backlog) ([]models.Backlog, error) { return backlogs, nil })
 	if err != nil {
-		return models.BacklogList{}, err
-	}
-	if err := m.saveBacklogs(ctx, current, backlogs); err != nil {
 		return models.BacklogList{}, err
 	}
 	return m.ListBacklogs(ctx)
@@ -226,43 +271,42 @@ func newStep(b models.Backlog, name string) models.BacklogStep {
 }
 
 func (m *taskManager) CreateBacklog(ctx context.Context, name string, steps []string) (models.BacklogSummary, error) {
-	current, err := m.backlogs(ctx)
-	if err != nil {
-		return models.BacklogSummary{}, err
-	}
 	if len(steps) == 0 {
 		steps = []string{"To do", "Done"}
 	}
-	taken := func(id string) bool { _, ok := models.FindBacklog(current, id); return ok }
-	created := models.Backlog{ID: uniqueID(taken, name), Name: strings.TrimSpace(name)}
-	for _, step := range steps {
-		created.Steps = append(created.Steps, newStep(created, step))
-	}
-	next := append(append([]models.Backlog{}, current...), created)
-	if err := m.saveBacklogs(ctx, current, next); err != nil {
-		return models.BacklogSummary{}, err
-	}
-	return m.summaryOf(ctx, created.ID)
-}
-
-func (m *taskManager) changeBacklog(ctx context.Context, backlogID string, change func(*models.Backlog) error) (models.BacklogSummary, error) {
-	current, err := m.backlogs(ctx)
+	var createdID string
+	err := m.saveBacklogs(ctx, func(current []models.Backlog) ([]models.Backlog, error) {
+		taken := func(id string) bool { _, ok := models.FindBacklog(current, id); return ok }
+		created := models.Backlog{ID: uniqueID(taken, name), Name: strings.TrimSpace(name)}
+		for _, step := range steps {
+			created.Steps = append(created.Steps, newStep(created, step))
+		}
+		createdID = created.ID
+		return append(append([]models.Backlog{}, current...), created), nil
+	})
 	if err != nil {
 		return models.BacklogSummary{}, err
 	}
-	next := make([]models.Backlog, len(current))
-	for i, b := range current {
-		next[i] = b
-		next[i].Steps = append([]models.BacklogStep{}, b.Steps...)
-	}
-	i, ok := models.FindBacklog(next, backlogID)
-	if !ok {
-		return models.BacklogSummary{}, fmt.Errorf("%w: %q", ErrUnknownBacklog, backlogID)
-	}
-	if err := change(&next[i]); err != nil {
-		return models.BacklogSummary{}, err
-	}
-	if err := m.saveBacklogs(ctx, current, next); err != nil {
+	return m.summaryOf(ctx, createdID)
+}
+
+func (m *taskManager) changeBacklog(ctx context.Context, backlogID string, change func(*models.Backlog) error) (models.BacklogSummary, error) {
+	err := m.saveBacklogs(ctx, func(current []models.Backlog) ([]models.Backlog, error) {
+		next := make([]models.Backlog, len(current))
+		for i, b := range current {
+			next[i] = b
+			next[i].Steps = append([]models.BacklogStep{}, b.Steps...)
+		}
+		i, ok := models.FindBacklog(next, backlogID)
+		if !ok {
+			return nil, fmt.Errorf("%w: %q", ErrUnknownBacklog, backlogID)
+		}
+		if err := change(&next[i]); err != nil {
+			return nil, err
+		}
+		return next, nil
+	})
+	if err != nil {
 		return models.BacklogSummary{}, err
 	}
 	return m.summaryOf(ctx, backlogID)
@@ -276,16 +320,13 @@ func (m *taskManager) RenameBacklog(ctx context.Context, backlogID, name string)
 }
 
 func (m *taskManager) DeleteBacklog(ctx context.Context, backlogID string) error {
-	current, err := m.backlogs(ctx)
-	if err != nil {
-		return err
-	}
-	i, ok := models.FindBacklog(current, backlogID)
-	if !ok {
-		return fmt.Errorf("%w: %q", ErrUnknownBacklog, backlogID)
-	}
-	next := append(append([]models.Backlog{}, current[:i]...), current[i+1:]...)
-	return m.saveBacklogs(ctx, current, next)
+	return m.saveBacklogs(ctx, func(current []models.Backlog) ([]models.Backlog, error) {
+		i, ok := models.FindBacklog(current, backlogID)
+		if !ok {
+			return nil, fmt.Errorf("%w: %q", ErrUnknownBacklog, backlogID)
+		}
+		return append(append([]models.Backlog{}, current[:i]...), current[i+1:]...), nil
+	})
 }
 
 func (m *taskManager) AddBacklogStep(ctx context.Context, backlogID, name, after string) (models.BacklogSummary, error) {
@@ -367,33 +408,59 @@ func (m *taskManager) MoveTaskToStep(ctx context.Context, taskID, backlogID, ste
 	if err != nil {
 		return Task{}, err
 	}
-	if len(step.Statuses) > 0 && !coversStatus(step, task.Status) {
-		path, ok := StatusPathToState(task.Status, models.TaskState{Name: step.Name, Statuses: step.Statuses})
+	var path []TaskStatus
+	if len(step.Statuses) > 0 && !models.StepNamesStatus(step, task.Status) {
+		reached, ok := StatusPathToState(task.Status, models.TaskState{Name: step.Name, Statuses: step.Statuses})
 		if !ok {
 			return Task{}, fmt.Errorf("%w: a task in %s cannot reach %q", ErrNoPathToState, task.Status, step.Name)
 		}
-		for _, next := range path {
-			task.Status = next
-			if task, err = m.UpdateTask(ctx, task); err != nil {
-				return Task{}, err
-			}
-		}
+		path = reached
 	}
-	res := m.store.Query(ctx, roleTask).Where("id = ? AND deleted = ?", taskID, false).
-		Updates(map[string]any{"backlog": backlogID, "step": stepID})
-	if res.Error != nil {
-		return Task{}, fmt.Errorf("MoveTaskToStep: %w", res.Error)
+	originalBacklog, originalStep := m.storedPlace(ctx, taskID)
+	startedAs := task.Status
+	if err := m.writePlace(ctx, taskID, backlogID, stepID); err != nil {
+		return Task{}, err
+	}
+	for _, next := range path {
+		task.Status = next
+		if task, err = m.updateTask(ctx, task, false); err != nil {
+			m.restorePlace(ctx, taskID, originalBacklog, originalStep, startedAs)
+			return Task{}, err
+		}
 	}
 	return m.GetTask(ctx, taskID)
 }
 
-func coversStatus(step models.BacklogStep, status TaskStatus) bool {
-	for _, s := range step.Statuses {
-		if s == status {
-			return true
+func (m *taskManager) writePlace(ctx context.Context, taskID, backlogID, stepID string) error {
+	res := m.store.Query(ctx, roleTask).Where("id = ? AND deleted = ?", taskID, false).
+		Updates(map[string]any{"backlog": backlogID, "step": stepID})
+	if res.Error != nil {
+		return fmt.Errorf("MoveTaskToStep: %w", res.Error)
+	}
+	return nil
+}
+
+func (m *taskManager) restorePlace(ctx context.Context, taskID, backlogID, stepID string, startedAs TaskStatus) {
+	var now struct{ Status TaskStatus }
+	m.store.Query(ctx, roleTask).Where("id = ?", taskID).Select("status").Scan(&now)
+	if now.Status != startedAs {
+		if backlogs, err := m.backlogs(ctx); err == nil {
+			backlogID, stepID = models.StepAfterStatusChange(backlogs, models.Task{Backlog: backlogID, Step: stepID, Status: now.Status})
 		}
 	}
-	return false
+	m.writePlace(ctx, taskID, backlogID, stepID)
+}
+
+func (m *taskManager) placeAfterStatusChange(ctx context.Context, task Task) (string, string, error) {
+	if task.Backlog == "" {
+		return "", "", nil
+	}
+	backlogs, err := m.backlogs(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	backlogID, stepID := models.StepAfterStatusChange(backlogs, task)
+	return backlogID, stepID, nil
 }
 
 func (m *taskManager) placeOne(ctx context.Context, t *Task) error {
