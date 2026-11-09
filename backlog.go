@@ -172,7 +172,12 @@ func (m *taskManager) taskPlaces(tx *gorm.DB) ([]taskPlaceRow, error) {
 
 func (m *taskManager) saveBacklogs(ctx context.Context, change backlogChange) error {
 	var saved []models.Backlog
+	backlogSaves.Lock()
+	defer backlogSaves.Unlock()
 	err := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := m.lockBacklogs(tx); err != nil {
+			return fmt.Errorf("backlogs: %w", err)
+		}
 		current, err := StoredBacklogs(tx, m.spec)
 		if err != nil {
 			return fmt.Errorf("backlogs: %w", err)

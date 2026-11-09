@@ -62,8 +62,15 @@ func (m *taskManager) narrowToPlace(ctx context.Context, q *gorm.DB, filter Task
 		backlog = found
 	}
 	isFirst := backlog.ID == backlogs[0].ID
+	ids := make([]string, len(backlogs))
+	for i, b := range backlogs {
+		ids[i] = b.ID
+	}
 	if filter.Step == "" {
-		return q.Where(inBacklog(isFirst), backlog.ID), nil
+		if !isFirst {
+			return q.Where("backlog = ?", backlog.ID), nil
+		}
+		return q.Where("(backlog = ? OR "+unplaced+")", backlog.ID, ids), nil
 	}
 	step, ok := stepNamed(backlog, filter.Step)
 	if !ok {
@@ -76,15 +83,10 @@ func (m *taskManager) narrowToPlace(ctx context.Context, q *gorm.DB, filter Task
 	for i, status := range step.Statuses {
 		statuses[i] = string(status)
 	}
-	return q.Where("(backlog = ? AND step = ?) OR ((backlog = '' OR backlog IS NULL) AND status IN ?)", backlog.ID, step.ID, statuses), nil
+	return q.Where("((backlog = ? AND step = ?) OR ("+unplaced+" AND status IN ?))", backlog.ID, step.ID, ids, statuses), nil
 }
 
-func inBacklog(isFirst bool) string {
-	if isFirst {
-		return "(backlog = ? OR backlog = '' OR backlog IS NULL)"
-	}
-	return "backlog = ?"
-}
+const unplaced = "(backlog IS NULL OR backlog = '' OR backlog NOT IN ?)"
 
 func backlogNamed(backlogs []models.Backlog, name string) (models.Backlog, bool) {
 	for _, b := range backlogs {
