@@ -9,6 +9,7 @@
 | [repeating-tasks.md](repeating-tasks.md) | A repeating task's template, the period it is due in, the key that makes one task per period, and what is left to build (W72). |
 | [run-versions.md](run-versions.md) | A run keeps the workflow version it began on, the one partial index on runs still going, and Stop with a start again on the good version (HS300). |
 | [backlogs.md](backlogs.md) | Backlogs with their own ordered steps, a task in one backlog at one step, the nine backlog operations and their actions, and why a step or backlog holding issues is refused (hub-steward SW15, SW20, SW26). |
+| [list-filters.md](list-filters.md) | The five filters `list_tasks` gained for the hub-steward backlog (tag, repo, backlog, step, untouched_days), their rules and why a tag is a subquery (hub-steward SW19). |
 
 Both pages describe the shape this repo took on 2026-09-28, when it moved off
 hand-written row structs and hand-written handlers onto
