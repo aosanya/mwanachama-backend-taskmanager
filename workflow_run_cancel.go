@@ -112,6 +112,12 @@ func (m *taskManager) cancelTask(ctx context.Context, task Task, reason string) 
 	if task.CompletedAt == "" {
 		task.CompletedAt = now
 	}
+	storedBacklog, storedStep := m.storedPlace(ctx, task.ID)
+	placedBacklog, placedStep, err := m.placeFor(ctx, storedBacklog, storedStep, task.Status)
+	if err != nil {
+		return fmt.Errorf("cancelTask: %w", err)
+	}
+	task.Backlog, task.Step = placedBacklog, placedStep
 	row, err := encode(m.store.Object(roleTask), task)
 	if err != nil {
 		return fmt.Errorf("cancelTask: %w", err)

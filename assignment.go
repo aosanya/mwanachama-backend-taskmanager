@@ -154,6 +154,13 @@ func (m *taskManager) setTaskStatus(ctx context.Context, taskID string, status T
 	if status != TaskStatusBlocked {
 		cols["held_by"] = ""
 	}
+	place, err := m.placeColumnsFor(ctx, taskID, status)
+	if err != nil {
+		return fmt.Errorf("setTaskStatus: %w", err)
+	}
+	for k, v := range place {
+		cols[k] = v
+	}
 	res := m.store.Query(ctx, roleTask).Where("id = ?", taskID).Updates(cols)
 	if res.Error != nil {
 		return fmt.Errorf("setTaskStatus: %w", res.Error)

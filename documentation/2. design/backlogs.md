@@ -31,6 +31,10 @@ the stored place, so changing a task's fields never moves it.
   lifecycle statuses the task walks its status there through the same
   transition rules as `MoveTaskToState`; a step that names none leaves the
   status alone.
+- A placed task also moves to the step that names its new status when the status
+  changes outside `UpdateTask`: blocking on assign, unblocking dependents,
+  cancelling a run or a case, and rolling a run back. An unplaced task is not
+  pinned by these paths; it keeps reading from its status.
 - A step that holds issues cannot be removed, and a backlog that holds issues
   cannot be deleted: both return `ErrBacklogHoldsIssues` (409), including when
   `ReplaceBacklogs` would drop them. `ErrUnknownBacklogStep` and
@@ -75,6 +79,7 @@ live in the `backlog_access` setting and the owner group in
 | A call with no person (a loader, an agent) is not narrowed. | `requester_id` empty |
 | On a hub with an owner group or grants, a person whose groups cannot be looked up, or a module with no lookup set, sees and writes nothing. | `backlogVisibility` |
 | `give` and `take` run in one transaction, so eight groups given access at once all keep their grant. A grant to a group that no longer exists is listed with `gone` and counts for nothing. Grants of a deleted backlog are dropped when the backlogs are saved. | `changeGrants`, `pruneGrants` |
+| Saving the `backlogs` setting takes a package mutex and, on Postgres, a transaction-level advisory lock keyed on the task table and the setting, so two simultaneous edits both survive. | `saveBacklogs`, `lockBacklogs` |
 | An issue that names a backlog that no longer exists reads in the first backlog and stays visible to whoever sees it. | `narrowToVisible` |
 
 The module does not know about groups itself. The hub that mounts it hands in
