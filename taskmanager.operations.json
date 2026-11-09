@@ -761,17 +761,19 @@
       "returns": [{"body": true}]
     },
     "open_sourced_tasks": {
-      "method": "POST", "path": "/sourced-tasks", "call": "OpenSourcedTasks", "action": "taskmanager.sourced_task.open",
+      "method": "POST", "path": "/sourced-tasks", "call": "OpenSourcedTasksAs", "action": "taskmanager.sourced_task.open",
       "title": "Open tasks from a source",
       "description": "Open one dated task per item a source lists, all in one transaction: a source (an opaque reference the host passes, such as the raw key of what listed the items) and items, each with a title, an optional description, an RFC 3339 due time and an optional key (the title when absent). An item already opened from the same source opens nothing again, so a replay is safe; each item comes back with its task id and whether this call opened it.",
-      "args": [{"from": "body", "whole": true}],
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the first backlog, where these issues land."},
+               {"from": "body", "whole": true}],
       "returns": [{"body": true}]
     },
     "generate_tasks": {
-      "method": "POST", "path": "/generated-tasks", "call": "GenerateTasks", "action": "taskmanager.generated_task.create",
+      "method": "POST", "path": "/generated-tasks", "call": "GenerateTasksAs", "action": "taskmanager.generated_task.create",
       "title": "Generate tasks over a list of subjects",
       "description": "Create one task per subject key from one template, all in one transaction: a run (an opaque name the host gives this generation), a template (title, optional description, priority, RFC 3339 due time and estimated hours) and subjects, the opaque keys the host listed, such as the groups or register records a query returned. Each task carries its subject key as its linked_ref. A subject already generated under the same run creates nothing again, so a replay is safe. At most 5000 subjects in one call; a blank or repeated subject refuses the whole call.",
-      "args": [{"from": "body", "whole": true}],
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the first backlog, where these issues land."},
+               {"from": "body", "whole": true}],
       "returns": [{"body": true}]
     },
     "create_repeating_task": {
