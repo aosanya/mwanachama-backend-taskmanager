@@ -3,6 +3,11 @@
 // storage mapping.
 package models
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 // TaskStatus represents the lifecycle state of a [Task].
 type TaskStatus string
 
@@ -169,6 +174,22 @@ type Task struct {
 	Deleted bool `json:"deleted"`
 }
 
+type TagList []string
+
+func (l *TagList) UnmarshalJSON(raw []byte) error {
+	var many []string
+	if err := json.Unmarshal(raw, &many); err == nil {
+		*l = many
+		return nil
+	}
+	var one string
+	if err := json.Unmarshal(raw, &one); err != nil {
+		return fmt.Errorf("tag must be a tag name or a list of tag names")
+	}
+	*l = TagList{one}
+	return nil
+}
+
 // TaskFilter constrains the results returned by TaskManager.ListTasks.
 // Zero values mean "no filter" for that field.
 type TaskFilter struct {
@@ -176,7 +197,7 @@ type TaskFilter struct {
 	Priority      TaskPriority `query:"priority"`
 	WorkflowRunID string       `query:"workflow_run_id"`
 	HeldBy        string       `query:"held_by"`
-	Tag           []string     `query:"tag"`
+	Tag           TagList      `query:"tag"`
 	Repo          string       `query:"repo"`
 	Backlog       string       `query:"backlog"`
 	Step          string       `query:"step"`

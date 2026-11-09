@@ -49,18 +49,16 @@ the stored place, so changing a task's fields never moves it.
 | `rename_backlog_step` | `PUT /backlogs/{backlogID}/steps/{stepID}` | `taskmanager.backlog_step.rename` |
 | `remove_backlog_step` | `DELETE /backlogs/{backlogID}/steps/{stepID}` | `taskmanager.backlog_step.remove` |
 | `reorder_backlog_steps` | `PUT /backlogs/{backlogID}/step-order` | `taskmanager.backlog_step.reorder` |
+| `move_task_to_step` | `POST /tasks/{taskID}/move-to-step` | `taskmanager.task.move_to_step` |
 
 Each action is its own permission, so a role can be given listing without
 managing. `taskmanager.backlog.manage` is the one the phone app checks to show
-its Add and Edit backlog screens. Moving a task to a step has no route yet;
-it is a manager method only, as in the hub's copy.
+its Add and Edit backlog screens. Moving a task to a step is the tenth
+operation: it names the backlog and the step by id.
 
 ## Not here yet
 
 - Access by group (a group's Can see or Can move on a backlog) is hub-steward
   SW32 and is ported separately.
-- The `backlog` and `step` filters on `list_tasks` are hub-steward SW19, ported
-  separately.
-- `TestNewCardsLandAtTheBottomInTheOrderTheyWereCreated` and the other
-  `task_rank_test.go` tests fail on this repo's HEAD before this change; they
-  are unrelated to backlogs.
+- The `task_rank_test.go` tests that failed on this repo's HEAD before the
+  backlogs port pass since the rank feature was wired in (`6666b2e`).

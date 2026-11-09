@@ -29,6 +29,9 @@ func (m *taskManager) narrowList(ctx context.Context, q *gorm.DB, filter TaskFil
 		return nil, err
 	}
 	for _, tag := range filter.Tag {
+		if tag == "" {
+			continue
+		}
 		q = q.Where("id IN (?)", m.taskIDsWithTag(ctx, tag))
 	}
 	if filter.UntouchedDays > 0 {
