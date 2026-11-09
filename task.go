@@ -43,6 +43,8 @@ type TaskManager interface {
 
 	ListOverdueTasks(ctx context.Context, filter OverdueFilter) ([]OverdueTask, error)
 
+	PendingTasks(ctx context.Context, filter PendingFilter) (PendingTasks, error)
+
 	ListTaskStates(ctx context.Context) (TaskStateList, error)
 
 	MoveTaskToState(ctx context.Context, taskID, state string) (Task, error)

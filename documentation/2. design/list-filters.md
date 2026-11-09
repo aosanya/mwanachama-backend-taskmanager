@@ -30,9 +30,15 @@ task created with a `rank` above 0 keeps it, so the loader's priority order
 survives; a task created without one gets a rank below the bottom of the
 list.
 
+## What is pending in one call (hub-steward SW67, D87)
+
+`GET /pending-tasks` (`taskmanager_task_pending`) answers what is pending, open or left in one call, so a caller does not page `list_tasks`. Pending is every issue not completed, failed or cancelled that the caller can see. It returns `total`, `by_step` (the count at each step, in step order) and `by_priority`, counted over everything the filters match, and `items`: the first `limit` issues in rank order, each compact (id, title, state, backlog, step, priority, tags, rank, blocked) and without the description. It narrows by `tag` (every tag must match), `backlog`, `step`, `priority` and `q` (every word in the title or a tag, without regard to case); `limit` defaults to 25 and is at most 100, and `offset` pages. It is narrowed by the caller's backlog access exactly as `list_tasks` is; a call with no person is not narrowed. A timing test on 2,000 issues with descriptions requires it to be at least 5 times faster and 20 times smaller than paging `list_tasks`.
+
+This repo has no permission catalog, so the hub's note that `task.read` covers `taskmanager.task.pending` has nothing to port here: a host that maps actions to permissions adds the action itself.
+
 ## Tests
 
-`task_list_filter_test.go` covers each filter, their combination, several tags,
+`task_pending_test.go` and `routes/pending_tasks_test.go` cover the pending call; `task_list_filter_test.go` covers each filter, their combination, several tags,
 case, the 400s and the days boundary; `task_list_tag_rank_test.go` covers
 a single-string tag, an empty tag, a caller's rank kept and the list order. `depends_on_traverse_test.go` checks
 that `traverse_relationships` returns a task's `depends_on` links outbound and

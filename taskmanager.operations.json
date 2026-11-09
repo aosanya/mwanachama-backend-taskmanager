@@ -25,6 +25,14 @@
                {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."}],
       "returns": [{"body": true}]
     },
+    "pending_tasks": {
+      "method": "GET", "path": "/pending-tasks", "call": "PendingTasks", "action": "taskmanager.task.pending",
+      "title": "What is pending",
+      "description": "The quick answer to what is pending, open or left, in one call: every issue that is not completed, failed or cancelled and that the caller can see. It returns total, by_step (the count at each step, in step order) and by_priority (critical, high, medium, low), counted over everything the filters match, and items: the first limit issues in rank order, each compact (id, title with its code, state, backlog, step, priority, tags, rank, blocked) and without the description. Narrow by tag (repeat it to require every tag), backlog (id or name), step (id or name), priority, or q (words that must each appear in the title or a tag, without regard to case). limit defaults to 25 and is at most 100; pass offset (0 or more) to read the next page. To read one issue in full use taskmanager_task_read; to page through every issue use taskmanager_task_list.",
+      "args": [{"from": "query", "whole": true},
+               {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."}],
+      "returns": [{"body": true}]
+    },
     "get_task": {
       "method": "GET", "path": "/tasks/{taskID}", "call": "GetTaskFor", "action": "taskmanager.task.read",
       "title": "Read task",

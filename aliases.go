@@ -12,6 +12,10 @@ type (
 	TaskFilter         = models.TaskFilter
 	OverdueFilter      = models.OverdueFilter
 	OverdueTask        = models.OverdueTask
+	PendingFilter      = models.PendingFilter
+	PendingCount       = models.PendingCount
+	PendingItem        = models.PendingItem
+	PendingTasks       = models.PendingTasks
 	Assignment         = models.Assignment
 	AssigneeKind       = models.AssigneeKind
 	HolderTasksQuery   = models.HolderTasksQuery
