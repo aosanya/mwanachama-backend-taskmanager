@@ -32,6 +32,8 @@ func (m *taskManager) UseGroups(g Groups) { m.groups = g }
 
 func (m *taskManager) UseGroupExists(g GroupExists) { m.groupExists = g }
 
+func (m *taskManager) UseRoleSync(r RoleSync) { m.roleSync = r }
+
 type backlogVisibility struct {
 	all    bool
 	levels map[string]models.AccessLevel
@@ -180,6 +182,9 @@ func (m *taskManager) accessOf(ctx context.Context, backlogID string) (models.Ba
 			groups[i].Gone = !exists
 		}
 	}
+	if err := m.markRoles(ctx, groups); err != nil {
+		return models.BacklogAccess{}, err
+	}
 	return models.BacklogAccess{BacklogID: backlogID, OwnerGroup: owner, Groups: groups}, nil
 }
 
@@ -230,6 +235,9 @@ func (m *taskManager) GiveBacklogAccess(ctx context.Context, backlogID, groupID,
 	if err != nil {
 		return models.BacklogAccess{}, err
 	}
+	if err := m.syncGroupRole(ctx, groupID); err != nil {
+		return models.BacklogAccess{}, err
+	}
 	return m.accessOf(ctx, backlogID)
 }
 
@@ -241,6 +249,9 @@ func (m *taskManager) TakeBacklogAccess(ctx context.Context, backlogID, groupID 
 		return models.WithoutGrant(grants, backlogID, groupID), nil
 	})
 	if err != nil {
+		return models.BacklogAccess{}, err
+	}
+	if err := m.syncGroupRole(ctx, groupID); err != nil {
 		return models.BacklogAccess{}, err
 	}
 	return m.accessOf(ctx, backlogID)
@@ -283,5 +294,8 @@ func (m *taskManager) pruneGrants(ctx context.Context, kept []models.Backlog) er
 	if len(pruned) == len(grants) {
 		return nil
 	}
-	return m.storeSetting(ctx, accessSetting, pruned)
+	if err := m.storeSetting(ctx, accessSetting, pruned); err != nil {
+		return err
+	}
+	return m.syncGroupRoles(ctx, grants)
 }

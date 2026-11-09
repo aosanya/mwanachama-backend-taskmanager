@@ -20,9 +20,22 @@ type BacklogGrant struct {
 }
 
 type GroupAccess struct {
-	GroupID string      `json:"group_id"`
-	Level   AccessLevel `json:"level"`
-	Gone    bool        `json:"gone,omitempty"`
+	GroupID      string      `json:"group_id"`
+	Level        AccessLevel `json:"level"`
+	Gone         bool        `json:"gone,omitempty"`
+	Roles        []string    `json:"roles,omitempty"`
+	NoRole       bool        `json:"no_role,omitempty"`
+	RoleTooSmall bool        `json:"role_too_small,omitempty"`
+}
+
+func HighestLevelOf(grants []BacklogGrant, groupID string) AccessLevel {
+	best := AccessLevel("")
+	for _, g := range grants {
+		if g.GroupID == groupID && g.Level.rank() > best.rank() {
+			best = g.Level
+		}
+	}
+	return best
 }
 
 type BacklogAccess struct {

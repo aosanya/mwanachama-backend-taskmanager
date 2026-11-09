@@ -101,9 +101,17 @@ The four operations:
 | `take_backlog_access` | `DELETE /backlogs/{backlogID}/access/{groupID}` | `taskmanager.backlog_access.take` |
 | `set_backlog_owner_group` | `PUT /backlog-owner-group` | `taskmanager.backlog.set_owner_group` |
 
-## Not here yet
+## Roles of a group
 
-- A backlog filter that treats an issue with a stale backlog id as being in the
-  first backlog (hub-steward SW48).
-- The hub's group roles (a group holding a role in the agency) are hub work and
-  are not part of this module.
+The module has no roles and no permission catalog. The hub that mounts it may
+hand in `UseRoleSync`, an object with two methods: `SetBacklogRole` receives a
+group id and the role code the group should now hold (`backlog_member` for Can
+see, `backlog_worker` for Can move, empty for none), and `GroupRoleState`
+reports the role codes a group holds and whether they allow reading and
+editing. Giving or taking access, and dropping the grants of a deleted
+backlog, call `SetBacklogRole` with the group's highest level over all
+backlogs (`HighestLevelOf`); the owner group is never given a role. The access
+list then carries `roles`, `no_role` (the roles do not allow reading) and
+`role_too_small` (Can move with roles that do not allow editing) for each
+group. With no hook set nothing is synced and those fields stay empty. Group
+roles themselves and the admission they give are the hub's.

@@ -72,6 +72,7 @@ type TaskManager interface {
 	SetBacklogOwnerGroup(ctx context.Context, groupID string) error
 	UseGroups(g Groups)
 	UseGroupExists(g GroupExists)
+	UseRoleSync(r RoleSync)
 	CreateTaskAs(ctx context.Context, requesterID string, task Task) (Task, error)
 	UpdateTaskAs(ctx context.Context, requesterID string, task Task) (Task, error)
 	MoveTaskToStateAs(ctx context.Context, requesterID, taskID, state string) (Task, error)
@@ -501,6 +502,7 @@ type taskManager struct {
 	overdueGrace time.Duration
 	groups       Groups
 	groupExists  GroupExists
+	roleSync     RoleSync
 }
 
 func NewTaskManager(db *gorm.DB, s *spec.Spec, pub events.Publisher) (TaskManager, error) {
