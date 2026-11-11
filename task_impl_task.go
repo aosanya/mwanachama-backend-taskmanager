@@ -122,7 +122,7 @@ func (m *taskManager) updateTask(ctx context.Context, task Task, replace bool) (
 	now := time.Now().UTC().Format(time.RFC3339)
 	task.UpdatedAt = now
 	task.CreatedAt = current.CreatedAt
-	if isTerminalStatus(task.Status) && task.CompletedAt == "" {
+	if isTerminalStatus(task.Status) && (task.CompletedAt == "" || current.Status != task.Status) {
 		task.CompletedAt = now
 	}
 	task.AssignedTo = current.AssignedTo
@@ -247,7 +247,7 @@ func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task,
 	if limit <= 0 || limit > maxListPage {
 		limit = maxListPage
 	}
-	tasks, err := specstore.List[Task](m.store, q.Order(taskOrder).Limit(limit), roleTask)
+	tasks, err := specstore.List[Task](m.store, q.Order(listOrder).Limit(limit), roleTask)
 	if err != nil {
 		return nil, fmt.Errorf("ListTasks: %w", err)
 	}

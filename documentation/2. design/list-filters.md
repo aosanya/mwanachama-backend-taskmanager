@@ -30,6 +30,15 @@ task created with a `rank` above 0 keeps it, so the loader's priority order
 survives; a task created without one gets a rank below the bottom of the
 list.
 
+The one exception is a completed task (hub-steward SW218). Completed tasks come
+after every other task, newest `completed_at` first, with rank, created time and
+id as the tie-break, so a Done step read with `step` shows the latest completion
+at the top and every other step keeps rank order. `completed_at` is set when a
+task reaches a terminal status and is set again whenever the status changes into
+one, so a task that returns to Done is placed by its latest completion. There is
+no sort control and no setting. `task_pending` lists open tasks only and keeps
+rank order.
+
 ## What is pending in one call (hub-steward SW67, D87)
 
 `GET /pending-tasks` (`taskmanager_task_pending`) answers what is pending, open or left in one call, so a caller does not page `list_tasks`. Pending is every issue not completed, failed or cancelled that the caller can see. It returns `total`, `by_step` (the count at each step, in step order) and `by_priority`, counted over everything the filters match, and `items`: the first `limit` issues in rank order, each compact (id, title, state, backlog, step, priority, tags, rank, blocked) and without the description. It narrows by `tag` (every tag must match), `backlog`, `step`, `priority` and `q` (every word in the title or a tag, without regard to case); `limit` defaults to 25 and is at most 100, and `offset` pages. It is narrowed by the caller's backlog access exactly as `list_tasks` is; a call with no person is not narrowed. A timing test on 2,000 issues with descriptions requires it to be at least 5 times faster and 20 times smaller than paging `list_tasks`.

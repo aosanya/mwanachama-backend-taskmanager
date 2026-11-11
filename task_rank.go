@@ -13,6 +13,8 @@ const rankGap = 1 << 16
 
 const taskOrder = `"rank", created_at, id`
 
+const listOrder = `CASE WHEN status = 'completed' THEN 1 ELSE 0 END, CASE WHEN status = 'completed' THEN completed_at END DESC NULLS LAST, "rank", created_at, id`
+
 type rankedCard struct {
 	ID   string
 	Rank int
