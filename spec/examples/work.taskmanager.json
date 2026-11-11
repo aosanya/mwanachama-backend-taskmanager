@@ -118,6 +118,12 @@
       "description": "One dated entry in the Log of a task, and who wrote it."
     },
     {
+      "role": "task_reference",
+      "name": "task_reference",
+      "table": "task_references",
+      "description": "One thing a task is about: a file, a folder, another task, a screen or tool, or a link."
+    },
+    {
       "role": "repeating_task",
       "name": "repeating_task",
       "table": "repeating_tasks",

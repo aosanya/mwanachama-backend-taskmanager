@@ -1403,6 +1403,24 @@
       ]
     },
     {
+      "role": "task_reference",
+      "description": "One thing an issue is about: a file or folder of a repo's main branch, another issue, a screen or tool, or a website link. The id is a digest of the issue, kind, repo and target, so an issue refers to the same thing once. Whether a file or folder still exists is not stored.",
+      "fields": [
+        {"name": "id", "type": "string", "description": "A digest of the issue, kind, repo and target.", "primary": true},
+        {"name": "task_id", "type": "string", "description": "The issue it belongs to.", "required": true},
+        {"name": "kind", "type": "string", "description": "file, folder, issue, screen or link.", "required": true},
+        {"name": "repo", "type": "string", "description": "For a file or folder, the repo it is in; empty for the other kinds."},
+        {"name": "target", "type": "string", "description": "The path inside the repo, the issue number, the tool or screen name, or the URL.", "required": true},
+        {"name": "source", "type": "string", "description": "person or assistant: who named it.", "required": true},
+        {"name": "confirmed", "type": "bool", "description": "Whether a person has confirmed it; a person's own entry is confirmed when added."},
+        {"name": "added_by", "type": "string", "description": "The account that added it, from the session."},
+        {"name": "created_at", "type": "timestamp", "description": "When it was added."}
+      ],
+      "indexes": [
+        {"name": "task", "description": "Reads one issue's references in order.", "fields": ["task_id", "created_at"]}
+      ]
+    },
+    {
       "role": "repeating_task",
       "description": "A task template made again at the start of every period of its schedule, each made task due by that period's end. Stopping it keeps every task it already made.",
       "fields": [

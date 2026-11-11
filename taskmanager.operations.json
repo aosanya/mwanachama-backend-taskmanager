@@ -78,6 +78,54 @@
                {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue."}],
       "returns": [{"body": true}]
     },
+    "add_task_reference": {
+      "method": "POST", "path": "/tasks/{taskID}/references", "status": 201, "call": "AddTaskReference", "action": "taskmanager.task.reference_add",
+      "title": "Add a reference to an issue",
+      "description": "Say what an issue is about: one file, folder, issue, screen or tool, or website link. Anyone who can see the issue may add one, a reader who cannot move it included. A file or folder is a repo and a path on the repo's main branch; an issue is its number; a screen or tool is its name; a link is an http or https URL. The writer and the time are set by the hub, and an entry a person adds is confirmed. The same thing twice on one issue is refused.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is adding it, from the session; recorded with the entry."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue it is about."},
+               {"from": "body", "as": "kind", "required": true, "description": "file, folder, issue, screen or link."},
+               {"from": "body", "as": "repo", "description": "The repo, for a file or folder."},
+               {"from": "body", "as": "target", "required": true, "description": "The path inside the repo, the issue number, the tool or screen name, or the URL."}],
+      "returns": [{"body": true}]
+    },
+    "propose_task_reference": {
+      "method": "POST", "path": "/tasks/{taskID}/references/proposals", "status": 201, "call": "ProposeTaskReference", "action": "taskmanager.task.reference_propose",
+      "title": "Propose a reference for an issue",
+      "description": "The assistant's way to say what an issue seems to be about, from searching: one file, folder, issue, screen or tool, or website link, in the same form as adding one. It is saved unconfirmed and shown as the assistant's until a person confirms it or removes it. Anyone who can see the issue may propose. The same thing twice on one issue is refused.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is proposing it, from the session; recorded with the entry."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue it seems to be about."},
+               {"from": "body", "as": "kind", "required": true, "description": "file, folder, issue, screen or link."},
+               {"from": "body", "as": "repo", "description": "The repo, for a file or folder."},
+               {"from": "body", "as": "target", "required": true, "description": "The path inside the repo, the issue number, the tool or screen name, or the URL."}],
+      "returns": [{"body": true}]
+    },
+    "confirm_task_reference": {
+      "method": "POST", "path": "/tasks/{taskID}/references/{referenceID}/confirm", "call": "ConfirmTaskReference", "action": "taskmanager.task.reference_confirm",
+      "title": "Confirm a proposed reference",
+      "description": "A person agrees that a proposed reference is right. It stays marked as the assistant's and is no longer waiting. Confirming one already confirmed changes nothing. Anyone who can see the issue may confirm.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is confirming it, from the session."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue."},
+               {"from": "path", "as": "referenceID", "description": "The reference to confirm, from the list."}],
+      "returns": [{"body": true}]
+    },
+    "list_task_references": {
+      "method": "GET", "path": "/tasks/{taskID}/references", "call": "ListTaskReferences", "action": "taskmanager.task.reference_list",
+      "title": "List what an issue is about",
+      "description": "List the references of one issue, oldest first: kind, repo, target, who named it (person or assistant), whether a person has confirmed it, who added it and when. Whether a file or folder is still on the repo is not checked here.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue."}],
+      "returns": [{"body": true}]
+    },
+    "remove_task_reference": {
+      "method": "DELETE", "path": "/tasks/{taskID}/references/{referenceID}", "status": 204, "call": "RemoveTaskReference", "action": "taskmanager.task.reference_remove",
+      "title": "Remove a reference from an issue",
+      "description": "Take one reference off an issue; this is also how a file that was renamed or deleted is fixed, by removing it and adding the right one. Anyone who can see the issue may remove one.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is removing it, from the session."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue."},
+               {"from": "path", "as": "referenceID", "description": "The reference to remove, from the list."}],
+      "returns": [{"body": true}]
+    },
     "list_task_states": {
       "method": "GET", "path": "/task-states", "call": "ListTaskStates", "action": "taskmanager.task_state.list",
       "title": "List task states",
@@ -938,6 +986,9 @@
     "ErrRequesterVoteStays": 409,
     "ErrTaskNotFound": 404,
     "ErrInvalidTaskNote": 400,
+    "ErrInvalidTaskReference": 400,
+    "ErrDuplicateTaskReference": 409,
+    "ErrTaskReferenceNotFound": 404,
     "ErrInvalidOverdueFilter": 400,
     "ErrInvalidAssignee": 400,
     "ErrAgentNotFound": 404,

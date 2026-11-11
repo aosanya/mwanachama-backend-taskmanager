@@ -44,6 +44,7 @@ type (
 	CaseFilter         = models.CaseFilter
 	CaseVote           = models.CaseVote
 	TaskNote           = models.TaskNote
+	TaskReference      = models.TaskReference
 	TaskPatch          = models.TaskPatch
 	RankedCase         = models.RankedCase
 	CodeSequence       = models.CodeSequence

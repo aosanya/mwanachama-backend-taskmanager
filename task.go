@@ -241,6 +241,11 @@ type TaskManager interface {
 	ListCaseVotes(ctx context.Context, caseID string) ([]CaseVote, error)
 	AddTaskNote(ctx context.Context, requesterID, taskID, kind, text string, links []string) (TaskNote, error)
 	ListTaskNotes(ctx context.Context, requesterID, taskID string) ([]TaskNote, error)
+	AddTaskReference(ctx context.Context, requesterID, taskID, kind, repo, target string) (TaskReference, error)
+	ProposeTaskReference(ctx context.Context, requesterID, taskID, kind, repo, target string) (TaskReference, error)
+	ConfirmTaskReference(ctx context.Context, requesterID, taskID, referenceID string) (TaskReference, error)
+	ListTaskReferences(ctx context.Context, requesterID, taskID string) ([]TaskReference, error)
+	RemoveTaskReference(ctx context.Context, requesterID, taskID, referenceID string) error
 	ListCasesByVotes(ctx context.Context, filter CaseFilter) ([]RankedCase, error)
 
 	// GetTaskByName retrieves a task by its project-scoped name (task_name)

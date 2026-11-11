@@ -127,6 +127,12 @@
       "description": "One dated entry in the Log of a work item, and who wrote it."
     },
     {
+      "role": "task_reference",
+      "name": "task_reference",
+      "table": "task_references",
+      "description": "One thing a work item is about: a file, a folder, another item, a screen or tool, or a link."
+    },
+    {
       "role": "repeating_task",
       "name": "repeating_work_item",
       "table": "repeating_work_items",
