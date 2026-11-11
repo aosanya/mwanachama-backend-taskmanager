@@ -9,6 +9,8 @@ type PendingFilter struct {
 	Limit    int          `query:"limit"`
 	Offset   int          `query:"offset"`
 
+	IncludeClosed bool `query:"include_closed"`
+
 	RequesterID string `query:"-" json:"-"`
 }
 

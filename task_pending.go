@@ -54,19 +54,20 @@ func (m *taskManager) PendingTasks(ctx context.Context, filter PendingFilter) (P
 	if err != nil {
 		return PendingTasks{}, fmt.Errorf("PendingTasks: %w", err)
 	}
-	var tallies []pendingTally
-	tallyQuery, err := m.pendingBase(ctx, filter)
+	tallies, err := m.pendingTallies(ctx, filter, false)
 	if err != nil {
 		return PendingTasks{}, fmt.Errorf("PendingTasks: %w", err)
 	}
-	if err := tallyQuery.Select("backlog, step, status, priority, COUNT(*) AS n").
-		Group("backlog, step, status, priority").Scan(&tallies).Error; err != nil {
-		return PendingTasks{}, fmt.Errorf("PendingTasks: %w", err)
+	var closedTallies []pendingTally
+	if filter.IncludeClosed {
+		if closedTallies, err = m.pendingTallies(ctx, filter, true); err != nil {
+			return PendingTasks{}, fmt.Errorf("PendingTasks: %w", err)
+		}
 	}
 	out := PendingTasks{Items: []PendingItem{}}
-	out.ByStep, out.ByPriority, out.Total = tally(backlogs, tallies)
+	out.ByStep, out.ByPriority, out.Total = tally(backlogs, tallies, closedTallies)
 
-	rowQuery, err := m.pendingBase(ctx, filter)
+	rowQuery, err := m.pendingBase(ctx, filter, false)
 	if err != nil {
 		return PendingTasks{}, fmt.Errorf("PendingTasks: %w", err)
 	}
@@ -91,8 +92,24 @@ func (m *taskManager) PendingTasks(ctx context.Context, filter PendingFilter) (P
 	return out, nil
 }
 
-func (m *taskManager) pendingBase(ctx context.Context, filter PendingFilter) (*gorm.DB, error) {
-	q := m.store.Query(ctx, roleTask).Where("deleted = ?", false).Where("status NOT IN ?", closedStatuses)
+func (m *taskManager) pendingTallies(ctx context.Context, filter PendingFilter, closed bool) ([]pendingTally, error) {
+	query, err := m.pendingBase(ctx, filter, closed)
+	if err != nil {
+		return nil, err
+	}
+	var tallies []pendingTally
+	err = query.Select("backlog, step, status, priority, COUNT(*) AS n").
+		Group("backlog, step, status, priority").Scan(&tallies).Error
+	return tallies, err
+}
+
+func (m *taskManager) pendingBase(ctx context.Context, filter PendingFilter, closed bool) (*gorm.DB, error) {
+	q := m.store.Query(ctx, roleTask).Where("deleted = ?", false)
+	if closed {
+		q = q.Where("status IN ?", closedStatuses)
+	} else {
+		q = q.Where("status NOT IN ?", closedStatuses)
+	}
 	if filter.Priority != "" {
 		q = q.Where("priority = ?", string(filter.Priority))
 	}
@@ -122,7 +139,7 @@ func likeLiteral(word string) string {
 	return strings.NewReplacer(`\`, `\\`, "%", `\%`, "_", `\_`).Replace(word)
 }
 
-func tally(backlogs []models.Backlog, tallies []pendingTally) (byStep, byPriority []PendingCount, total int) {
+func tally(backlogs []models.Backlog, tallies, closedTallies []pendingTally) (byStep, byPriority []PendingCount, total int) {
 	stepCounts := map[string]int{}
 	priorityCounts := map[string]int{}
 	for _, t := range tallies {
@@ -130,6 +147,10 @@ func tally(backlogs []models.Backlog, tallies []pendingTally) (byStep, byPriorit
 		stepCounts[step] += t.N
 		priorityCounts[t.Priority] += t.N
 		total += t.N
+	}
+	for _, t := range closedTallies {
+		_, step := placeNames(backlogs, pendingRow{Status: t.Status, Backlog: t.Backlog, Step: t.Step})
+		stepCounts[step] += t.N
 	}
 	byStep = []PendingCount{}
 	seen := map[string]bool{}

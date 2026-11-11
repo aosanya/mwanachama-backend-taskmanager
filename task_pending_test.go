@@ -310,3 +310,50 @@ func TestPendingTasks_IsFarCheaperThanPagingTheList(t *testing.T) {
 		t.Fatalf("pending took %v against %v for paging the list: not far cheaper", pending, paging)
 	}
 }
+
+func TestPendingTasks_CountsDoneAndCancelledByStepOnlyWhenAsked(t *testing.T) {
+	mgr := newTestManager(t)
+	seedPending(t, mgr)
+
+	asked := pendingOf(t, mgr, mwanachamataskmanager.PendingFilter{IncludeClosed: true})
+
+	want := map[string]int{"To do": 2, "Doing": 1, "Done": 1, "Cancelled": 1}
+	if len(asked.ByStep) != len(want) {
+		t.Fatalf("by_step %+v, want %v", asked.ByStep, want)
+	}
+	for name, count := range want {
+		if got := countOf(asked.ByStep, name); got != count {
+			t.Fatalf("%s %d, want %d: %+v", name, got, count, asked.ByStep)
+		}
+	}
+	if names := []string{asked.ByStep[0].Name, asked.ByStep[1].Name, asked.ByStep[2].Name, asked.ByStep[3].Name}; strings.Join(names, ",") != "To do,Doing,Done,Cancelled" {
+		t.Fatalf("by_step not in step order: %+v", asked.ByStep)
+	}
+	if asked.Total != 3 || len(asked.Items) != 3 {
+		t.Fatalf("total %d items %d, want the 3 open issues only", asked.Total, len(asked.Items))
+	}
+
+	plain := pendingOf(t, mgr, mwanachamataskmanager.PendingFilter{})
+	if countOf(plain.ByStep, "Done") != -1 || countOf(plain.ByStep, "Cancelled") != -1 {
+		t.Fatalf("closed steps are counted without being asked: %+v", plain.ByStep)
+	}
+}
+
+func TestPendingTasks_ClosedCountsFollowTheTagFilter(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+	mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "open mine", Tags: []string{"mine"}})
+	for _, tags := range [][]string{{"mine"}, {"other"}} {
+		task := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "closed " + tags[0], Tags: tags})
+		task.Status = mwanachamataskmanager.TaskStatusCancelled
+		if _, err := mgr.UpdateTask(ctx, task); err != nil {
+			t.Fatalf("UpdateTask: %v", err)
+		}
+	}
+
+	out := pendingOf(t, mgr, mwanachamataskmanager.PendingFilter{Tag: []string{"mine"}, IncludeClosed: true})
+
+	if got := countOf(out.ByStep, "Cancelled"); got != 1 {
+		t.Fatalf("Cancelled %d, want 1: %+v", got, out.ByStep)
+	}
+}
