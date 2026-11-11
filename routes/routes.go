@@ -19,6 +19,7 @@ var operations = sync.OnceValues(func() (*dispatch.Spec, error) {
 
 var sentinels = map[string]error{
 	"ErrTaskNotFound":               mwanachamataskmanager.ErrTaskNotFound,
+	"ErrInvalidTaskNote":            mwanachamataskmanager.ErrInvalidTaskNote,
 	"ErrUnknownBacklog":             mwanachamataskmanager.ErrUnknownBacklog,
 	"ErrInvalidFilter":              mwanachamataskmanager.ErrInvalidFilter,
 	"ErrInvalidOverdueFilter":       mwanachamataskmanager.ErrInvalidOverdueFilter,

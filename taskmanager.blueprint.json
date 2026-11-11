@@ -1387,6 +1387,22 @@
       ]
     },
     {
+      "role": "task_note",
+      "description": "One dated entry in the Log of an issue: who wrote it, whether a person or a worker, the text, and links to the work. Entries are only added; none is changed or removed.",
+      "fields": [
+        {"name": "id", "type": "string", "description": "Storage key, opaque to callers.", "primary": true},
+        {"name": "task_id", "type": "string", "description": "The issue whose Log it belongs to.", "required": true},
+        {"name": "author_id", "type": "string", "description": "The account that wrote it, from the session."},
+        {"name": "kind", "type": "string", "description": "person or worker.", "required": true},
+        {"name": "text", "type": "text", "description": "A line or a longer write-up.", "required": true},
+        {"name": "links", "type": "json", "description": "Links to the work: a commit, a file, a drawing, a CI run."},
+        {"name": "created_at", "type": "timestamp", "description": "When it was written."}
+      ],
+      "indexes": [
+        {"name": "task", "description": "Reads one issue's Log in order.", "fields": ["task_id", "created_at"]}
+      ]
+    },
+    {
       "role": "repeating_task",
       "description": "A task template made again at the start of every period of its schedule, each made task due by that period's end. Stopping it keeps every task it already made.",
       "fields": [

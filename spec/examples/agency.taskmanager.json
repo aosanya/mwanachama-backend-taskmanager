@@ -121,6 +121,12 @@
       "description": "One member's vote on one case, and who cast it."
     },
     {
+      "role": "task_note",
+      "name": "task_note",
+      "table": "task_notes",
+      "description": "One dated entry in the Log of a work item, and who wrote it."
+    },
+    {
       "role": "repeating_task",
       "name": "repeating_work_item",
       "table": "repeating_work_items",

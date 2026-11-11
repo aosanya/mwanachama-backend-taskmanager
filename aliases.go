@@ -43,6 +43,7 @@ type (
 	CaseTask           = models.CaseTask
 	CaseFilter         = models.CaseFilter
 	CaseVote           = models.CaseVote
+	TaskNote           = models.TaskNote
 	RankedCase         = models.RankedCase
 	CodeSequence       = models.CodeSequence
 )

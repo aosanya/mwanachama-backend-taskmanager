@@ -50,6 +50,25 @@
                {"from": "path", "as": "taskID", "refers": "taskmanager.task", "into": "ID", "description": "The task to update."}],
       "returns": [{"body": true}]
     },
+    "add_task_note": {
+      "method": "POST", "path": "/tasks/{taskID}/notes", "status": 201, "call": "AddTaskNote", "action": "taskmanager.task.note_add",
+      "title": "Add a note to an issue's Log",
+      "description": "Add one dated entry to the Log of an issue. Anyone who can see the issue may add one, a reader who cannot move it included. The writer and the time are set by the hub; nothing already in the Log is changed. kind is person (the default) or a worker; links are the commit, file, drawing or CI run the entry is about.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; recorded as the entry's writer."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue whose Log it goes in."},
+               {"from": "body", "as": "kind", "description": "person or worker. person when left out."},
+               {"from": "body", "as": "text", "required": true, "description": "A line or a longer write-up."},
+               {"from": "body", "as": "links", "description": "Links to the work, as a list of strings."}],
+      "returns": [{"body": true}]
+    },
+    "list_task_notes": {
+      "method": "GET", "path": "/tasks/{taskID}/notes", "call": "ListTaskNotes", "action": "taskmanager.task.note_list",
+      "title": "List the Log of an issue",
+      "description": "List the entries in the Log of one issue, oldest first: writer, kind, text, links and time.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue."}],
+      "returns": [{"body": true}]
+    },
     "list_task_states": {
       "method": "GET", "path": "/task-states", "call": "ListTaskStates", "action": "taskmanager.task_state.list",
       "title": "List task states",
@@ -909,6 +928,7 @@
     "ErrVoteNotFound": 404,
     "ErrRequesterVoteStays": 409,
     "ErrTaskNotFound": 404,
+    "ErrInvalidTaskNote": 400,
     "ErrInvalidOverdueFilter": 400,
     "ErrInvalidAssignee": 400,
     "ErrAgentNotFound": 404,
