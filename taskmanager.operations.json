@@ -50,6 +50,15 @@
                {"from": "path", "as": "taskID", "refers": "taskmanager.task", "into": "ID", "description": "The task to update."}],
       "returns": [{"body": true}]
     },
+    "patch_task": {
+      "method": "PATCH", "path": "/tasks/{taskID}", "call": "PatchTaskAs", "action": "taskmanager.task.patch",
+      "title": "Patch task",
+      "description": "Change only the fields you send and leave every other field of the issue as it is: tags, project, priority, rank, place and the rest. Use this to edit one field in one call. Sending tags replaces the whole tag list; an empty list clears it. A status change is checked against the lifecycle. To move an issue between steps use taskmanager_task_move_to_step.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "body", "whole": true},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "into": "ID", "description": "The task to patch."}],
+      "returns": [{"body": true}]
+    },
     "add_task_note": {
       "method": "POST", "path": "/tasks/{taskID}/notes", "status": 201, "call": "AddTaskNote", "action": "taskmanager.task.note_add",
       "title": "Add a note to an issue's Log",

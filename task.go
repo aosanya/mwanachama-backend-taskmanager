@@ -77,6 +77,7 @@ type TaskManager interface {
 	UseRoleSync(r RoleSync)
 	CreateTaskAs(ctx context.Context, requesterID string, task Task) (Task, error)
 	UpdateTaskAs(ctx context.Context, requesterID string, task Task) (Task, error)
+	PatchTaskAs(ctx context.Context, requesterID string, patch TaskPatch) (Task, error)
 	MoveTaskToStateAs(ctx context.Context, requesterID, taskID, state string) (Task, error)
 	PlaceTaskAs(ctx context.Context, requesterID, taskID, afterID, beforeID string) (Task, error)
 	DeleteTaskAs(ctx context.Context, requesterID, taskID string) error
