@@ -50,6 +50,20 @@
           ]
         },
         {
+          "name": "effort",
+          "type": "enum",
+          "description": "Estimated effort to complete the task, entered when it is added.",
+          "default": "unknown",
+          "values": [
+            "unknown",
+            "very_low",
+            "low",
+            "medium",
+            "high",
+            "very_high"
+          ]
+        },
+        {
           "name": "due_at",
           "type": "timestamp",
           "description": "The deadline. Empty when there is none."

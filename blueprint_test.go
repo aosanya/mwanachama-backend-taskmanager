@@ -92,6 +92,14 @@ func TestVocabularyMatchesTheBlueprint(t *testing.T) {
 			string(models.TaskPriorityHigh),
 			string(models.TaskPriorityCritical),
 		},
+		roleTask + ".effort": {
+			string(models.TaskEffortUnknown),
+			string(models.TaskEffortVeryLow),
+			string(models.TaskEffortLow),
+			string(models.TaskEffortMedium),
+			string(models.TaskEffortHigh),
+			string(models.TaskEffortVeryHigh),
+		},
 		roleTaskTodo + ".status": {
 			string(models.TodoStatusPending),
 			string(models.TodoStatusBlocked),

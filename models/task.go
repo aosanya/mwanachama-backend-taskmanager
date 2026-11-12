@@ -91,6 +91,17 @@ const (
 	TaskPriorityCritical TaskPriority = "critical"
 )
 
+type TaskEffort string
+
+const (
+	TaskEffortUnknown  TaskEffort = "unknown"
+	TaskEffortVeryLow  TaskEffort = "very_low"
+	TaskEffortLow      TaskEffort = "low"
+	TaskEffortMedium   TaskEffort = "medium"
+	TaskEffortHigh     TaskEffort = "high"
+	TaskEffortVeryHigh TaskEffort = "very_high"
+)
+
 // Task is the core domain entity managed by TaskManager.
 // All timestamps are ISO 8601 strings (RFC 3339). Empty string means "not set".
 type Task struct {
@@ -103,6 +114,8 @@ type Task struct {
 	State string `json:"state,omitempty" spec:"-"`
 
 	Priority TaskPriority `json:"priority"`
+
+	Effort TaskEffort `json:"effort"`
 
 	// DueAt is the RFC 3339 deadline; empty string when no deadline is set.
 	DueAt string `json:"due_at,omitempty"`

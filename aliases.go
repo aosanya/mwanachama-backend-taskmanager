@@ -9,6 +9,7 @@ type (
 	Task               = models.Task
 	TaskStatus         = models.TaskStatus
 	TaskPriority       = models.TaskPriority
+	TaskEffort         = models.TaskEffort
 	TaskFilter         = models.TaskFilter
 	OverdueFilter      = models.OverdueFilter
 	OverdueTask        = models.OverdueTask
@@ -64,6 +65,13 @@ const (
 	TaskPriorityMedium   = models.TaskPriorityMedium
 	TaskPriorityHigh     = models.TaskPriorityHigh
 	TaskPriorityCritical = models.TaskPriorityCritical
+
+	TaskEffortUnknown  = models.TaskEffortUnknown
+	TaskEffortVeryLow  = models.TaskEffortVeryLow
+	TaskEffortLow      = models.TaskEffortLow
+	TaskEffortMedium   = models.TaskEffortMedium
+	TaskEffortHigh     = models.TaskEffortHigh
+	TaskEffortVeryHigh = models.TaskEffortVeryHigh
 
 	TodoStatusPending    = models.TodoStatusPending
 	TodoStatusBlocked    = models.TodoStatusBlocked

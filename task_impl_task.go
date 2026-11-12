@@ -37,6 +37,12 @@ func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
 	if task.Priority == "" {
 		task.Priority = TaskPriorityMedium
 	}
+	if task.Effort == "" {
+		task.Effort = TaskEffortUnknown
+	}
+	if err := checkEffort(task.Effort); err != nil {
+		return Task{}, fmt.Errorf("CreateTask: %w", err)
+	}
 	task.CompletedAt = ""
 	if task.Rank <= 0 {
 		if task.Rank, err = m.nextRank(ctx); err != nil {
@@ -107,6 +113,12 @@ func (m *taskManager) updateTask(ctx context.Context, task Task, replace bool) (
 	current, err := m.GetTask(ctx, task.ID)
 	if err != nil {
 		return Task{}, err
+	}
+	if task.Effort == "" {
+		task.Effort = current.Effort
+	}
+	if err := checkEffort(task.Effort); err != nil {
+		return Task{}, fmt.Errorf("UpdateTask: %w", err)
 	}
 	if current.Status != task.Status && !current.Status.CanTransitionTo(task.Status) {
 		return Task{}, ErrInvalidStatusTransition
@@ -369,6 +381,9 @@ func nonStatusChangedFields(before, after Task) []string {
 	}
 	if before.Priority != after.Priority {
 		out = append(out, "priority")
+	}
+	if before.Effort != after.Effort {
+		out = append(out, "effort")
 	}
 	if before.DueAt != after.DueAt {
 		out = append(out, "due_at")

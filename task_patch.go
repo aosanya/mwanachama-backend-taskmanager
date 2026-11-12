@@ -29,6 +29,9 @@ func applyPatch(task Task, p TaskPatch) Task {
 	if p.Priority != nil {
 		task.Priority = *p.Priority
 	}
+	if p.Effort != nil {
+		task.Effort = *p.Effort
+	}
 	if p.Tags != nil {
 		task.Tags = *p.Tags
 	}

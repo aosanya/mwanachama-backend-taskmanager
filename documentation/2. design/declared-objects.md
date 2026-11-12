@@ -159,3 +159,14 @@ What the string holds is the host's to decide. The natural shape is
 `mwanachama-backend-shared/identity`'s raw `<module>/<instance>/<identity>`,
 which survives a form's versions; a bare form row id would not. That choice
 is left open rather than enforced here.
+
+## Task effort
+
+A task carries `effort`, the estimate of how much work it is, entered when the
+task is added and editable afterwards through the patch route. It is an enum:
+`unknown`, `very_low`, `low`, `medium`, `high`, `very_high`. A task created
+without one lands as `unknown`; an update that sends none keeps the stored
+value; anything outside the list is refused with 400 (`ErrInvalidEffort`).
+It sits beside `estimated_hours`, which stays the planned hours and is not
+derived from it. The same field and checks are in the hub-steward copy of the
+module, `projects/hub-steward/code/wakala-api/modules/taskmanager`.
