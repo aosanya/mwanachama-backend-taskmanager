@@ -29,6 +29,16 @@ var ErrTagNotFound = errors.New("tag not found")
 
 var ErrTaskTodoNotFound = errors.New("task todo not found")
 
+var ErrTaskTodoCycle = errors.New("a todo cannot wait on itself or on a todo that waits on it")
+
+var ErrTaskTodoCrossIssue = errors.New("a todo can wait only on todos of the same issue")
+
+var ErrTaskTodoDependencyNotFound = errors.New("a todo waits on a todo that does not exist")
+
+var ErrTaskTodoOrderMismatch = errors.New("a new order must name every todo of the issue exactly once")
+
+var ErrTaskTodoBlockedReasonRequired = errors.New("a todo blocked by hand needs a reason")
+
 var ErrWorkflowRunNotFound = errors.New("workflow run not found")
 
 var ErrInvalidRunStatusTransition = errors.New("invalid workflow run status transition")

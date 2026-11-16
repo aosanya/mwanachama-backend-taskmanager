@@ -659,11 +659,56 @@
       "returns": [{"body": true}]
     },
     "update_task_todo_status": {
-      "method": "PUT", "path": "/todos/{todoID}/status", "call": "UpdateTaskTodoStatus", "action": "taskmanager.task_todo.set_status",
-      "title": "Set step status",
-      "description": "Move one step to a new lifecycle state.",
-      "args": [{"from": "path", "as": "todoID", "refers": "taskmanager.task_todo", "description": "The step to move."},
-               {"from": "body", "as": "status", "required": true, "field": "TaskTodo.status"}],
+      "method": "PUT", "path": "/todos/{todoID}/status", "call": "SetTodoStateFor", "action": "taskmanager.task_todo.set_status",
+      "title": "Set the status of a todo",
+      "description": "Set one todo of an issue to To do, In progress, Done or Blocked (the API values pending, dispatched, completed and blocked are taken too). Blocked by hand needs a blocked_reason; setting any other status clears the reason, so lifting a block is setting To do. A todo that waits on a todo that is not Done reads Blocked by itself and turns To do when all of them are Done. Returns the todo with its state.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "path", "as": "todoID", "refers": "taskmanager.task_todo", "description": "The todo to set."},
+               {"from": "body", "as": "status", "required": true, "description": "To do, In progress, Done or Blocked."},
+               {"from": "body", "as": "blocked_reason", "description": "Why it is blocked. Required when status is Blocked, ignored otherwise."}],
+      "returns": [{"body": true}]
+    },
+    "list_issue_todos": {
+      "method": "GET", "path": "/tasks/{taskID}/todos", "call": "ListTodosOfIssue", "action": "taskmanager.task_todo.list_for_issue",
+      "title": "List the todos of an issue",
+      "description": "List the todo list of one issue by its id, in order. Each todo carries its id, code, title, instructions, ordinality, depends_on (the ids of the todos it waits on), status (the API value), state (To do, In progress, Done or Blocked; a failed todo reads Blocked) and blocked_reason. done and total count the issue's todos. An issue with no todos returns an empty list and 0 of 0.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue."}],
+      "returns": [{"body": true}]
+    },
+    "count_issue_todos": {
+      "method": "GET", "path": "/todo-counts", "call": "CountTodosOfIssues", "action": "taskmanager.task_todo.count_for_issues",
+      "title": "Count the todos of many issues",
+      "description": "For a list of issues (task_id, repeated, at most 500) return in one call each issue's done and total todo counts, for a board card's 2 of 6 pill. An issue with no todos, one that does not exist and one the caller cannot see are left out.",
+      "args": [{"from": "query", "whole": true},
+               {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."}],
+      "returns": [{"body": true}]
+    },
+    "edit_task_todo": {
+      "method": "PATCH", "path": "/todos/{todoID}", "call": "EditTodoFor", "action": "taskmanager.task_todo.update",
+      "title": "Edit a todo",
+      "description": "Change only the fields you send: title, description, instructions and depends_on (the ids of the todos of the same issue it waits on; an empty list clears it). A change that would make a cycle, or make the todo wait on a todo of another issue, is refused and nothing changes.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "path", "as": "todoID", "refers": "taskmanager.task_todo", "description": "The todo to edit."},
+               {"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "reorder_issue_todos": {
+      "method": "PUT", "path": "/tasks/{taskID}/todos/order", "call": "ReorderTodosOfIssue", "action": "taskmanager.task_todo.reorder",
+      "title": "Reorder the todos of an issue",
+      "description": "Put the todos of one issue in a new order. ids must hold every todo of the issue exactly once, first to last; a list that misses one or names one of another issue is refused. Returns the list in its new order.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue."},
+               {"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "delete_task_todo": {
+      "method": "DELETE", "path": "/todos/{todoID}", "call": "DeleteTodoFor", "action": "taskmanager.task_todo.delete",
+      "status": 204,
+      "title": "Delete a todo",
+      "description": "Delete one todo of an issue. The todos that waited on it no longer wait on it, and it leaves the counts.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "path", "as": "todoID", "refers": "taskmanager.task_todo", "description": "The todo to delete."}],
       "returns": [{"body": true}]
     },
     "list_task_todos": {
@@ -1096,6 +1141,12 @@
     "ErrProjectNotFound": 404,
     "ErrTagNotFound": 404,
     "ErrTaskTodoNotFound": 404,
+    "ErrTaskTodoCycle": 409,
+    "ErrTaskTodoCrossIssue": 400,
+    "ErrTaskTodoDependencyNotFound": 400,
+    "ErrTaskTodoOrderMismatch": 409,
+    "ErrTaskTodoBlockedReasonRequired": 400,
+    "ErrInvalidTodoStatus": 400,
     "ErrWorkflowRunNotFound": 404,
     "ErrRelationshipNotFound": 404,
     "ErrImportJobNotFound": 404,

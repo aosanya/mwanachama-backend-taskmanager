@@ -20,6 +20,8 @@ type (
 	AssigneeKind       = models.AssigneeKind
 	HolderTasksQuery   = models.HolderTasksQuery
 	TaskTodo           = models.TaskTodo
+	TaskTodoPatch      = models.TaskTodoPatch
+	TodoCount          = models.TodoCount
 	TodoStatus         = models.TodoStatus
 	Agent              = models.Agent
 	Project            = models.Project

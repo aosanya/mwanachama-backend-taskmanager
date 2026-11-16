@@ -79,7 +79,12 @@ func operationsTakingTheCallerThatWrite(t *testing.T) []string {
 func writesOnAnIssue(f *moreWritesFixture, other string) map[string]probeCall {
 	deadline := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
 	issue := "/tasks/" + f.issue
+	todo := f.todo(f.h.t, f.issue, "probed piece")
 	return map[string]probeCall{
+		"edit_task_todo":           {"PATCH", "/todos/" + todo, map[string]any{"title": "edited"}},
+		"update_task_todo_status":  {"PUT", "/todos/" + todo + "/status", map[string]any{"status": "Done"}},
+		"delete_task_todo":         {"DELETE", "/todos/" + todo, nil},
+		"reorder_issue_todos":      {"PUT", issue + "/todos/order", map[string]any{"ids": []string{todo}}},
 		"create_task":              {"POST", "/tasks", map[string]any{"title": "new", "backlog": f.docs, "step": "write"}},
 		"update_task":              {"PUT", issue, map[string]any{"title": "renamed", "status": "pending", "backlog": f.docs, "step": "write"}},
 		"patch_task":               {"PATCH", issue, map[string]any{"title": "patched"}},

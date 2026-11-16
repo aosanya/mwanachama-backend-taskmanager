@@ -352,7 +352,12 @@
         {
           "name": "depends_on",
           "type": "json",
-          "description": "The ordinalities of the steps that must finish before this one is dispatched."
+          "description": "The ids of the steps of the same task that must finish before this one is dispatched. Ids, not positions, so a reorder or a delete never breaks the list."
+        },
+        {
+          "name": "blocked_reason",
+          "type": "text",
+          "description": "Why a person marked this step blocked by hand. Empty unless the step is blocked, and cleared when the block is lifted."
         },
         {
           "name": "status",

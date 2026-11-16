@@ -166,6 +166,12 @@ type TaskManager interface {
 	ListCaseVotes(ctx context.Context, caseID string) ([]CaseVote, error)
 	AddTaskNote(ctx context.Context, requesterID, taskID, kind, text string, links []string) (TaskNote, error)
 	ListTaskNotes(ctx context.Context, requesterID, taskID string) ([]TaskNote, error)
+	ListTodosOfIssue(ctx context.Context, requesterID, issueID string) (IssueTodoList, error)
+	CountTodosOfIssues(ctx context.Context, filter TodoCountsFilter) (IssueTodoCounts, error)
+	EditTodoFor(ctx context.Context, requesterID, todoID string, change TodoChange) (TodoView, error)
+	ReorderTodosOfIssue(ctx context.Context, requesterID, issueID string, order TodoOrder) (IssueTodoList, error)
+	DeleteTodoFor(ctx context.Context, requesterID, todoID string) error
+	SetTodoStateFor(ctx context.Context, requesterID, todoID, state, blockedReason string) (TodoView, error)
 	GetWorkerCapsDefault(ctx context.Context) (WorkerCaps, error)
 	SetWorkerCapsDefault(ctx context.Context, requesterID string, change TaskCapsChange) (WorkerCaps, error)
 	GetTaskCaps(ctx context.Context, requesterID, taskID string) (TaskCaps, error)
@@ -201,6 +207,22 @@ type TaskManager interface {
 	GetTaskTodo(ctx context.Context, todoID string) (TaskTodo, error)
 
 	UpdateTaskTodoStatus(ctx context.Context, todoID string, status TodoStatus) (TaskTodo, error)
+
+	SetTaskTodoStatus(ctx context.Context, todoID string, status TodoStatus, blockedReason string) (TaskTodo, error)
+
+	UpdateTaskTodo(ctx context.Context, todoID string, patch TaskTodoPatch) (TaskTodo, error)
+
+	ReorderTaskTodos(ctx context.Context, issueID string, orderedIDs []string) ([]TaskTodo, error)
+
+	DeleteTaskTodo(ctx context.Context, todoID string) error
+
+	ListIssueTodos(ctx context.Context, issueID string) ([]TaskTodo, error)
+
+	CountIssueTodos(ctx context.Context, issueIDs []string) (map[string]TodoCount, error)
+
+	CheckTodoSameIssue(ctx context.Context, issueID string, dependsOn []string) error
+
+	CheckTodoCycle(ctx context.Context, todoID string, dependsOn []string) error
 
 	CreateWorkflowRun(ctx context.Context, name, triggerEvent, initiator string) (WorkflowRun, error)
 
@@ -301,7 +323,11 @@ func NewTaskManager(db *gorm.DB, s *spec.Spec, pub events.Publisher) (TaskManage
 	if err != nil {
 		return nil, fmt.Errorf("NewTaskManager: %w", err)
 	}
-	return &taskManager{db: db, store: st, publisher: pub, spec: s, overdueGrace: grace}, nil
+	m := &taskManager{db: db, store: st, publisher: pub, spec: s, overdueGrace: grace}
+	if err := m.migrateTodoDependencies(context.Background()); err != nil {
+		return nil, fmt.Errorf("NewTaskManager: %w", err)
+	}
+	return m, nil
 }
 
 func Unbound() TaskManager { return (*taskManager)(nil) }
