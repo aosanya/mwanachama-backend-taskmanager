@@ -4,7 +4,7 @@
       "method": "POST", "path": "/tasks", "call": "CreateTaskAs", "action": "taskmanager.task.create",
       "status": 201,
       "title": "Create task",
-      "description": "Create one task. It lands pending whatever status the caller asked for, and its id is server-minted. Send effort, the estimated effort: unknown, very_low, low, medium, high or very_high; it is unknown when none is sent and any other value is refused with 400. A person needs Can move on the backlog it lands in (the first backlog when none is named).",
+      "description": "Create one task. It lands pending whatever status the caller asked for, and its id is server-minted. Send effort, the estimated effort: unknown, very_low, low, medium, high or very_high; it is unknown when none is sent and any other value is refused with 400. It is given its code, the next number in its project's series (SW193), unless the caller sends a code, which is kept; a code another issue of the project holds is refused with 409. A person needs Can move on the backlog it lands in (the first backlog when none is named).",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
                {"from": "body", "whole": true}],
       "returns": [{"body": true}]
@@ -28,7 +28,7 @@
     "pending_tasks": {
       "method": "GET", "path": "/pending-tasks", "call": "PendingTasks", "action": "taskmanager.task.pending",
       "title": "What is pending",
-      "description": "The quick answer to what is pending, open or left, in one call: every issue that is not completed, failed or cancelled and that the caller can see. It returns total, by_step (the count at each step, in step order) and by_priority (critical, high, medium, low), counted over everything the filters match, and items: the first limit issues in rank order, each compact (id, title with its code, state, backlog, step, priority, tags, rank, blocked) and without the description. Narrow by tag (repeat it to require every tag), backlog (id or name), step (id or name), priority, or q (words that must each appear in the title or a tag, without regard to case). limit defaults to 25 and is at most 100; pass offset (0 or more) to read the next page. Pass include_closed true and by_step also counts the issues of the same filters that are completed or cancelled, at their Done and Cancelled steps; total, by_priority and items stay the open issues. To read one issue in full use taskmanager_task_read; to page through every issue use taskmanager_task_list.",
+      "description": "The quick answer to what is pending, open or left, in one call: every issue that is not completed, failed or cancelled and that the caller can see. It returns total, by_step (the count at each step, in step order) and by_priority (critical, high, medium, low), counted over everything the filters match, and items: the first limit issues in rank order, each compact (id, code, title, state, backlog, step, priority, tags, rank, blocked) and without the description. Narrow by tag (repeat it to require every tag), backlog (id or name), step (id or name), priority, or q (words that must each appear in the title, the code or a tag, without regard to case). limit defaults to 25 and is at most 100; pass offset (0 or more) to read the next page. Pass include_closed true and by_step also counts the issues of the same filters that are completed or cancelled, at their Done and Cancelled steps; total, by_priority and items stay the open issues. To read one issue in full use taskmanager_task_read; to page through every issue use taskmanager_task_list.",
       "args": [{"from": "query", "whole": true},
                {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."}],
       "returns": [{"body": true}]
@@ -44,7 +44,7 @@
     "update_task": {
       "method": "PUT", "path": "/tasks/{taskID}", "call": "UpdateTaskAs", "action": "taskmanager.task.update",
       "title": "Update task",
-      "description": "Replace the mutable fields of one task. A status change is checked against the lifecycle, and moving from pending to in_progress is refused while anything still blocks it.",
+      "description": "Replace the mutable fields of one task. A status change is checked against the lifecycle, and moving from pending to in_progress is refused while anything still blocks it. The code is overwritten when a different one is sent and kept when none is sent, so it is never cleared; a code another issue of the project holds is refused with 409.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
                {"from": "body", "whole": true},
                {"from": "path", "as": "taskID", "refers": "taskmanager.task", "into": "ID", "description": "The task to update."}],
@@ -1014,6 +1014,7 @@
     "ErrRequesterVoteStays": 409,
     "ErrTaskNotFound": 404,
     "ErrInvalidTaskNote": 400,
+    "ErrDuplicateTaskCode": 409,
     "ErrInvalidTaskReference": 400,
     "ErrDuplicateTaskReference": 409,
     "ErrTaskReferenceNotFound": 404,

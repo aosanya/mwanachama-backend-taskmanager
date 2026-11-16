@@ -159,6 +159,22 @@
           "description": "Who outside the board holds a blocked task, as an opaque label or reference the module stores and never resolves. Empty when nothing outside holds it. Kept only while the task is blocked; any other status clears it."
         },
         {
+          "name": "code",
+          "type": "string",
+          "description": "The issue's own code in its repo's series, such as SW193 or DEV-127. The hub numbers a new issue itself at creation, a person or the loader may overwrite it, and it is never empty. No two live issues of one project share a code.",
+          "required": true
+        },
+        {
+          "name": "code_series",
+          "type": "string",
+          "description": "The letters, and the hyphen when there is one, that start a code of the usual shape, such as SW or DEV-. Empty when the code is outside the usual shape. Set by the hub from the code."
+        },
+        {
+          "name": "code_number",
+          "type": "int",
+          "description": "The number that ends a code of the usual shape, such as 193. Zero when the code is outside the usual shape. Set by the hub from the code."
+        },
+        {
           "name": "linked_ref",
           "type": "string",
           "description": "An opaque reference to something another module owns that this task points at, such as the questionnaire it asks its assignee to answer. Empty when the task points at nothing. The module stores it and reads it back; it never resolves it."
@@ -204,6 +220,14 @@
           "description": "Finds one worker's open tasks.",
           "fields": [
             "assigned_to"
+          ]
+        },
+        {
+          "name": "project_code",
+          "description": "Finds an issue by its code within its project and reads the highest number of a series.",
+          "fields": [
+            "project_name",
+            "code"
           ]
         },
         {

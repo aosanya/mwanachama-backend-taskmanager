@@ -1,6 +1,3 @@
-// Package models holds mwanachamataskmanager's domain types — pure Go
-// structs with zero GORM/DB imports. See gormstore for the row shapes and
-// storage mapping.
 package models
 
 import (
@@ -176,6 +173,10 @@ type Task struct {
 	ParentTaskID string `json:"parent_task_id,omitempty"`
 
 	HeldBy string `json:"held_by,omitempty"`
+
+	Code       string `json:"code"`
+	CodeSeries string `json:"code_series"`
+	CodeNumber int    `json:"code_number"`
 
 	LinkedRef string `json:"linked_ref,omitempty"`
 

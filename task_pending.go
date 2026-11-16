@@ -23,6 +23,7 @@ var priorityOrder = []TaskPriority{
 
 type pendingRow struct {
 	ID       string
+	Code     string
 	Title    string
 	Status   string
 	Priority string
@@ -72,7 +73,7 @@ func (m *taskManager) PendingTasks(ctx context.Context, filter PendingFilter) (P
 		return PendingTasks{}, fmt.Errorf("PendingTasks: %w", err)
 	}
 	var rows []pendingRow
-	if err := rowQuery.Select(`id, title, status, priority, backlog, step, "rank"`).
+	if err := rowQuery.Select(`id, code, title, status, priority, backlog, step, "rank"`).
 		Order(taskOrder).Limit(limit).Offset(filter.Offset).Scan(&rows).Error; err != nil {
 		return PendingTasks{}, fmt.Errorf("PendingTasks: %w", err)
 	}
@@ -84,7 +85,7 @@ func (m *taskManager) PendingTasks(ctx context.Context, filter PendingFilter) (P
 	for _, r := range rows {
 		backlogName, stepName := placeNames(backlogs, r)
 		out.Items = append(out.Items, PendingItem{
-			ID: r.ID, Title: r.Title, State: models.StateNameFor(states, TaskStatus(r.Status)),
+			ID: r.ID, Code: r.Code, Title: r.Title, State: models.StateNameFor(states, TaskStatus(r.Status)),
 			Backlog: backlogName, Step: stepName, Priority: TaskPriority(r.Priority),
 			Tags: tags[r.ID], Rank: r.Rank, Blocked: isBlocked(tags[r.ID]),
 		})
@@ -130,7 +131,7 @@ func (m *taskManager) pendingBase(ctx context.Context, filter PendingFilter, clo
 		pattern := "%" + likeLiteral(word) + "%"
 		tagged := m.store.Query(ctx, roleTagging).Select("task_id").
 			Where("tag_id IN (?)", m.store.Query(ctx, roleTag).Select("id").Where("LOWER(name) LIKE ?"+likeEscape, pattern))
-		q = q.Where("(LOWER(title) LIKE ?"+likeEscape+" OR id IN (?))", pattern, tagged)
+		q = q.Where("(LOWER(title) LIKE ?"+likeEscape+" OR LOWER(code) LIKE ?"+likeEscape+" OR id IN (?))", pattern, pattern, tagged)
 	}
 	return q, nil
 }

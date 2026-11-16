@@ -117,14 +117,19 @@ func TestConcurrentTodoCreatesEachGetTheirOwnCode(t *testing.T) {
 	}
 }
 
-// Two concurrently-created tags with distinct names each get their own code
-// too. The tag path has its own retry for a name collision, which is a
-// different race from the counter's and must not be masking this one.
 func TestConcurrentDistinctTagsEachGetTheirOwnCode(t *testing.T) {
 	mgr, db, tables := sharedCacheManager(t, "w22tags")
 	ctx := context.Background()
 
 	const n = 12
+	created := make([]mwanachamataskmanager.Task, n)
+	for i := range created {
+		task, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: fmt.Sprintf("task-%d", i)})
+		if err != nil {
+			t.Fatalf("CreateTask %d: %v", i, err)
+		}
+		created[i] = task
+	}
 	var wg sync.WaitGroup
 	errs := make([]error, n)
 	start := make(chan struct{})
@@ -133,10 +138,9 @@ func TestConcurrentDistinctTagsEachGetTheirOwnCode(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start
-			_, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{
-				Title: fmt.Sprintf("task-%d", i),
-				Tags:  []string{fmt.Sprintf("tag-%d", i)},
-			})
+			task := created[i]
+			task.Tags = []string{fmt.Sprintf("tag-%d", i)}
+			_, err := mgr.UpdateTask(ctx, task)
 			errs[i] = err
 		}(i)
 	}
@@ -151,6 +155,9 @@ func TestConcurrentDistinctTagsEachGetTheirOwnCode(t *testing.T) {
 	var codes []string
 	if err := db.Table(tables.Tags).Order("id").Pluck("code", &codes).Error; err != nil {
 		t.Fatalf("read codes: %v", err)
+	}
+	if len(codes) != n {
+		t.Fatalf("created %d tags, want %d", len(codes), n)
 	}
 	seen := map[string]int{}
 	for _, code := range codes {

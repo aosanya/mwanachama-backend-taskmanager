@@ -21,6 +21,7 @@ type PendingCount struct {
 
 type PendingItem struct {
 	ID       string       `json:"id"`
+	Code     string       `json:"code"`
 	Title    string       `json:"title"`
 	State    string       `json:"state,omitempty"`
 	Backlog  string       `json:"backlog"`

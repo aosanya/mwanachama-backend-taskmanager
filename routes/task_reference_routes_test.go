@@ -1,28 +1,9 @@
 package routes_test
 
 import (
-	"context"
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 )
-
-func (h *accessHub) listAs(caller, path string) []map[string]any {
-	h.t.Helper()
-	req := httptest.NewRequest(http.MethodGet, path, nil)
-	req = req.WithContext(context.WithValue(req.Context(), callerKey{}, caller))
-	rec := httptest.NewRecorder()
-	h.mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		h.t.Fatalf("GET %s as %q = %d %s", path, caller, rec.Code, rec.Body.String())
-	}
-	var list []map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
-		h.t.Fatalf("GET %s: %v: %s", path, err, rec.Body.String())
-	}
-	return list
-}
 
 func TestAReaderAddsListsAndRemovesAReferenceAndAnUnseenIssueIsNotFound(t *testing.T) {
 	f := newMoreWritesFixture(t)
@@ -36,7 +17,7 @@ func TestAReaderAddsListsAndRemovesAReferenceAndAnUnseenIssueIsNotFound(t *testi
 	f.h.expect(http.StatusConflict, "ann", "POST", refs, map[string]any{"kind": "file", "repo": "hub-steward", "target": "loader/importer.go"})
 	f.h.expect(http.StatusBadRequest, "ann", "POST", refs, map[string]any{"kind": "file", "target": "a.go"})
 
-	list := f.h.listAs("boss", refs)
+	list := f.h.notesAs("boss", refs)
 	if len(list) != 1 || list[0]["target"] != "loader/importer.go" {
 		t.Fatalf("got %v", list)
 	}
@@ -47,7 +28,7 @@ func TestAReaderAddsListsAndRemovesAReferenceAndAnUnseenIssueIsNotFound(t *testi
 
 	f.h.expect(http.StatusNoContent, "ann", "DELETE", refs+"/"+added["id"].(string), nil)
 	f.h.expect(http.StatusNotFound, "ann", "DELETE", refs+"/"+added["id"].(string), nil)
-	if left := f.h.listAs("boss", refs); len(left) != 0 {
+	if left := f.h.notesAs("boss", refs); len(left) != 0 {
 		t.Fatalf("got %v", left)
 	}
 }
