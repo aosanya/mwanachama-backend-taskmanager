@@ -133,6 +133,9 @@ func CheckChangedNames(current, next []Backlog) error {
 			if problem := plaintext.Problem("backlog name", b.Name); problem != "" {
 				return fmt.Errorf("backlogs: %s", problem)
 			}
+			if err := checkBacklogNameFree(next, b); err != nil {
+				return err
+			}
 		}
 		for _, s := range b.Steps {
 			if i, ok := FindStep(before, s.ID); existed && ok && before.Steps[i].Name == s.Name {
@@ -141,6 +144,27 @@ func CheckChangedNames(current, next []Backlog) error {
 			if problem := plaintext.Problem("step name", s.Name); problem != "" {
 				return fmt.Errorf("backlogs: %s", problem)
 			}
+			if err := checkStepNameFree(b, s); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func checkBacklogNameFree(backlogs []Backlog, changed Backlog) error {
+	for _, other := range backlogs {
+		if other.ID != changed.ID && plaintext.SameName(other.Name, changed.Name) {
+			return fmt.Errorf("backlogs: %q is declared twice", changed.Name)
+		}
+	}
+	return nil
+}
+
+func checkStepNameFree(b Backlog, changed BacklogStep) error {
+	for _, other := range b.Steps {
+		if other.ID != changed.ID && plaintext.SameName(other.Name, changed.Name) {
+			return fmt.Errorf("backlogs: step %q of %q is declared twice", changed.Name, b.Name)
 		}
 	}
 	return nil
