@@ -8,7 +8,7 @@ import (
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
-func sourcedRequest() mwanachamataskmanager.OpenSourcedTasks {
+func sourcedTasksRequest() mwanachamataskmanager.OpenSourcedTasks {
 	return mwanachamataskmanager.OpenSourcedTasks{
 		Source: "forms/agy1/result-7",
 		Items: []mwanachamataskmanager.SourcedTaskItem{
@@ -21,7 +21,7 @@ func sourcedRequest() mwanachamataskmanager.OpenSourcedTasks {
 func TestOpenSourcedTasksOpensOneDatedTaskPerItem(t *testing.T) {
 	ctx := context.Background()
 	m := newTestManager(t)
-	got, err := m.OpenSourcedTasks(ctx, sourcedRequest())
+	got, err := m.OpenSourcedTasks(ctx, sourcedTasksRequest())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,11 +49,11 @@ func TestOpenSourcedTasksOpensOneDatedTaskPerItem(t *testing.T) {
 func TestOpenSourcedTasksReplayOpensNothingAgain(t *testing.T) {
 	ctx := context.Background()
 	m := newTestManager(t)
-	first, err := m.OpenSourcedTasks(ctx, sourcedRequest())
+	first, err := m.OpenSourcedTasks(ctx, sourcedTasksRequest())
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := sourcedRequest()
+	req := sourcedTasksRequest()
 	req.Items = append(req.Items, mwanachamataskmanager.SourcedTaskItem{Key: "3", Title: "Light the market", DueAt: "2027-01-01T00:00:00Z"})
 	again, err := m.OpenSourcedTasks(ctx, req)
 	if err != nil {
@@ -67,7 +67,7 @@ func TestOpenSourcedTasksReplayOpensNothingAgain(t *testing.T) {
 	if !again.Items[2].Opened {
 		t.Fatal("a new item on a replay is opened")
 	}
-	other := sourcedRequest()
+	other := sourcedTasksRequest()
 	other.Source = "forms/agy1/result-8"
 	fresh, err := m.OpenSourcedTasks(ctx, other)
 	if err != nil {
@@ -82,7 +82,7 @@ func TestOpenSourcedTasksRefusesABadRequestWholly(t *testing.T) {
 	ctx := context.Background()
 	m := newTestManager(t)
 	cases := map[string]mwanachamataskmanager.OpenSourcedTasks{
-		"no source":    {Items: sourcedRequest().Items},
+		"no source":    {Items: sourcedTasksRequest().Items},
 		"no items":     {Source: "s"},
 		"bad due":      {Source: "s", Items: []mwanachamataskmanager.SourcedTaskItem{{Title: "a", DueAt: "soon"}}},
 		"no title":     {Source: "s", Items: []mwanachamataskmanager.SourcedTaskItem{{DueAt: "2026-11-30T00:00:00Z"}}},

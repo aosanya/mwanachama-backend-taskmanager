@@ -225,10 +225,10 @@ func TestBatchesOpenedInARunStayInTheRun(t *testing.T) {
 	c := newBoardCopy(t)
 	run := c.run(t, "run-1")
 
-	if _, err := run.GenerateTasks(c.ctx, generateRequest("a", "b")); err != nil {
+	if _, err := run.GenerateTasks(c.ctx, generatedTasksRequest("a", "b")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := run.OpenSourcedTasks(c.ctx, sourcedRequest()); err != nil {
+	if _, err := run.OpenSourcedTasks(c.ctx, sourcedTasksRequest()); err != nil {
 		t.Fatal(err)
 	}
 

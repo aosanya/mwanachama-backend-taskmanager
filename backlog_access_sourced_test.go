@@ -9,14 +9,14 @@ import (
 	"github.com/aosanya/mwanachama-backend-taskmanager/models"
 )
 
-func feedOneItemRequest() mwanachamataskmanager.OpenSourcedTasks {
+func sourcedRequest() mwanachamataskmanager.OpenSourcedTasks {
 	return mwanachamataskmanager.OpenSourcedTasks{
 		Source: "feed",
 		Items:  []mwanachamataskmanager.SourcedTaskItem{{Key: "k1", Title: "from a feed", DueAt: "2030-01-01T00:00:00Z"}},
 	}
 }
 
-func generateOneSubjectRequest() mwanachamataskmanager.GenerateTasks {
+func generateRequest() mwanachamataskmanager.GenerateTasks {
 	return mwanachamataskmanager.GenerateTasks{
 		Run:      "r1",
 		Template: models.TaskTemplate{Title: "per subject"},
@@ -24,7 +24,7 @@ func generateOneSubjectRequest() mwanachamataskmanager.GenerateTasks {
 	}
 }
 
-func issueCount(t *testing.T, mgr mwanachamataskmanager.TaskManager) int {
+func taskCount(t *testing.T, mgr mwanachamataskmanager.TaskManager) int {
 	t.Helper()
 	tasks, err := mgr.ListTasks(context.Background(), mwanachamataskmanager.TaskFilter{})
 	if err != nil {
@@ -37,32 +37,32 @@ func TestSourcedAndGeneratedTasks_NeedCanMoveOnTheFirstBacklog(t *testing.T) {
 	ctx := context.Background()
 	mgr := restrictedManager(t)
 
-	_, err := mgr.OpenSourcedTasksAs(ctx, "dev", feedOneItemRequest())
+	_, err := mgr.OpenSourcedTasksAs(ctx, "dev", sourcedRequest())
 	wantForbidden(t, "sourced tasks with no access", err)
-	_, err = mgr.GenerateTasksAs(ctx, "dev", generateOneSubjectRequest())
+	_, err = mgr.GenerateTasksAs(ctx, "dev", generateRequest())
 	wantForbidden(t, "generated tasks with no access", err)
 
 	if _, err := mgr.GiveBacklogAccess(ctx, "backlog", devGroup, "see"); err != nil {
 		t.Fatal(err)
 	}
-	_, err = mgr.OpenSourcedTasksAs(ctx, "dev", feedOneItemRequest())
+	_, err = mgr.OpenSourcedTasksAs(ctx, "dev", sourcedRequest())
 	wantForbidden(t, "sourced tasks with Can see", err)
-	_, err = mgr.GenerateTasksAs(ctx, "dev", generateOneSubjectRequest())
+	_, err = mgr.GenerateTasksAs(ctx, "dev", generateRequest())
 	wantForbidden(t, "generated tasks with Can see", err)
-	if got := issueCount(t, mgr); got != 0 {
+	if got := taskCount(t, mgr); got != 0 {
 		t.Fatalf("refused calls created %d issues", got)
 	}
 
 	if _, err := mgr.GiveBacklogAccess(ctx, "backlog", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.OpenSourcedTasksAs(ctx, "dev", feedOneItemRequest()); err != nil {
+	if _, err := mgr.OpenSourcedTasksAs(ctx, "dev", sourcedRequest()); err != nil {
 		t.Fatalf("sourced tasks with Can move: %v", err)
 	}
-	if _, err := mgr.GenerateTasksAs(ctx, "dev", generateOneSubjectRequest()); err != nil {
+	if _, err := mgr.GenerateTasksAs(ctx, "dev", generateRequest()); err != nil {
 		t.Fatalf("generated tasks with Can move: %v", err)
 	}
-	if got := issueCount(t, mgr); got != 2 {
+	if got := taskCount(t, mgr); got != 2 {
 		t.Fatalf("allowed calls created %d issues, want 2", got)
 	}
 }
@@ -70,10 +70,10 @@ func TestSourcedAndGeneratedTasks_NeedCanMoveOnTheFirstBacklog(t *testing.T) {
 func TestSourcedAndGeneratedTasks_ACallWithNoPersonAndTheOwnerGroupAreNotNarrowed(t *testing.T) {
 	ctx := context.Background()
 	mgr := restrictedManager(t)
-	if _, err := mgr.OpenSourcedTasksAs(ctx, "", feedOneItemRequest()); err != nil {
+	if _, err := mgr.OpenSourcedTasksAs(ctx, "", sourcedRequest()); err != nil {
 		t.Fatalf("no person: %v", err)
 	}
-	if _, err := mgr.GenerateTasksAs(ctx, "owner", generateOneSubjectRequest()); err != nil {
+	if _, err := mgr.GenerateTasksAs(ctx, "owner", generateRequest()); err != nil {
 		t.Fatalf("owner group: %v", err)
 	}
 }
@@ -86,7 +86,7 @@ func TestTodosDoNotCreateOrChangeAnIssue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	count := issueCount(t, mgr)
+	count := taskCount(t, mgr)
 	if _, err := mgr.CreateTaskTodo(ctx, mwanachamataskmanager.TaskTodo{Title: "step", Instructions: "do it", ParentTaskID: parent.ID}); err != nil {
 		t.Fatalf("create todo: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestTodosDoNotCreateOrChangeAnIssue(t *testing.T) {
 	if !reflect.DeepEqual(after, before) {
 		t.Fatalf("a todo changed its parent issue: %v -> %v", before, after)
 	}
-	if got := issueCount(t, mgr); got != count {
+	if got := taskCount(t, mgr); got != count {
 		t.Fatalf("a todo changed the issue count from %d to %d", count, got)
 	}
 }

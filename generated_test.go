@@ -9,7 +9,7 @@ import (
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
-func generateRequest(subjects ...string) mwanachamataskmanager.GenerateTasks {
+func generatedTasksRequest(subjects ...string) mwanachamataskmanager.GenerateTasks {
 	return mwanachamataskmanager.GenerateTasks{
 		Run: "agency/agy1/ward-survey-2026",
 		Template: mwanachamataskmanager.TaskTemplate{
@@ -25,7 +25,7 @@ func generateRequest(subjects ...string) mwanachamataskmanager.GenerateTasks {
 func TestGenerateTasksCreatesOneTaskPerSubjectCarryingItsKey(t *testing.T) {
 	ctx := context.Background()
 	m := newTestManager(t)
-	got, err := m.GenerateTasks(ctx, generateRequest("actor/agy1/ward-1", "actor/agy1/ward-2"))
+	got, err := m.GenerateTasks(ctx, generatedTasksRequest("actor/agy1/ward-1", "actor/agy1/ward-2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,11 +50,11 @@ func TestGenerateTasksCreatesOneTaskPerSubjectCarryingItsKey(t *testing.T) {
 func TestGenerateTasksReplayCreatesNothingAgain(t *testing.T) {
 	ctx := context.Background()
 	m := newTestManager(t)
-	first, err := m.GenerateTasks(ctx, generateRequest("a", "b"))
+	first, err := m.GenerateTasks(ctx, generatedTasksRequest("a", "b"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := m.GenerateTasks(ctx, generateRequest("a", "b", "c"))
+	again, err := m.GenerateTasks(ctx, generatedTasksRequest("a", "b", "c"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestGenerateTasksReplayCreatesNothingAgain(t *testing.T) {
 	if !again.Items[2].Created {
 		t.Fatal("a new subject on a replay is generated")
 	}
-	other := generateRequest("a")
+	other := generatedTasksRequest("a")
 	other.Run = "agency/agy1/ward-survey-2027"
 	fresh, err := m.GenerateTasks(ctx, other)
 	if err != nil {
@@ -87,19 +87,19 @@ func TestGenerateTasksReplayCreatesNothingAgain(t *testing.T) {
 func TestGenerateTasksRefusesABadRequestWholly(t *testing.T) {
 	ctx := context.Background()
 	m := newTestManager(t)
-	noRun := generateRequest("a")
+	noRun := generatedTasksRequest("a")
 	noRun.Run = ""
-	noTitle := generateRequest("a")
+	noTitle := generatedTasksRequest("a")
 	noTitle.Template.Title = ""
-	badDue := generateRequest("a")
+	badDue := generatedTasksRequest("a")
 	badDue.Template.DueAt = "soon"
 	cases := map[string]mwanachamataskmanager.GenerateTasks{
 		"no run":           noRun,
 		"no title":         noTitle,
 		"bad due":          badDue,
-		"no subjects":      generateRequest(),
-		"blank subject":    generateRequest("a", " "),
-		"repeated subject": generateRequest("a", "b", "a"),
+		"no subjects":      generatedTasksRequest(),
+		"blank subject":    generatedTasksRequest("a", " "),
+		"repeated subject": generatedTasksRequest("a", "b", "a"),
 	}
 	for name, req := range cases {
 		if _, err := m.GenerateTasks(ctx, req); !errors.Is(err, mwanachamataskmanager.ErrInvalidGeneratedTasks) {
@@ -122,7 +122,7 @@ func TestGenerateTasksRefusesMoreThanTheCap(t *testing.T) {
 	for i := range subjects {
 		subjects[i] = fmt.Sprintf("s-%d", i)
 	}
-	if _, err := m.GenerateTasks(ctx, generateRequest(subjects...)); !errors.Is(err, mwanachamataskmanager.ErrTooManySubjects) {
+	if _, err := m.GenerateTasks(ctx, generatedTasksRequest(subjects...)); !errors.Is(err, mwanachamataskmanager.ErrTooManySubjects) {
 		t.Fatalf("err = %v", err)
 	}
 	tasks, err := m.ListTasks(ctx, mwanachamataskmanager.TaskFilter{})
