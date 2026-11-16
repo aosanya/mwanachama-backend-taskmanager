@@ -12,6 +12,7 @@ const (
 	tagReady   = "Ready"
 	tagWaiting = "Waiting"
 	tagBlocked = "Blocked"
+	tagSinbin  = "Sinbin"
 )
 
 func finishesDependency(s TaskStatus) bool {

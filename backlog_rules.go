@@ -42,11 +42,6 @@ const (
 	RuleMatchAny = "any"
 )
 
-const (
-	markReady   = "ready"
-	markBlocked = "blocked"
-)
-
 var ruleFieldOperators = map[string][]string{
 	RuleFieldTag:         {RuleOpHas, RuleOpDoesNotHave},
 	RuleFieldMark:        {RuleOpIs, RuleOpIsNot},
@@ -131,13 +126,12 @@ func canonicalValue(field, value string) (string, error) {
 		}
 		return "", nil
 	case RuleFieldMark:
-		switch strings.ToLower(value) {
-		case markReady:
-			return "Ready", nil
-		case markBlocked:
-			return "Blocked", nil
+		for _, mark := range []string{tagReady, tagWaiting, tagSinbin, tagBlocked} {
+			if strings.EqualFold(value, mark) {
+				return mark, nil
+			}
 		}
-		return "", fmt.Errorf("mark is Ready or Blocked, got %q", value)
+		return "", fmt.Errorf("mark is Ready, Waiting, Sinbin or Blocked, got %q", value)
 	case RuleFieldPriority:
 		switch TaskPriority(strings.ToLower(value)) {
 		case TaskPriorityLow, TaskPriorityMedium, TaskPriorityHigh, TaskPriorityCritical:
@@ -299,7 +293,7 @@ func ruleMatches(r Rule, s RuleSubject, now time.Time) bool {
 		has := containsFold(subjectTags(s), r.Value)
 		return has == (r.Operator == RuleOpHas)
 	case RuleFieldMark:
-		is := markOfTags(s.Task.Tags) == strings.ToLower(r.Value)
+		is := strings.EqualFold(markOfTags(s.Task.Tags), r.Value)
 		return is == (r.Operator == RuleOpIs)
 	case RuleFieldBacklog:
 		is := nameOrID(s.BacklogName, s.Task.Backlog, r.Value)

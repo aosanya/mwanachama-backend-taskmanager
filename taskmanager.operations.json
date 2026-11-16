@@ -78,6 +78,63 @@
                {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue."}],
       "returns": [{"body": true}]
     },
+    "get_task_caps": {
+      "method": "GET", "path": "/tasks/{taskID}/caps", "call": "GetTaskCaps", "action": "taskmanager.task.caps_read",
+      "title": "Read the caps and consumption of an issue",
+      "description": "Read, in one call, the three caps a worker runs under on this issue (input tokens, output tokens and runtime seconds), the default for all workers, the issue's own numbers when it has any, and what the current or last run has used with whether the runtime clock is stopped because the worker waits for the owner's answer. Runtime is working time. used is absent when no worker has run.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue."}],
+      "returns": [{"body": true}]
+    },
+    "get_caps_nearest": {
+      "method": "GET", "path": "/caps-nearest", "call": "NearestCaps", "action": "taskmanager.task.caps_nearest",
+      "title": "Read the nearest cap of many issues",
+      "description": "For a list of issues (task_id, repeated) or every issue of a backlog (backlog, id or name; at most 500, in rank order) return, in one call, each issue's caps in force (its own numbers, else the default) and nearest: the cap its last or current run is closest to, with key (input_tokens, output_tokens or runtime_seconds), used, cap and ratio (used over cap, above 1 once past the cap). nearest is absent when no worker has run on the issue. An id that does not exist or that the caller cannot see is left out. Send task_id or backlog, at most 500 ids. To read one issue's caps and consumption in full use taskmanager_task_caps_read.",
+      "args": [{"from": "query", "whole": true},
+               {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."}],
+      "returns": [{"body": true}]
+    },
+    "set_task_caps": {
+      "method": "PUT", "path": "/tasks/{taskID}/caps", "call": "SetTaskCaps", "action": "taskmanager.task.caps_set",
+      "title": "Give an issue its own caps",
+      "description": "Give one issue its own cap numbers, which replace the default for that issue; a cap not sent keeps its current value, or the default if the issue had none. Each number is a whole number of at least 1: input_tokens, output_tokens, runtime_seconds (working time). Returns the caps in force and the consumption.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue."},
+               {"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "clear_task_caps": {
+      "method": "DELETE", "path": "/tasks/{taskID}/caps", "call": "ClearTaskCaps", "action": "taskmanager.task.caps_clear",
+      "title": "Use the default caps on an issue",
+      "description": "Remove the issue's own cap numbers so the default for all workers applies again. Returns the caps in force and the consumption.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue."}],
+      "returns": [{"body": true}]
+    },
+    "write_task_usage": {
+      "method": "PUT", "path": "/tasks/{taskID}/usage", "call": "WriteTaskUsage", "action": "taskmanager.task.usage_write",
+      "title": "Write what a worker has used on an issue",
+      "description": "Called by the runner while a worker runs: replace the consumption of the issue's current run with the totals so far, input_tokens, output_tokens, seconds_used (working time), clock_stopped (true from the worker's question to the owner until the answer) and, when the runner knows them, files_uncommitted (the files the worker changed that are not committed; an empty list means none). Zeros start a new run. The hub sets the time it was written. When any total reaches a cap in force (the runtime cap is not applied while the clock is stopped) the hub itself stops the worker's issue if it is In Progress: it adds one worker Log entry (the cap passed, the three figures against their caps, the last step finished, what is left, the files not committed), drops Ready, Waiting and Blocked, adds Sinbin and moves the issue to To do. The reply says stop: true with the passed caps; the runner then ends its session. Returns the caps in force, the consumption, stop and passed.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue."},
+               {"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "get_worker_caps_default": {
+      "method": "GET", "path": "/worker-caps", "call": "GetWorkerCapsDefault", "action": "taskmanager.worker_caps.read",
+      "title": "Read the default caps for all workers",
+      "description": "The three numbers every worker runs under on an issue that carries none of its own: input_tokens 500,000, output_tokens 100,000 and runtime_seconds 900 until changed.",
+      "args": [],
+      "returns": [{"body": true}]
+    },
+    "set_worker_caps_default": {
+      "method": "PUT", "path": "/worker-caps", "call": "SetWorkerCapsDefault", "action": "taskmanager.worker_caps.set",
+      "title": "Set the default caps for all workers",
+      "description": "Change the default caps; send any of input_tokens, output_tokens, runtime_seconds (each a whole number of at least 1) and the rest stay. Only the Product owner group may. Returns the default now in force.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session."},
+               {"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
     "add_task_reference": {
       "method": "POST", "path": "/tasks/{taskID}/references", "status": 201, "call": "AddTaskReference", "action": "taskmanager.task.reference_add",
       "title": "Add a reference to an issue",
@@ -1018,6 +1075,7 @@
     "ErrRequesterVoteStays": 409,
     "ErrTaskNotFound": 404,
     "ErrInvalidTaskNote": 400,
+    "ErrInvalidCaps": 400,
     "ErrDuplicateTaskCode": 409,
     "ErrInvalidTaskReference": 400,
     "ErrDuplicateTaskReference": 409,

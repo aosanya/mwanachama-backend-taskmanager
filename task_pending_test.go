@@ -92,8 +92,8 @@ func TestPendingTasks_CountsEachStepInStepOrder(t *testing.T) {
 
 	out := pendingOf(t, mgr, mwanachamataskmanager.PendingFilter{})
 
-	if len(out.ByStep) != 2 || out.ByStep[0].Name != "To do" || out.ByStep[0].Count != 2 || out.ByStep[1].Name != "Doing" || out.ByStep[1].Count != 1 {
-		t.Fatalf("by_step %+v, want To do 2 then Doing 1", out.ByStep)
+	if len(out.ByStep) != 2 || out.ByStep[0].Name != "To do" || out.ByStep[0].Count != 2 || out.ByStep[1].Name != "In Progress" || out.ByStep[1].Count != 1 {
+		t.Fatalf("by_step %+v, want To do 2 then In Progress 1", out.ByStep)
 	}
 }
 
@@ -323,13 +323,57 @@ func TestPendingTasks_BlockedMeansTheBlockedTagOnly(t *testing.T) {
 	}
 }
 
+func TestPendingTasks_WaitingIsItsOwnMarkAndNeverBesideBlocked(t *testing.T) {
+	mgr := newTestManager(t)
+	mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "waits", Tags: []string{"Waiting"}})
+	mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "both", Tags: []string{"Waiting", "Blocked"}})
+	mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "ready", Tags: []string{"Ready"}})
+
+	type flags struct{ blocked, waiting bool }
+	got := map[string]flags{}
+	for _, item := range pendingOf(t, mgr, mwanachamataskmanager.PendingFilter{}).Items {
+		got[item.Title] = flags{item.Blocked, item.Waiting}
+	}
+	want := map[string]flags{"waits": {false, true}, "both": {true, false}, "ready": {false, false}}
+	for title, w := range want {
+		if got[title] != w {
+			t.Fatalf("%s flags %+v, want %+v (all %v)", title, got[title], w, got)
+		}
+	}
+}
+
+func TestPendingTasks_SinbinIsItsOwnMarkAndNeverBesideBlockedOrWaiting(t *testing.T) {
+	mgr := newTestManager(t)
+	mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "stopped", Tags: []string{"Sinbin"}})
+	mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "stopped and waiting", Tags: []string{"Sinbin", "Waiting"}})
+	mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "stopped and blocked", Tags: []string{"Sinbin", "Blocked"}})
+	mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "ready", Tags: []string{"Ready"}})
+
+	type flags struct{ blocked, waiting, sinbin bool }
+	got := map[string]flags{}
+	for _, item := range pendingOf(t, mgr, mwanachamataskmanager.PendingFilter{}).Items {
+		got[item.Title] = flags{item.Blocked, item.Waiting, item.Sinbin}
+	}
+	want := map[string]flags{
+		"stopped":             {false, false, true},
+		"stopped and waiting": {false, false, true},
+		"stopped and blocked": {true, false, false},
+		"ready":               {false, false, false},
+	}
+	for title, w := range want {
+		if got[title] != w {
+			t.Fatalf("%s flags %+v, want %+v (all %v)", title, got[title], w, got)
+		}
+	}
+}
+
 func TestPendingTasks_CountsDoneAndCancelledByStepOnlyWhenAsked(t *testing.T) {
 	mgr := newTestManager(t)
 	seedPending(t, mgr)
 
 	asked := pendingOf(t, mgr, mwanachamataskmanager.PendingFilter{IncludeClosed: true})
 
-	want := map[string]int{"To do": 2, "Doing": 1, "Done": 1, "Cancelled": 1}
+	want := map[string]int{"To do": 2, "In Progress": 1, "Done": 1, "Cancelled": 1}
 	if len(asked.ByStep) != len(want) {
 		t.Fatalf("by_step %+v, want %v", asked.ByStep, want)
 	}
@@ -338,7 +382,7 @@ func TestPendingTasks_CountsDoneAndCancelledByStepOnlyWhenAsked(t *testing.T) {
 			t.Fatalf("%s %d, want %d: %+v", name, got, count, asked.ByStep)
 		}
 	}
-	if names := []string{asked.ByStep[0].Name, asked.ByStep[1].Name, asked.ByStep[2].Name, asked.ByStep[3].Name}; strings.Join(names, ",") != "To do,Doing,Done,Cancelled" {
+	if names := []string{asked.ByStep[0].Name, asked.ByStep[1].Name, asked.ByStep[2].Name, asked.ByStep[3].Name}; strings.Join(names, ",") != "To do,In Progress,Done,Cancelled" {
 		t.Fatalf("by_step not in step order: %+v", asked.ByStep)
 	}
 	if asked.Total != 3 || len(asked.Items) != 3 {

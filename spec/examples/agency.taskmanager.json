@@ -121,6 +121,18 @@
       "description": "One member's vote on one case, and who cast it."
     },
     {
+      "role": "task_caps",
+      "name": "task_caps",
+      "table": "task_caps",
+      "description": "The three caps one work item carries in place of the default."
+    },
+    {
+      "role": "task_usage",
+      "name": "task_usage",
+      "table": "task_usage",
+      "description": "What the current or last worker run on one work item has used."
+    },
+    {
       "role": "task_note",
       "name": "task_note",
       "table": "task_notes",

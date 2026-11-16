@@ -20,6 +20,7 @@ var operations = sync.OnceValues(func() (*dispatch.Spec, error) {
 var sentinels = map[string]error{
 	"ErrTaskNotFound":               mwanachamataskmanager.ErrTaskNotFound,
 	"ErrInvalidTaskNote":            mwanachamataskmanager.ErrInvalidTaskNote,
+	"ErrInvalidCaps":                mwanachamataskmanager.ErrInvalidCaps,
 	"ErrDuplicateTaskCode":          mwanachamataskmanager.ErrDuplicateTaskCode,
 	"ErrInvalidTaskReference":       mwanachamataskmanager.ErrInvalidTaskReference,
 	"ErrDuplicateTaskReference":     mwanachamataskmanager.ErrDuplicateTaskReference,
@@ -84,9 +85,6 @@ var sentinels = map[string]error{
 	"ErrStepRoleNotHeld":            mwanachamataskmanager.ErrStepRoleNotHeld,
 }
 
-// AnonymousActions is empty on purpose: nothing on a work board is readable
-// without a caller. It stays as the allowlist Split is built on, so an
-// operation added to the spec and not named here arrives gated.
 var AnonymousActions = []string{}
 
 type Mount struct {
@@ -148,9 +146,6 @@ func OperatorRoutesFor(tm mwanachamataskmanager.TaskManager, m Mount) []Route {
 	return SplitFor(tm, m).Gated
 }
 
-// Shape is the declared route table without handlers, for a mount that
-// resolves its manager per request rather than holding one. Its order is
-// Dispatch's own, so Shape()[i] and Routes(tm)[i] are the same operation.
 func Shape() []Route {
 	s, err := operations()
 	if err != nil {

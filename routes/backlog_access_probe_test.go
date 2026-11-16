@@ -27,14 +27,15 @@ type probeCall struct {
 }
 
 var operationsNotBoundToABacklog = map[string]bool{
-	"open_case":              true,
-	"vote_case":              true,
-	"take_back_vote":         true,
-	"add_task_note":          true,
-	"add_task_reference":     true,
-	"propose_task_reference": true,
-	"confirm_task_reference": true,
-	"remove_task_reference":  true,
+	"open_case":               true,
+	"vote_case":               true,
+	"take_back_vote":          true,
+	"add_task_note":           true,
+	"add_task_reference":      true,
+	"propose_task_reference":  true,
+	"confirm_task_reference":  true,
+	"remove_task_reference":   true,
+	"set_worker_caps_default": true,
 }
 
 var readsSentAsPost = map[string]bool{
@@ -102,6 +103,9 @@ func writesOnAnIssue(f *moreWritesFixture, other string) map[string]probeCall {
 		"link_case_task":           {"PUT", "/cases/" + f.kase + "/tasks/" + f.issue, nil},
 		"end_case":                 {"POST", "/cases/" + f.kase + "/end", map[string]any{"status": "cancelled"}},
 		"open_sourced_tasks":       {"POST", "/sourced-tasks", map[string]any{"source": "feed", "items": []map[string]any{{"key": "k1", "title": "from a feed", "due_at": "2030-01-01T00:00:00Z"}}}},
+		"set_task_caps":            {"PUT", issue + "/caps", map[string]any{"input_tokens": 5}},
+		"clear_task_caps":          {"DELETE", issue + "/caps", nil},
+		"write_task_usage":         {"PUT", issue + "/usage", map[string]any{"input_tokens": 5}},
 		"generate_tasks":           {"POST", "/generated-tasks", map[string]any{"run": "r1", "template": map[string]any{"title": "per subject"}, "subjects": []string{"s1"}}},
 	}
 }

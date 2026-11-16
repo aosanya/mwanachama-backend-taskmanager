@@ -30,7 +30,7 @@ func TestRuleSet_ValidateRefusals(t *testing.T) {
 		{"wrong operator for the field", ruleSet("all", rule("tag", "is", "Docs")), "does not take"},
 		{"title with a tag operator", ruleSet("all", rule("title", "has", "x")), "does not take"},
 		{"empty value", ruleSet("all", rule("tag", "has", "  ")), "needs a value"},
-		{"unknown mark", ruleSet("all", rule("mark", "is", "Stale")), "Ready or Blocked"},
+		{"unknown mark", ruleSet("all", rule("mark", "is", "Stale")), "Ready, Waiting, Sinbin or Blocked"},
 		{"unknown priority", ruleSet("all", rule("priority", "is", "urgent")), "low, medium, high or critical"},
 		{"waits on with a value", ruleSet("all", rule("waits_on", "has_something", "x")), "takes no value"},
 		{"span without a unit", ruleSet("all", rule("last_changed", "in_the_last", "30")), "number and a unit"},
@@ -63,7 +63,7 @@ func contains(s, sub string) bool {
 func TestRuleSet_AcceptsEveryFieldAndOperator(t *testing.T) {
 	set := ruleSet("any",
 		rule("tag", "has", "Docs"), rule("tag", "does_not_have", "Docs"),
-		rule("mark", "is", "Ready"), rule("mark", "is_not", "Blocked"),
+		rule("mark", "is", "Ready"), rule("mark", "is_not", "Blocked"), rule("mark", "is", "Waiting"), rule("mark", "is", "Sinbin"), rule("mark", "is_not", "sinbin"),
 		rule("backlog", "is", "Software"), rule("backlog", "is_not", "Software"),
 		rule("step", "is", "To do"), rule("step", "is_not", "To do"),
 		rule("priority", "is", "high"), rule("priority", "is_not", "low"),
@@ -140,6 +140,8 @@ func TestRuleSet_Matches(t *testing.T) {
 	}
 	blocked := base
 	blocked.Tags = []string{"Docs", "Blocked"}
+	waitingTagged := base
+	waitingTagged.Tags = []string{"Docs", "Waiting"}
 	stale := base
 	stale.UpdatedAt = old
 	waiting := subject(base)
@@ -165,6 +167,27 @@ func TestRuleSet_Matches(t *testing.T) {
 		{"a paused row with neither tag is not Blocked", ruleSet("all", rule("mark", "is", "Blocked")), subject(mwanachamataskmanager.Task{Tags: []string{"Docs"}}), false},
 		{"a paused row with neither tag is not Ready, as a negative rule", ruleSet("all", rule("mark", "is_not", "Ready")), subject(mwanachamataskmanager.Task{Tags: []string{"Docs"}}), true},
 		{"Blocked wins when both tags are present", ruleSet("all", rule("mark", "is", "Ready")), subject(mwanachamataskmanager.Task{Tags: []string{"Ready", "Blocked"}}), false},
+		{"mark waiting", ruleSet("all", rule("mark", "is", "Waiting")), subject(waitingTagged), true},
+		{"mark waiting, any case", ruleSet("all", rule("mark", "is", "waiting")), subject(waitingTagged), true},
+		{"a waiting issue is not Ready", ruleSet("all", rule("mark", "is", "Ready")), subject(waitingTagged), false},
+		{"a waiting issue is not Blocked", ruleSet("all", rule("mark", "is", "Blocked")), subject(waitingTagged), false},
+		{"a ready issue is not Waiting", ruleSet("all", rule("mark", "is", "Waiting")), subject(base), false},
+		{"mark is not waiting", ruleSet("all", rule("mark", "is_not", "Waiting")), subject(base), true},
+		{"Waiting wins over Ready when both tags are present", ruleSet("all", rule("mark", "is", "Waiting")), subject(mwanachamataskmanager.Task{Tags: []string{"Ready", "Waiting"}}), true},
+		{"Waiting beside Ready is not Ready", ruleSet("all", rule("mark", "is", "Ready")), subject(mwanachamataskmanager.Task{Tags: []string{"Ready", "Waiting"}}), false},
+		{"Blocked wins over Waiting when both tags are present", ruleSet("all", rule("mark", "is", "Blocked")), subject(mwanachamataskmanager.Task{Tags: []string{"Waiting", "Blocked"}}), true},
+		{"Blocked beside Waiting is not Waiting", ruleSet("all", rule("mark", "is", "Waiting")), subject(mwanachamataskmanager.Task{Tags: []string{"Waiting", "Blocked"}}), false},
+		{"mark sinbin", ruleSet("all", rule("mark", "is", "Sinbin")), subject(mwanachamataskmanager.Task{Tags: []string{"Docs", "Sinbin"}}), true},
+		{"mark sinbin, any case", ruleSet("all", rule("mark", "is", "sinbin")), subject(mwanachamataskmanager.Task{Tags: []string{"Sinbin"}}), true},
+		{"a sinbin issue is not Ready", ruleSet("all", rule("mark", "is", "Ready")), subject(mwanachamataskmanager.Task{Tags: []string{"Sinbin"}}), false},
+		{"a sinbin issue is not Waiting", ruleSet("all", rule("mark", "is", "Waiting")), subject(mwanachamataskmanager.Task{Tags: []string{"Sinbin"}}), false},
+		{"a sinbin issue is not Blocked", ruleSet("all", rule("mark", "is", "Blocked")), subject(mwanachamataskmanager.Task{Tags: []string{"Sinbin"}}), false},
+		{"a ready issue is not Sinbin", ruleSet("all", rule("mark", "is", "Sinbin")), subject(base), false},
+		{"mark is not sinbin", ruleSet("all", rule("mark", "is_not", "Sinbin")), subject(base), true},
+		{"Sinbin wins over Ready when both tags are present", ruleSet("all", rule("mark", "is", "Sinbin")), subject(mwanachamataskmanager.Task{Tags: []string{"Ready", "Sinbin"}}), true},
+		{"Sinbin wins over Waiting when both tags are present", ruleSet("all", rule("mark", "is", "Sinbin")), subject(mwanachamataskmanager.Task{Tags: []string{"Waiting", "Sinbin"}}), true},
+		{"Blocked wins over Sinbin when both tags are present", ruleSet("all", rule("mark", "is", "Blocked")), subject(mwanachamataskmanager.Task{Tags: []string{"Sinbin", "Blocked"}}), true},
+		{"Blocked beside Sinbin is not Sinbin", ruleSet("all", rule("mark", "is", "Sinbin")), subject(mwanachamataskmanager.Task{Tags: []string{"Sinbin", "Blocked"}}), false},
 		{"backlog by name", ruleSet("all", rule("backlog", "is", "software")), subject(base), true},
 		{"backlog by id", ruleSet("all", rule("backlog", "is", "b-1")), subject(base), true},
 		{"backlog is not", ruleSet("all", rule("backlog", "is_not", "Documentation")), subject(base), true},

@@ -1441,6 +1441,30 @@
       ]
     },
     {
+      "role": "task_caps",
+      "description": "The three caps one issue carries in place of the default for all workers: input tokens, output tokens and runtime seconds. One row per issue; a cap left at zero falls back to the default for that one cap.",
+      "fields": [
+        {"name": "id", "type": "string", "description": "The issue's id, so an issue has one row.", "primary": true},
+        {"name": "task_id", "type": "string", "description": "The issue the numbers belong to.", "required": true},
+        {"name": "input_tokens", "type": "int", "description": "Every token sent to the model, cached re-reads included; zero means the default."},
+        {"name": "output_tokens", "type": "int", "description": "Every token the model wrote; zero means the default."},
+        {"name": "runtime_seconds", "type": "int", "description": "Seconds of working time; zero means the default."}
+      ]
+    },
+    {
+      "role": "task_usage",
+      "description": "What the current or last worker run on one issue has used: input and output tokens, working seconds, whether the runtime clock is stopped, and when it was last written. One row per issue, replaced by each write.",
+      "fields": [
+        {"name": "id", "type": "string", "description": "The issue's id, so an issue has one row.", "primary": true},
+        {"name": "task_id", "type": "string", "description": "The issue the run belongs to.", "required": true},
+        {"name": "input_tokens", "type": "int", "description": "Input tokens used so far."},
+        {"name": "output_tokens", "type": "int", "description": "Output tokens used so far."},
+        {"name": "seconds_used", "type": "int", "description": "Seconds of working time used so far."},
+        {"name": "clock_stopped", "type": "bool", "description": "Whether the runtime clock is stopped because the worker waits for the owner's answer."},
+        {"name": "updated_at", "type": "timestamp", "description": "When the hook last wrote it."}
+      ]
+    },
+    {
       "role": "task_reference",
       "description": "One thing an issue is about: a file or folder of a repo's main branch, another issue, a screen or tool, or a website link. The id is a digest of the issue, kind, repo and target, so an issue refers to the same thing once. Whether a file or folder still exists is not stored.",
       "fields": [
@@ -1656,7 +1680,7 @@
             },
             {
               "id": "doing",
-              "name": "Doing",
+              "name": "In Progress",
               "statuses": [
                 "in_progress",
                 "split"
@@ -1700,6 +1724,24 @@
       "type": "string",
       "description": "The id of the group that always sees and moves every backlog, the Product owner group. Empty leaves the backlogs open until a grant is given.",
       "default": ""
+    },
+    {
+      "name": "worker_cap_input_tokens",
+      "type": "int",
+      "description": "The input-token cap of one worker on one issue in one session, for every issue that carries no number of its own. Every token sent each turn counts, cached re-reads included.",
+      "default": 500000
+    },
+    {
+      "name": "worker_cap_output_tokens",
+      "type": "int",
+      "description": "The output-token cap of one worker on one issue in one session, for every issue that carries no number of its own.",
+      "default": 100000
+    },
+    {
+      "name": "worker_cap_runtime_seconds",
+      "type": "int",
+      "description": "The runtime cap of one worker on one issue in one session, in seconds of working time, for every issue that carries no number of its own. The wait for the owner's answer does not count.",
+      "default": 900
     },
     {
       "name": "overdue_grace_hours",
