@@ -145,7 +145,7 @@ func TestStopWorkflowRun_EndsTheRunAtOnceAndCancelsItsOpenTasks(t *testing.T) {
 	if listed, _ := mgr.ListWorkflowRunsUnderWay(ctx, "group-order"); len(listed) != 0 {
 		t.Errorf("under way after stop = %v, want none", ids(listed))
 	}
-	if !contains(pub.topicList(), mwanachamataskmanager.TopicRunCancelled) {
+	if !listHas(pub.topicList(), mwanachamataskmanager.TopicRunCancelled) {
 		t.Errorf("topics = %v, want work.run.cancelled", pub.topicList())
 	}
 }

@@ -125,7 +125,7 @@ func TestBacklogAccess_RefusesAnUnknownLevelBacklogOrEmptyGroup(t *testing.T) {
 	mgr := managerWithTwoBacklogs(t)
 	ctx := context.Background()
 	mgr.SetBacklogOwnerGroup(ctx, ownerGroup)
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "edit"); !errors.Is(err, mwanachamataskmanager.ErrInvalidBacklog) {
+	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "own"); !errors.Is(err, mwanachamataskmanager.ErrInvalidBacklog) {
 		t.Fatalf("level: %v", err)
 	}
 	if _, err := mgr.GiveBacklogAccess(ctx, "software", " ", "see"); !errors.Is(err, mwanachamataskmanager.ErrInvalidBacklog) {

@@ -51,6 +51,9 @@ type TaskManager interface {
 
 	ListBacklogs(ctx context.Context) (BacklogList, error)
 	CreateBacklog(ctx context.Context, name string, steps []string) (BacklogSummary, error)
+	CreateBacklogWithRules(ctx context.Context, name string, steps []string, rules *BacklogRules) (BacklogSummary, error)
+	SetBacklogRules(ctx context.Context, backlogID string, rules *BacklogRules) (BacklogSummary, error)
+	CountBacklogRules(ctx context.Context, requesterID string, rules *BacklogRules) (RulesCount, error)
 	RenameBacklog(ctx context.Context, backlogID, name string) (BacklogSummary, error)
 	DeleteBacklog(ctx context.Context, backlogID string) error
 	AddBacklogStep(ctx context.Context, backlogID, name, after string) (BacklogSummary, error)
@@ -60,6 +63,15 @@ type TaskManager interface {
 	ReplaceBacklogs(ctx context.Context, backlogs []Backlog) (BacklogList, error)
 	MoveTaskToStep(ctx context.Context, taskID, backlogID, stepID string) (Task, error)
 	MoveTaskToStepAs(ctx context.Context, requesterID, taskID, backlogID, stepID string) (Task, error)
+	RenameBacklogAs(ctx context.Context, requesterID, backlogID, name string) (BacklogSummary, error)
+	DeleteBacklogAs(ctx context.Context, requesterID, backlogID string) error
+	AddBacklogStepAs(ctx context.Context, requesterID, backlogID, name, after string) (BacklogSummary, error)
+	RenameBacklogStepAs(ctx context.Context, requesterID, backlogID, stepID, name string) (BacklogSummary, error)
+	ReorderBacklogStepsAs(ctx context.Context, requesterID, backlogID string, steps []string) (BacklogSummary, error)
+	RemoveBacklogStepAs(ctx context.Context, requesterID, backlogID, stepID string) (BacklogSummary, error)
+	ReplaceBacklogsAs(ctx context.Context, requesterID string, backlogs []Backlog) (BacklogList, error)
+	GiveBacklogAccessAs(ctx context.Context, requesterID, backlogID, groupID, level string) (BacklogAccess, error)
+	TakeBacklogAccessAs(ctx context.Context, requesterID, backlogID, groupID string) (BacklogAccess, error)
 	ListBacklogsFor(ctx context.Context, requesterID string) (BacklogList, error)
 	GetTaskFor(ctx context.Context, requesterID, taskID string) (Task, error)
 	GetTaskByNameFor(ctx context.Context, requesterID, projectName, taskName string) (Task, error)
@@ -74,6 +86,7 @@ type TaskManager interface {
 	SetBacklogOwnerGroup(ctx context.Context, groupID string) error
 	UseGroups(g Groups)
 	UseGroupExists(g GroupExists)
+	UseInstanceOwner(o InstanceOwner)
 	UseRoleSync(r RoleSync)
 	CreateTaskAs(ctx context.Context, requesterID string, task Task) (Task, error)
 	UpdateTaskAs(ctx context.Context, requesterID string, task Task) (Task, error)
@@ -507,14 +520,15 @@ type Publisher = events.Publisher
 
 // taskManager is the concrete implementation of [TaskManager].
 type taskManager struct {
-	db           *gorm.DB
-	store        *store
-	publisher    events.Publisher
-	spec         *spec.Spec
-	overdueGrace time.Duration
-	groups       Groups
-	groupExists  GroupExists
-	roleSync     RoleSync
+	db            *gorm.DB
+	store         *store
+	publisher     events.Publisher
+	spec          *spec.Spec
+	overdueGrace  time.Duration
+	groups        Groups
+	groupExists   GroupExists
+	instanceOwner InstanceOwner
+	roleSync      RoleSync
 }
 
 func NewTaskManager(db *gorm.DB, s *spec.Spec, pub events.Publisher) (TaskManager, error) {

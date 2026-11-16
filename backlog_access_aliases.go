@@ -11,4 +11,5 @@ type (
 const (
 	AccessSee  = models.AccessSee
 	AccessMove = models.AccessMove
+	AccessEdit = models.AccessEdit
 )

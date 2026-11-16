@@ -11,6 +11,7 @@ type AccessLevel string
 const (
 	AccessSee  AccessLevel = "see"
 	AccessMove AccessLevel = "move"
+	AccessEdit AccessLevel = "edit"
 )
 
 type BacklogGrant struct {
@@ -44,10 +45,12 @@ type BacklogAccess struct {
 	Groups     []GroupAccess `json:"groups"`
 }
 
-func (l AccessLevel) Valid() bool { return l == AccessSee || l == AccessMove }
+func (l AccessLevel) Valid() bool { return l == AccessSee || l == AccessMove || l == AccessEdit }
 
 func (l AccessLevel) rank() int {
 	switch l {
+	case AccessEdit:
+		return 3
 	case AccessMove:
 		return 2
 	case AccessSee:
@@ -80,7 +83,7 @@ func CheckGrant(g BacklogGrant) error {
 		return fmt.Errorf("backlog access: a grant names a backlog and a group")
 	}
 	if !g.Level.Valid() {
-		return fmt.Errorf("backlog access: level %q is not see or move", g.Level)
+		return fmt.Errorf("backlog access: level %q is not see, move or edit", g.Level)
 	}
 	return nil
 }
@@ -136,14 +139,14 @@ func GrantsKept(grants []BacklogGrant, backlogs []Backlog) []BacklogGrant {
 
 func AccessLevelOf(grants []BacklogGrant, ownerGroup, backlogID string, groups []string) AccessLevel {
 	if ownerGroup == "" && len(grants) == 0 {
-		return AccessMove
+		return AccessEdit
 	}
 	held := map[string]bool{}
 	for _, id := range groups {
 		held[id] = true
 	}
 	if ownerGroup != "" && held[ownerGroup] {
-		return AccessMove
+		return AccessEdit
 	}
 	best := AccessLevel("")
 	for _, g := range grants {

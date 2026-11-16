@@ -67,10 +67,10 @@ func TestRollbackWorkflowRun_FailedRun_ReachesRolledBack(t *testing.T) {
 	}
 
 	topics := pub.topicList()
-	if !contains(topics, mwanachamataskmanager.TopicRunRollingBack) {
+	if !listHas(topics, mwanachamataskmanager.TopicRunRollingBack) {
 		t.Errorf("expected work.run.rolling_back event; got %v", topics)
 	}
-	if !contains(topics, mwanachamataskmanager.TopicRunRolledBack) {
+	if !listHas(topics, mwanachamataskmanager.TopicRunRolledBack) {
 		t.Errorf("expected work.run.rolled_back event; got %v", topics)
 	}
 }
@@ -167,7 +167,7 @@ func TestDeleteWorkflowRunArtifacts_ResetsTasksToPendingAndEmitsEvents(t *testin
 		t.Errorf("task.WorkflowRunID = %q, want empty", after.WorkflowRunID)
 	}
 
-	if !contains(pub.topicList(), mwanachamataskmanager.TopicTaskRolledBack) {
+	if !listHas(pub.topicList(), mwanachamataskmanager.TopicTaskRolledBack) {
 		t.Errorf("expected work.task.rolled_back event; got %v", pub.topicList())
 	}
 }
@@ -438,7 +438,7 @@ func (p *recordingPublisher) topicList() []string {
 	return out
 }
 
-func contains(ss []string, target string) bool {
+func listHas(ss []string, target string) bool {
 	for _, s := range ss {
 		if s == target {
 			return true

@@ -28,9 +28,13 @@ type Groups func(ctx context.Context, callerID string) ([]string, error)
 
 type GroupExists func(ctx context.Context, groupID string) (bool, error)
 
+type InstanceOwner func(ctx context.Context, callerID string) (bool, error)
+
 func (m *taskManager) UseGroups(g Groups) { m.groups = g }
 
 func (m *taskManager) UseGroupExists(g GroupExists) { m.groupExists = g }
+
+func (m *taskManager) UseInstanceOwner(o InstanceOwner) { m.instanceOwner = o }
 
 func (m *taskManager) UseRoleSync(r RoleSync) { m.roleSync = r }
 
@@ -43,8 +47,21 @@ func (v backlogVisibility) Sees(backlogID string) bool {
 	return v.all || v.levels[backlogID] != ""
 }
 
+func (v backlogVisibility) LevelOf(backlogID string) models.AccessLevel {
+	if v.all {
+		return models.AccessEdit
+	}
+	return v.levels[backlogID]
+}
+
 func (v backlogVisibility) Moves(backlogID string) bool {
-	return v.all || v.levels[backlogID] == models.AccessMove
+	level := v.levels[backlogID]
+	return v.all || level == models.AccessMove || level == models.AccessEdit
+}
+
+func (v backlogVisibility) Edits(backlogID string) bool {
+	level := v.levels[backlogID]
+	return v.all || level == models.AccessEdit
 }
 
 func (m *taskManager) storedGrants(ctx context.Context) ([]models.BacklogGrant, error) {
@@ -90,6 +107,15 @@ func (m *taskManager) backlogVisibility(ctx context.Context, requesterID string)
 	if requesterID == "" {
 		return backlogVisibility{all: true}, nil
 	}
+	if m.instanceOwner != nil {
+		owns, err := m.instanceOwner(ctx, requesterID)
+		if err != nil {
+			return backlogVisibility{}, fmt.Errorf("backlog access: owner: %w", err)
+		}
+		if owns {
+			return backlogVisibility{all: true}, nil
+		}
+	}
 	grants, err := m.storedGrants(ctx)
 	if err != nil {
 		return backlogVisibility{}, err
@@ -131,8 +157,16 @@ func (m *taskManager) ListBacklogsFor(ctx context.Context, requesterID string) (
 		return models.BacklogList{}, err
 	}
 	kept := make([]models.BacklogSummary, 0, len(list.Items))
+	backlogs, err := m.backlogs(ctx)
+	if err != nil {
+		return models.BacklogList{}, err
+	}
+	if err := m.countSmartIssues(ctx, requesterID, &list, backlogs); err != nil {
+		return models.BacklogList{}, err
+	}
 	for _, item := range list.Items {
 		if visible.Sees(item.ID) {
+			item.Level = visible.LevelOf(item.ID)
 			kept = append(kept, item)
 		}
 	}
@@ -226,6 +260,9 @@ func (m *taskManager) GiveBacklogAccess(ctx context.Context, backlogID, groupID,
 		return models.BacklogAccess{}, fmt.Errorf("%w: %s", ErrInvalidBacklog, err)
 	}
 	if _, err := m.accessOf(ctx, backlogID); err != nil {
+		return models.BacklogAccess{}, err
+	}
+	if err := m.refuseMoveOnSmart(ctx, backlogID, grant.Level); err != nil {
 		return models.BacklogAccess{}, err
 	}
 	if err := m.requireGroup(ctx, groupID); err != nil {

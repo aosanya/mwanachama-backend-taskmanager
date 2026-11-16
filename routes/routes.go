@@ -73,6 +73,7 @@ var sentinels = map[string]error{
 	"ErrInvalidEffort":              mwanachamataskmanager.ErrInvalidEffort,
 	"ErrUnknownBacklogStep":         mwanachamataskmanager.ErrUnknownBacklogStep,
 	"ErrInvalidBacklog":             mwanachamataskmanager.ErrInvalidBacklog,
+	"ErrDuplicateRules":             mwanachamataskmanager.ErrDuplicateRules,
 	"ErrBacklogHoldsIssues":         mwanachamataskmanager.ErrBacklogHoldsIssues,
 	"ErrBacklogForbidden":           mwanachamataskmanager.ErrBacklogForbidden,
 	"ErrOwnerGroupNotSet":           mwanachamataskmanager.ErrOwnerGroupNotSet,

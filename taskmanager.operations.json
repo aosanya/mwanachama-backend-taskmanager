@@ -149,69 +149,93 @@
       "returns": [{"body": true}]
     },
     "create_backlog": {
-      "method": "POST", "path": "/backlogs", "call": "CreateBacklog", "action": "taskmanager.backlog.create",
+      "method": "POST", "path": "/backlogs", "call": "CreateBacklogWithRules", "action": "taskmanager.backlog.create",
       "status": 201,
       "title": "Create backlog",
-      "description": "Add a backlog with a name and its steps in order. The name must not belong to another backlog and at least one step is needed.",
+      "description": "Add a backlog with a name and either its steps in order or rules. With steps it is a workflow: the name must not belong to another backlog and at least one step is needed. With rules (a match of all or any, and a list of rules each with a field, an operator and a value) it is a smart backlog: it holds no issues of its own and lists whatever the rules match, and the same rules cannot be saved twice (refused with the existing backlog's id and name).",
       "args": [{"from": "body", "as": "name", "required": true, "description": "The new backlog's name."},
-               {"from": "body", "as": "steps", "required": true, "description": "The names of its steps, in order."}],
+               {"from": "body", "as": "steps", "description": "The names of its steps, in order; leave out for a smart backlog."},
+               {"from": "body", "as": "rules", "description": "For a smart backlog: {match: all or any, rules: [{field, operator, value}]}; leave out for a backlog with steps."}],
+      "returns": [{"body": true}]
+    },
+    "set_backlog_rules": {
+      "method": "PUT", "path": "/backlogs/{backlogID}/rules", "call": "SetBacklogRules", "action": "taskmanager.backlog.rules_set",
+      "title": "Set a smart backlog's rules",
+      "description": "Replace the rules of a smart backlog. The same rules as another smart backlog are refused with that backlog's id and name.",
+      "args": [{"from": "path", "as": "backlogID", "description": "The smart backlog."},
+               {"from": "body", "as": "rules", "required": true, "description": "{match: all or any, rules: [{field, operator, value}]}."}],
+      "returns": [{"body": true}]
+    },
+    "count_backlog_rules": {
+      "method": "POST", "path": "/backlogs/rules/count", "call": "CountBacklogRules", "action": "taskmanager.backlog.rules_count",
+      "title": "Count what rules match",
+      "description": "Say how many issues the caller can see that the given rules match, without saving anything, so the rules screen can show a live count.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "body", "as": "rules", "required": true, "description": "{match: all or any, rules: [{field, operator, value}]}."}],
       "returns": [{"body": true}]
     },
     "rename_backlog": {
-      "method": "PUT", "path": "/backlogs/{backlogID}", "call": "RenameBacklog", "action": "taskmanager.backlog.rename",
+      "method": "PUT", "path": "/backlogs/{backlogID}", "call": "RenameBacklogAs", "action": "taskmanager.backlog.rename",
       "title": "Rename backlog",
       "description": "Give a backlog another name. Its steps and issues stay as they are.",
-      "args": [{"from": "path", "as": "backlogID", "description": "The backlog to rename."},
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "path", "as": "backlogID", "description": "The backlog to rename."},
                {"from": "body", "as": "name", "required": true, "description": "The new name."}],
       "returns": [{"body": true}]
     },
     "delete_backlog": {
-      "method": "DELETE", "path": "/backlogs/{backlogID}", "call": "DeleteBacklog", "action": "taskmanager.backlog.delete",
+      "method": "DELETE", "path": "/backlogs/{backlogID}", "call": "DeleteBacklogAs", "action": "taskmanager.backlog.delete",
       "status": 204,
       "title": "Delete backlog",
       "description": "Delete a backlog. A backlog that holds issues cannot be deleted; move the issues out first.",
-      "args": [{"from": "path", "as": "backlogID", "description": "The backlog to delete."}],
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "path", "as": "backlogID", "description": "The backlog to delete."}],
       "returns": [{"body": true}]
     },
     "replace_backlogs": {
-      "method": "PUT", "path": "/backlogs", "call": "ReplaceBacklogs", "action": "taskmanager.backlog.manage",
+      "method": "PUT", "path": "/backlogs", "call": "ReplaceBacklogsAs", "action": "taskmanager.backlog.manage",
       "title": "Replace backlogs",
       "description": "Set the whole list of backlogs and their steps in one call, as the app's edit screens do. A step or a backlog that holds issues cannot be left out of the list.",
-      "args": [{"from": "body", "as": "backlogs", "required": true, "description": "Every backlog with its id, name and steps in order."}],
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "body", "as": "backlogs", "required": true, "description": "Every backlog with its id, name and steps in order."}],
       "returns": [{"body": true}]
     },
     "add_backlog_step": {
-      "method": "POST", "path": "/backlogs/{backlogID}/steps", "call": "AddBacklogStep", "action": "taskmanager.backlog_step.add",
+      "method": "POST", "path": "/backlogs/{backlogID}/steps", "call": "AddBacklogStepAs", "action": "taskmanager.backlog_step.add",
       "status": 201,
       "title": "Add backlog step",
       "description": "Add a step to a backlog, directly after the step named in after, or last when after is left out.",
-      "args": [{"from": "path", "as": "backlogID", "description": "The backlog to add the step to."},
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "path", "as": "backlogID", "description": "The backlog to add the step to."},
                {"from": "body", "as": "name", "required": true, "description": "The new step's name."},
                {"from": "body", "as": "after", "description": "The id of the step it goes after."}],
       "returns": [{"body": true}]
     },
     "rename_backlog_step": {
-      "method": "PUT", "path": "/backlogs/{backlogID}/steps/{stepID}", "call": "RenameBacklogStep", "action": "taskmanager.backlog_step.rename",
+      "method": "PUT", "path": "/backlogs/{backlogID}/steps/{stepID}", "call": "RenameBacklogStepAs", "action": "taskmanager.backlog_step.rename",
       "title": "Rename backlog step",
       "description": "Give a step of a backlog another name. The issues at it stay there.",
-      "args": [{"from": "path", "as": "backlogID", "description": "The backlog the step belongs to."},
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "path", "as": "backlogID", "description": "The backlog the step belongs to."},
                {"from": "path", "as": "stepID", "description": "The step to rename."},
                {"from": "body", "as": "name", "required": true, "description": "The new name."}],
       "returns": [{"body": true}]
     },
     "remove_backlog_step": {
-      "method": "DELETE", "path": "/backlogs/{backlogID}/steps/{stepID}", "call": "RemoveBacklogStep", "action": "taskmanager.backlog_step.remove",
+      "method": "DELETE", "path": "/backlogs/{backlogID}/steps/{stepID}", "call": "RemoveBacklogStepAs", "action": "taskmanager.backlog_step.remove",
       "title": "Remove backlog step",
       "description": "Remove a step from a backlog. A step that holds issues cannot be removed; move the issues out first.",
-      "args": [{"from": "path", "as": "backlogID", "description": "The backlog the step belongs to."},
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "path", "as": "backlogID", "description": "The backlog the step belongs to."},
                {"from": "path", "as": "stepID", "description": "The step to remove."}],
       "returns": [{"body": true}]
     },
     "reorder_backlog_steps": {
-      "method": "PUT", "path": "/backlogs/{backlogID}/step-order", "call": "ReorderBacklogSteps", "action": "taskmanager.backlog_step.reorder",
+      "method": "PUT", "path": "/backlogs/{backlogID}/step-order", "call": "ReorderBacklogStepsAs", "action": "taskmanager.backlog_step.reorder",
       "title": "Reorder backlog steps",
       "description": "Put the steps of a backlog in a new order. Name every step of the backlog once.",
-      "args": [{"from": "path", "as": "backlogID", "description": "The backlog to reorder."},
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "path", "as": "backlogID", "description": "The backlog to reorder."},
                {"from": "body", "as": "steps", "required": true, "description": "The ids of its steps, in the new order."}],
       "returns": [{"body": true}]
     },
@@ -228,24 +252,26 @@
     "list_backlog_access": {
       "method": "GET", "path": "/backlogs/{backlogID}/access", "call": "ListBacklogAccess", "action": "taskmanager.backlog_access.list",
       "title": "List who can use a backlog",
-      "description": "List the groups that have access to a backlog and what each may do: Can see or Can move. The Product owner group always has Can move. Each group also says which agency roles it holds (roles), no_role when none of them lets its members read tasks (so they still see nothing), and role_too_small when the group has Can move but no role lets its members edit tasks (so they can only look).",
+      "description": "List the groups that have access to a backlog and what each may do: Can see, Can move or Can edit. The Product owner group always has Can edit. Each group also says which agency roles it holds (roles), no_role when none of them lets its members read tasks (so they still see nothing), and role_too_small when the group has Can move but no role lets its members edit tasks (so they can only look).",
       "args": [{"from": "path", "as": "backlogID", "description": "The backlog to read."}],
       "returns": [{"body": true}]
     },
     "give_backlog_access": {
-      "method": "PUT", "path": "/backlogs/{backlogID}/access/{groupID}", "call": "GiveBacklogAccess", "action": "taskmanager.backlog_access.give",
+      "method": "PUT", "path": "/backlogs/{backlogID}/access/{groupID}", "call": "GiveBacklogAccessAs", "action": "taskmanager.backlog_access.give",
       "title": "Give a group access to a backlog",
-      "description": "Let a group see a backlog or move its issues. Giving a group that already has access changes its level. The group also gets the matching agency role in the same step, so its members can open the Backlogs at once: Backlog member for Can see, Backlog worker for Can move (the higher of its levels across all backlogs); an agency that has not defined those roles gives none, and the access list then says no_role.",
-      "args": [{"from": "path", "as": "backlogID", "description": "The backlog to give access to."},
+      "description": "Let a group see a backlog, move its issues or edit the backlog (rename it, change its steps and access, delete it); Can edit includes Can move and Can see. Giving a group that already has access changes its level. The group also gets the matching agency role in the same step, so its members can open the Backlogs at once: Backlog member for Can see, Backlog worker for Can move (the higher of its levels across all backlogs); an agency that has not defined those roles gives none, and the access list then says no_role.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "path", "as": "backlogID", "description": "The backlog to give access to."},
                {"from": "path", "as": "groupID", "description": "The group that gets the access."},
-               {"from": "body", "as": "level", "required": true, "description": "see for Can see, move for Can move."}],
+               {"from": "body", "as": "level", "required": true, "description": "see for Can see, move for Can move, edit for Can edit."}],
       "returns": [{"body": true}]
     },
     "take_backlog_access": {
-      "method": "DELETE", "path": "/backlogs/{backlogID}/access/{groupID}", "call": "TakeBacklogAccess", "action": "taskmanager.backlog_access.take",
+      "method": "DELETE", "path": "/backlogs/{backlogID}/access/{groupID}", "call": "TakeBacklogAccessAs", "action": "taskmanager.backlog_access.take",
       "title": "Take a group's access to a backlog away",
       "description": "Stop a group seeing a backlog. The Product owner group's access cannot be taken away. When it was the group's last access the group also loses its Backlog member or Backlog worker role.",
-      "args": [{"from": "path", "as": "backlogID", "description": "The backlog to take access from."},
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "path", "as": "backlogID", "description": "The backlog to take access from."},
                {"from": "path", "as": "groupID", "description": "The group that loses the access."}],
       "returns": [{"body": true}]
     },
@@ -965,6 +991,7 @@
     "ErrInvalidFilter": 400,
     "ErrUnknownBacklogStep": 400,
     "ErrInvalidBacklog": 400,
+    "ErrDuplicateRules": 409,
     "ErrBacklogHoldsIssues": 409,
     "ErrBacklogForbidden": 403,
     "ErrOwnerGroupNotSet": 409,

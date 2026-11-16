@@ -37,6 +37,10 @@ var operationsNotBoundToABacklog = map[string]bool{
 	"remove_task_reference":  true,
 }
 
+var readsSentAsPost = map[string]bool{
+	"count_backlog_rules": true,
+}
+
 func operationsTakingTheCallerThatWrite(t *testing.T) []string {
 	t.Helper()
 	raw, err := os.ReadFile("../taskmanager.operations.json")
@@ -57,7 +61,7 @@ func operationsTakingTheCallerThatWrite(t *testing.T) []string {
 	}
 	var names []string
 	for name, op := range file.Operations {
-		if op.Method == http.MethodGet || operationsNotBoundToABacklog[name] {
+		if op.Method == http.MethodGet || readsSentAsPost[name] || operationsNotBoundToABacklog[name] {
 			continue
 		}
 		for _, arg := range op.Args {
@@ -106,6 +110,9 @@ func TestEveryWriteThatTakesTheCallerIsProbedForCanSee(t *testing.T) {
 	f := newMoreWritesFixture(t)
 	other := f.h.expect(http.StatusCreated, "boss", "POST", "/tasks", map[string]any{"title": "second", "backlog": f.docs, "step": "write"})["id"].(string)
 	probed := writesOnAnIssue(f, other)
+	for name, call := range writesOnABacklog(f.docs, "steps") {
+		probed[name] = call
+	}
 	var have []string
 	for name := range probed {
 		have = append(have, name)

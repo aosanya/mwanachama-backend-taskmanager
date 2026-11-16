@@ -104,3 +104,23 @@ func TestBacklogRoles_TheAccessListSaysWhenARoleIsMissingOrTooSmall(t *testing.T
 		t.Fatalf("groups listed = %v", byGroup)
 	}
 }
+
+func TestBacklogRoles_CanEditGivesTheBacklogManagerRoleAndFallsBackToWorker(t *testing.T) {
+	mgr, roles := managerWithRoles(t)
+	ctx := context.Background()
+	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mgr.GiveBacklogAccess(ctx, "backlog", devGroup, "edit"); err != nil {
+		t.Fatal(err)
+	}
+	if roles.set[devGroup] != mwanachamataskmanager.RoleCodeBacklogManager {
+		t.Fatalf("after Can edit the group's role is %q", roles.set[devGroup])
+	}
+	if _, err := mgr.TakeBacklogAccess(ctx, "backlog", devGroup); err != nil {
+		t.Fatal(err)
+	}
+	if roles.set[devGroup] != mwanachamataskmanager.RoleCodeBacklogWorker {
+		t.Fatalf("after Can edit is taken the role falls back to %q", roles.set[devGroup])
+	}
+}

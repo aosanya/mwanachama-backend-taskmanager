@@ -86,7 +86,7 @@ func (m *taskManager) PendingTasks(ctx context.Context, filter PendingFilter) (P
 		out.Items = append(out.Items, PendingItem{
 			ID: r.ID, Title: r.Title, State: models.StateNameFor(states, TaskStatus(r.Status)),
 			Backlog: backlogName, Step: stepName, Priority: TaskPriority(r.Priority),
-			Tags: tags[r.ID], Rank: r.Rank, Blocked: isBlocked(TaskStatus(r.Status), tags[r.ID]),
+			Tags: tags[r.ID], Rank: r.Rank, Blocked: isBlocked(tags[r.ID]),
 		})
 	}
 	return out, nil
@@ -228,12 +228,23 @@ func (m *taskManager) tagNamesOf(ctx context.Context, taskIDs []string) map[stri
 	return out
 }
 
-func isBlocked(status TaskStatus, tags []string) bool {
-	if status == models.TaskStatusBlocked {
-		return true
+func isBlocked(tags []string) bool {
+	return hasTagFold(tags, markBlocked)
+}
+
+func markOfTags(tags []string) string {
+	switch {
+	case isBlocked(tags):
+		return markBlocked
+	case hasTagFold(tags, markReady):
+		return markReady
 	}
+	return ""
+}
+
+func hasTagFold(tags []string, name string) bool {
 	for _, t := range tags {
-		if strings.EqualFold(t, "blocked") {
+		if strings.EqualFold(t, name) {
 			return true
 		}
 	}

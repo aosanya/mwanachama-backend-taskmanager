@@ -34,7 +34,7 @@ func TestCancelWorkflowRun_InProgress_ReachesCancelling(t *testing.T) {
 	if result.CancellingUntil == "" {
 		t.Error("CancellingUntil empty; want RFC3339 deadline")
 	}
-	if !contains(pub.topicList(), mwanachamataskmanager.TopicRunCancelling) {
+	if !listHas(pub.topicList(), mwanachamataskmanager.TopicRunCancelling) {
 		t.Errorf("expected work.run.cancelling event; got %v", pub.topicList())
 	}
 }
@@ -219,7 +219,7 @@ func TestFinalizeWorkflowRunCancellation_CancellingRun_ReachesCancelled(t *testi
 	if result.CompletedAt == "" {
 		t.Error("CompletedAt empty after finalize")
 	}
-	if !contains(pub.topicList(), mwanachamataskmanager.TopicRunCancelled) {
+	if !listHas(pub.topicList(), mwanachamataskmanager.TopicRunCancelled) {
 		t.Errorf("expected work.run.cancelled event; got %v", pub.topicList())
 	}
 }

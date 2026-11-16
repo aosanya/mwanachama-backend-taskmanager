@@ -13,11 +13,28 @@ type BacklogStep struct {
 	Statuses []TaskStatus `json:"statuses,omitempty"`
 }
 
+const BacklogKindSmart = "smart"
+
+type BacklogRule struct {
+	Field    string `json:"field"`
+	Operator string `json:"operator"`
+	Value    string `json:"value,omitempty"`
+}
+
 type Backlog struct {
 	ID    string        `json:"id"`
 	Name  string        `json:"name"`
 	Steps []BacklogStep `json:"steps"`
+	Kind  string        `json:"kind,omitempty"`
+	Rules *BacklogRules `json:"rules,omitempty"`
 }
+
+type BacklogRules struct {
+	Match string        `json:"match"`
+	Rules []BacklogRule `json:"rules"`
+}
+
+func (b Backlog) Smart() bool { return b.Kind == BacklogKindSmart }
 
 type StepSummary struct {
 	ID     string `json:"id"`
@@ -30,6 +47,9 @@ type BacklogSummary struct {
 	Name   string        `json:"name"`
 	Issues int           `json:"issues"`
 	Steps  []StepSummary `json:"steps"`
+	Level  AccessLevel   `json:"level,omitempty"`
+	Kind   string        `json:"kind,omitempty"`
+	Rules  *BacklogRules `json:"rules,omitempty"`
 }
 
 type BacklogList struct {
@@ -88,9 +108,28 @@ func CheckBacklogs(backlogs []Backlog) error {
 			return fmt.Errorf("backlogs: %q is declared twice", b.Name)
 		}
 		ids[b.ID], names[b.Name] = true, true
+		if b.Smart() {
+			if err := checkSmart(b); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := checkSteps(b); err != nil {
 			return err
 		}
+	}
+	if backlogs[0].Smart() {
+		return fmt.Errorf("backlogs: the first backlog keeps steps, a smart backlog cannot be first")
+	}
+	return nil
+}
+
+func checkSmart(b Backlog) error {
+	if len(b.Steps) > 0 {
+		return fmt.Errorf("backlogs: smart backlog %q has no steps", b.Name)
+	}
+	if b.Rules == nil || len(b.Rules.Rules) == 0 {
+		return fmt.Errorf("backlogs: smart backlog %q needs at least one rule", b.Name)
 	}
 	return nil
 }

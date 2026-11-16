@@ -8,10 +8,11 @@ import (
 )
 
 const (
-	RoleCodeBacklogMember = "backlog_member"
-	RoleCodeBacklogWorker = "backlog_worker"
-	PermissionTaskRead    = "task.read"
-	PermissionTaskEdit    = "task.edit"
+	RoleCodeBacklogMember  = "backlog_member"
+	RoleCodeBacklogWorker  = "backlog_worker"
+	RoleCodeBacklogManager = "backlog_manager"
+	PermissionTaskRead     = "task.read"
+	PermissionTaskEdit     = "task.edit"
 )
 
 type RoleState struct {
@@ -27,6 +28,8 @@ type RoleSync interface {
 
 func backlogRoleFor(level models.AccessLevel) string {
 	switch level {
+	case models.AccessEdit:
+		return RoleCodeBacklogManager
 	case models.AccessMove:
 		return RoleCodeBacklogWorker
 	case models.AccessSee:
@@ -81,7 +84,7 @@ func (m *taskManager) markRoles(ctx context.Context, groups []models.GroupAccess
 		}
 		groups[i].Roles = state.Codes
 		groups[i].NoRole = !state.CanRead
-		groups[i].RoleTooSmall = groups[i].Level == models.AccessMove && !state.CanEdit
+		groups[i].RoleTooSmall = (groups[i].Level == models.AccessMove || groups[i].Level == models.AccessEdit) && !state.CanEdit
 	}
 	return nil
 }

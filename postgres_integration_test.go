@@ -197,7 +197,7 @@ func TestPostgres_WorkflowRun_CreateAndRollback(t *testing.T) {
 	if after.Status != mwanachamataskmanager.TaskStatusPending || after.WorkflowRunID != "" {
 		t.Errorf("post-rollback task = %+v, want status=pending workflow_run_id=\"\"", after)
 	}
-	if !contains(pub.topicList(), mwanachamataskmanager.TopicRunRolledBack) {
+	if !listHas(pub.topicList(), mwanachamataskmanager.TopicRunRolledBack) {
 		t.Errorf("expected run.rolled_back event; got %v", pub.topicList())
 	}
 }

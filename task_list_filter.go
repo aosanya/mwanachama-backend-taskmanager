@@ -66,6 +66,9 @@ func (m *taskManager) narrowToPlace(ctx context.Context, q *gorm.DB, filter Task
 			return nil, fmt.Errorf("%w: %q", ErrUnknownBacklog, filter.Backlog)
 		}
 		backlog = found
+		if found.Smart() {
+			return m.narrowToSmart(ctx, q, filter, found)
+		}
 	}
 	isFirst := backlog.ID == backlogs[0].ID
 	ids := make([]string, len(backlogs))
