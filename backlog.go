@@ -117,7 +117,7 @@ func summarize(backlogs []models.Backlog, tasks []Task) models.BacklogList {
 	}
 	out := models.BacklogList{Items: make([]models.BacklogSummary, len(backlogs))}
 	for i, b := range backlogs {
-		item := models.BacklogSummary{ID: b.ID, Name: b.Name, Issues: totals[b.ID], Steps: make([]models.StepSummary, len(b.Steps)), Kind: b.Kind, Rules: b.Rules}
+		item := models.BacklogSummary{ID: b.ID, Name: b.Name, Issues: totals[b.ID], Steps: make([]models.StepSummary, len(b.Steps)), Kind: b.Kind, Rules: b.Rules, Archived: b.Archived}
 		for j, s := range b.Steps {
 			item.Steps[j] = models.StepSummary{ID: s.ID, Name: s.Name, Issues: counts[b.ID][s.ID]}
 		}
@@ -354,6 +354,20 @@ func (m *taskManager) changeBacklog(ctx context.Context, backlogID string, chang
 func (m *taskManager) RenameBacklog(ctx context.Context, backlogID, name string) (models.BacklogSummary, error) {
 	return m.changeBacklog(ctx, backlogID, func(b *models.Backlog) error {
 		b.Name = strings.TrimSpace(name)
+		return nil
+	})
+}
+
+func (m *taskManager) ArchiveBacklog(ctx context.Context, backlogID string) (models.BacklogSummary, error) {
+	return m.changeBacklog(ctx, backlogID, func(b *models.Backlog) error {
+		b.Archived = true
+		return nil
+	})
+}
+
+func (m *taskManager) UnarchiveBacklog(ctx context.Context, backlogID string) (models.BacklogSummary, error) {
+	return m.changeBacklog(ctx, backlogID, func(b *models.Backlog) error {
+		b.Archived = false
 		return nil
 	})
 }

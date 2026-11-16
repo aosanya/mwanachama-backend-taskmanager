@@ -248,6 +248,22 @@
                {"from": "body", "as": "name", "required": true, "description": "The new name."}],
       "returns": [{"body": true}]
     },
+    "archive_backlog": {
+      "method": "PUT", "path": "/backlogs/{backlogID}/archive", "call": "ArchiveBacklogAs", "action": "taskmanager.backlog.archive",
+      "title": "Archive backlog",
+      "description": "Mark a whole backlog archived so the Backlogs list hides it. Its issues, codes and tags stay as they are and its issues still open by link; smart backlogs still read them. The first backlog cannot be archived.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "path", "as": "backlogID", "description": "The backlog to archive."}],
+      "returns": [{"body": true}]
+    },
+    "unarchive_backlog": {
+      "method": "PUT", "path": "/backlogs/{backlogID}/unarchive", "call": "UnarchiveBacklogAs", "action": "taskmanager.backlog.unarchive",
+      "title": "Unarchive backlog",
+      "description": "Bring an archived backlog back onto the Backlogs list.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "path", "as": "backlogID", "description": "The backlog to bring back."}],
+      "returns": [{"body": true}]
+    },
     "delete_backlog": {
       "method": "DELETE", "path": "/backlogs/{backlogID}", "call": "DeleteBacklogAs", "action": "taskmanager.backlog.delete",
       "status": 204,
@@ -260,7 +276,7 @@
     "replace_backlogs": {
       "method": "PUT", "path": "/backlogs", "call": "ReplaceBacklogsAs", "action": "taskmanager.backlog.manage",
       "title": "Replace backlogs",
-      "description": "Set the whole list of backlogs and their steps in one call, as the app's edit screens do. A step or a backlog that holds issues cannot be left out of the list.",
+      "description": "Set the whole list of backlogs and their steps in one call, as the app's edit screens do. A step or a backlog that holds issues cannot be left out of the list. A backlog is archived only when it carries archived true.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
                {"from": "body", "as": "backlogs", "required": true, "description": "Every backlog with its id, name and steps in order."}],
       "returns": [{"body": true}]

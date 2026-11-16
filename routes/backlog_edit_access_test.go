@@ -9,6 +9,8 @@ func writesOnABacklog(backlog, stepName string) map[string]probeCall {
 	b := "/backlogs/" + backlog
 	return map[string]probeCall{
 		"rename_backlog":        {"PUT", b, map[string]string{"name": "Renamed"}},
+		"archive_backlog":       {"PUT", b + "/archive", nil},
+		"unarchive_backlog":     {"PUT", b + "/unarchive", nil},
 		"delete_backlog":        {"DELETE", b, nil},
 		"replace_backlogs":      {"PUT", "/backlogs", map[string]any{"backlogs": []map[string]any{}}},
 		"add_backlog_step":      {"POST", b + "/steps", map[string]string{"name": stepName}},

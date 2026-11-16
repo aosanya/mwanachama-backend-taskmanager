@@ -25,6 +25,20 @@ func (m *taskManager) RenameBacklogAs(ctx context.Context, requesterID, backlogI
 	return m.RenameBacklog(ctx, backlogID, name)
 }
 
+func (m *taskManager) ArchiveBacklogAs(ctx context.Context, requesterID, backlogID string) (BacklogSummary, error) {
+	if err := m.requireEditOn(ctx, requesterID, backlogID); err != nil {
+		return BacklogSummary{}, err
+	}
+	return m.ArchiveBacklog(ctx, backlogID)
+}
+
+func (m *taskManager) UnarchiveBacklogAs(ctx context.Context, requesterID, backlogID string) (BacklogSummary, error) {
+	if err := m.requireEditOn(ctx, requesterID, backlogID); err != nil {
+		return BacklogSummary{}, err
+	}
+	return m.UnarchiveBacklog(ctx, backlogID)
+}
+
 func (m *taskManager) DeleteBacklogAs(ctx context.Context, requesterID, backlogID string) error {
 	if err := m.requireEditOn(ctx, requesterID, backlogID); err != nil {
 		return err

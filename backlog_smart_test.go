@@ -21,7 +21,7 @@ func titleHas(word string) models.BacklogRule {
 func smartManager(t *testing.T) mwanachamataskmanager.TaskManager {
 	t.Helper()
 	mgr := managerWithTwoBacklogs(t)
-	for _, title := range []string{"Fix the import route", "Write the guide", "Import the municipality"} {
+	for _, title := range []string{"Fix the import route", "Write the guide", "Import the catalog"} {
 		mustCreate(t, mgr, mwanachamataskmanager.Task{Title: title})
 	}
 	return mgr

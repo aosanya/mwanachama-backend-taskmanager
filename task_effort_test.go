@@ -49,7 +49,7 @@ func TestPatchTask_EffortChangesAndNothingElseDoes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if patched.Effort != mwanachamataskmanager.TaskEffortLow || patched.Title != "HM1" || patched.Priority != mwanachamataskmanager.TaskPriorityCritical || len(patched.Tags) != 2 {
+	if patched.Effort != mwanachamataskmanager.TaskEffortLow || patched.Title != "EX1" || patched.Priority != mwanachamataskmanager.TaskPriorityCritical || len(patched.Tags) != 2 {
 		t.Fatalf("patched %+v", patched)
 	}
 }

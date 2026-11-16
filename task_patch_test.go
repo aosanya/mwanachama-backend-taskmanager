@@ -14,11 +14,11 @@ func text(s string) *string { return &s }
 func newTaggedIssue(t *testing.T, mgr mwanachamataskmanager.TaskManager) mwanachamataskmanager.Task {
 	t.Helper()
 	return mustCreate(t, mgr, mwanachamataskmanager.Task{
-		Title:       "HM1",
+		Title:       "EX1",
 		Description: "old description",
 		Priority:    mwanachamataskmanager.TaskPriorityCritical,
-		Tags:        []string{"hungarian-municipality", "Ready"},
-		ProjectName: "projects/hungarian-municipality",
+		Tags:        []string{"example-project", "Ready"},
+		ProjectName: "projects/example-project",
 		Rank:        777,
 	})
 }
@@ -43,7 +43,7 @@ func TestPatchTask_OnlyTheDescriptionSentLeavesTheRestAlone(t *testing.T) {
 		if got.Description != "new description" {
 			t.Fatalf("description %q", got.Description)
 		}
-		if got.Title != "HM1" || got.Priority != mwanachamataskmanager.TaskPriorityCritical || got.ProjectName != "projects/hungarian-municipality" || got.Rank != 777 {
+		if got.Title != "EX1" || got.Priority != mwanachamataskmanager.TaskPriorityCritical || got.ProjectName != "projects/example-project" || got.Rank != 777 {
 			t.Fatalf("a field not sent changed: %+v", got)
 		}
 		if len(got.Tags) != 2 {
@@ -61,11 +61,11 @@ func TestPatchTask_EachFieldSentIsTheOnlyOneChanged(t *testing.T) {
 	made := newTaggedIssue(t, mgr)
 	priority := mwanachamataskmanager.TaskPriorityLow
 
-	got, err := mgr.PatchTaskAs(ctx, "", mwanachamataskmanager.TaskPatch{ID: made.ID, Title: text("HM1 renamed"), Priority: &priority, Tags: &[]string{"Blocked"}, ProjectName: text("projects/other")})
+	got, err := mgr.PatchTaskAs(ctx, "", mwanachamataskmanager.TaskPatch{ID: made.ID, Title: text("EX1 renamed"), Priority: &priority, Tags: &[]string{"Blocked"}, ProjectName: text("projects/other")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Title != "HM1 renamed" || got.Priority != priority || got.ProjectName != "projects/other" || !reflect.DeepEqual(got.Tags, []string{"Blocked"}) {
+	if got.Title != "EX1 renamed" || got.Priority != priority || got.ProjectName != "projects/other" || !reflect.DeepEqual(got.Tags, []string{"Blocked"}) {
 		t.Fatalf("got %+v", got)
 	}
 	if got.Description != "old description" || got.Rank != 777 {

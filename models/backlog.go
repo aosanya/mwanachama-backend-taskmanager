@@ -24,11 +24,12 @@ type BacklogRule struct {
 }
 
 type Backlog struct {
-	ID    string        `json:"id"`
-	Name  string        `json:"name"`
-	Steps []BacklogStep `json:"steps"`
-	Kind  string        `json:"kind,omitempty"`
-	Rules *BacklogRules `json:"rules,omitempty"`
+	ID       string        `json:"id"`
+	Name     string        `json:"name"`
+	Steps    []BacklogStep `json:"steps"`
+	Kind     string        `json:"kind,omitempty"`
+	Rules    *BacklogRules `json:"rules,omitempty"`
+	Archived bool          `json:"archived,omitempty"`
 }
 
 type BacklogRules struct {
@@ -45,13 +46,14 @@ type StepSummary struct {
 }
 
 type BacklogSummary struct {
-	ID     string        `json:"id"`
-	Name   string        `json:"name"`
-	Issues int           `json:"issues"`
-	Steps  []StepSummary `json:"steps"`
-	Level  AccessLevel   `json:"level,omitempty"`
-	Kind   string        `json:"kind,omitempty"`
-	Rules  *BacklogRules `json:"rules,omitempty"`
+	ID       string        `json:"id"`
+	Name     string        `json:"name"`
+	Issues   int           `json:"issues"`
+	Steps    []StepSummary `json:"steps"`
+	Level    AccessLevel   `json:"level,omitempty"`
+	Kind     string        `json:"kind,omitempty"`
+	Rules    *BacklogRules `json:"rules,omitempty"`
+	Archived bool          `json:"archived,omitempty"`
 }
 
 type BacklogList struct {
@@ -122,6 +124,9 @@ func CheckBacklogs(backlogs []Backlog) error {
 	}
 	if backlogs[0].Smart() {
 		return fmt.Errorf("backlogs: the first backlog keeps steps, a smart backlog cannot be first")
+	}
+	if backlogs[0].Archived {
+		return fmt.Errorf("backlogs: the first backlog takes issues that have no place, it cannot be archived")
 	}
 	return nil
 }

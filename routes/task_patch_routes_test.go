@@ -8,16 +8,16 @@ import (
 func TestPatchingOnlyTheDescriptionKeepsTagsProjectPriorityAndRank(t *testing.T) {
 	f := newMoreWritesFixture(t)
 	made := f.h.expect(http.StatusCreated, "boss", "POST", "/tasks", map[string]any{
-		"title": "HM1", "description": "old", "priority": "critical", "tags": []string{"hungarian-municipality", "Ready"},
-		"project_name": "projects/hungarian-municipality", "rank": 500, "backlog": f.docs, "step": "write",
+		"title": "EX1", "description": "old", "priority": "critical", "tags": []string{"example-project", "Ready"},
+		"project_name": "projects/example-project", "rank": 500, "backlog": f.docs, "step": "write",
 	})
 	path := "/tasks/" + made["id"].(string)
 
 	patched := f.h.expect(http.StatusOK, "boss", "PATCH", path, map[string]any{"description": "new"})
 	read := f.h.expect(http.StatusOK, "boss", "GET", path, nil)
 	for _, got := range []map[string]any{patched, read} {
-		if got["description"] != "new" || got["title"] != "HM1" || got["priority"] != "critical" ||
-			got["project_name"] != "projects/hungarian-municipality" || got["rank"] != float64(500) ||
+		if got["description"] != "new" || got["title"] != "EX1" || got["priority"] != "critical" ||
+			got["project_name"] != "projects/example-project" || got["rank"] != float64(500) ||
 			got["backlog"] != f.docs || got["step"] != "write" {
 			t.Fatalf("got %v", got)
 		}

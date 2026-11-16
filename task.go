@@ -43,6 +43,8 @@ type TaskManager interface {
 	SetBacklogRules(ctx context.Context, backlogID string, rules *BacklogRules) (BacklogSummary, error)
 	CountBacklogRules(ctx context.Context, requesterID string, rules *BacklogRules) (RulesCount, error)
 	RenameBacklog(ctx context.Context, backlogID, name string) (BacklogSummary, error)
+	ArchiveBacklog(ctx context.Context, backlogID string) (BacklogSummary, error)
+	UnarchiveBacklog(ctx context.Context, backlogID string) (BacklogSummary, error)
 	DeleteBacklog(ctx context.Context, backlogID string) error
 	AddBacklogStep(ctx context.Context, backlogID, name, after string) (BacklogSummary, error)
 	RenameBacklogStep(ctx context.Context, backlogID, stepID, name string) (BacklogSummary, error)
@@ -52,6 +54,8 @@ type TaskManager interface {
 	MoveTaskToStep(ctx context.Context, taskID, backlogID, stepID string) (Task, error)
 	MoveTaskToStepAs(ctx context.Context, requesterID, taskID, backlogID, stepID string) (Task, error)
 	RenameBacklogAs(ctx context.Context, requesterID, backlogID, name string) (BacklogSummary, error)
+	ArchiveBacklogAs(ctx context.Context, requesterID, backlogID string) (BacklogSummary, error)
+	UnarchiveBacklogAs(ctx context.Context, requesterID, backlogID string) (BacklogSummary, error)
 	DeleteBacklogAs(ctx context.Context, requesterID, backlogID string) error
 	AddBacklogStepAs(ctx context.Context, requesterID, backlogID, name, after string) (BacklogSummary, error)
 	RenameBacklogStepAs(ctx context.Context, requesterID, backlogID, stepID, name string) (BacklogSummary, error)

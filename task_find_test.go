@@ -34,7 +34,7 @@ func seedFind(t *testing.T, mgr mwanachamataskmanager.TaskManager) map[string]mw
 		{Title: "Add a login button", Code: "SW4", ProjectName: "swe", Tags: []string{"Ready", "app"}, Description: "the button sits in the header"},
 		{Title: "Fix the footer", Code: "SW40", ProjectName: "swe", Tags: []string{"bug"}, Description: "Duplicate of SW4 in spirit"},
 		{Title: "Fix the sidebar", Code: "SW41", ProjectName: "swe", Description: "A Narrow screen hides the Sidebar"},
-		{Title: "Other repo row", Code: "MUN4", ProjectName: "mun"},
+		{Title: "Other repo row", Code: "ZZ4", ProjectName: "zz"},
 		{Title: "Follow up", Code: "SW9", ProjectName: "swe", Description: "see SW4 and SW41 first"},
 		{Title: "Finished chore", Code: "SW5", ProjectName: "swe", Tags: []string{"app"}},
 	} {
@@ -98,7 +98,7 @@ func TestFindTasks_ACodePrefixFindsEveryCodeThatStartsWithIt(t *testing.T) {
 	if got := foundCodes(out); !slices.Equal(got, []string{"SW4", "SW40", "SW41"}) {
 		t.Fatalf("got %v", got)
 	}
-	if got := foundCodes(findOf(t, mgr, mwanachamataskmanager.FindFilter{Q: "MUN"})); !slices.Equal(got, []string{"MUN4"}) {
+	if got := foundCodes(findOf(t, mgr, mwanachamataskmanager.FindFilter{Q: "ZZ"})); !slices.Equal(got, []string{"ZZ4"}) {
 		t.Fatalf("a prefix of letters alone found %v", got)
 	}
 }

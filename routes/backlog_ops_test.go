@@ -114,6 +114,8 @@ func TestBacklogOperationsAreDeclaredWithTheirActions(t *testing.T) {
 		"POST /backlogs taskmanager.backlog.create",
 		"PUT /backlogs taskmanager.backlog.manage",
 		"PUT /backlogs/{backlogID} taskmanager.backlog.rename",
+		"PUT /backlogs/{backlogID}/archive taskmanager.backlog.archive",
+		"PUT /backlogs/{backlogID}/unarchive taskmanager.backlog.unarchive",
 		"DELETE /backlogs/{backlogID} taskmanager.backlog.delete",
 		"POST /backlogs/{backlogID}/steps taskmanager.backlog_step.add",
 		"PUT /backlogs/{backlogID}/steps/{stepID} taskmanager.backlog_step.rename",
@@ -192,4 +194,37 @@ func TestReplacingTheBacklogsSetsTheWholeList(t *testing.T) {
 	if len(list["items"].([]any)) != 2 {
 		t.Fatalf("replaced list = %v", list)
 	}
+}
+
+func archivedIn(list map[string]any, id string) (archived, listed bool) {
+	for _, raw := range list["items"].([]any) {
+		item := raw.(map[string]any)
+		if item["id"] == id {
+			flag, _ := item["archived"].(bool)
+			return flag, true
+		}
+	}
+	return false, false
+}
+
+func TestAnArchivedBacklogIsMarkedInTheListAndComesBack(t *testing.T) {
+	h := newHub(t)
+	h.expect(http.StatusCreated, "POST", "/backlogs", map[string]any{"name": "Redesign", "steps": []string{"Open", "Archive"}})
+
+	if archived, listed := archivedIn(h.expect(http.StatusOK, "GET", "/backlogs", nil), "redesign"); !listed || archived {
+		t.Fatalf("a new backlog: archived %v listed %v", archived, listed)
+	}
+	marked := h.expect(http.StatusOK, "PUT", "/backlogs/redesign/archive", nil)
+	if marked["archived"] != true {
+		t.Fatalf("archive reply = %v", marked)
+	}
+	if archived, listed := archivedIn(h.expect(http.StatusOK, "GET", "/backlogs", nil), "redesign"); !listed || !archived {
+		t.Fatalf("after archive: archived %v listed %v", archived, listed)
+	}
+	h.expect(http.StatusOK, "PUT", "/backlogs/redesign/unarchive", nil)
+	if archived, _ := archivedIn(h.expect(http.StatusOK, "GET", "/backlogs", nil), "redesign"); archived {
+		t.Fatal("still archived after unarchive")
+	}
+	h.expect(http.StatusBadRequest, "PUT", "/backlogs/backlog/archive", nil)
+	h.expect(http.StatusBadRequest, "PUT", "/backlogs/nowhere/archive", nil)
 }
