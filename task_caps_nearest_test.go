@@ -124,3 +124,28 @@ func TestNearestCaps_NeitherIdsNorBacklogAndTooManyIdsAreRefused(t *testing.T) {
 		t.Fatalf("501 ids: %v", err)
 	}
 }
+
+func TestNearestCaps_AnIssueCarriesTheTimeOfItsFirstWorkerEntryAndNoOtherNoteStartsIt(t *testing.T) {
+	ctx := context.Background()
+	mgr := newTestManager(t)
+	worked := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "worked"})
+	talked := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "talked"})
+	first, err := mgr.AddTaskNote(ctx, "", worked.ID, "worker", "taken", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, note := range []struct{ id, kind string }{{worked.ID, "person"}, {worked.ID, "worker"}, {talked.ID, "person"}} {
+		if _, err := mgr.AddTaskNote(ctx, "", note.id, note.kind, "later", nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := nearestOf(t, mgr, mwanachamataskmanager.CapsNearestFilter{TaskIDs: []string{worked.ID, talked.ID}})
+
+	if got[worked.ID].StartedAt != first.CreatedAt {
+		t.Fatalf("worked: started_at %q, first entry %q", got[worked.ID].StartedAt, first.CreatedAt)
+	}
+	if got[talked.ID].StartedAt != "" {
+		t.Fatalf("talked: started_at %q", got[talked.ID].StartedAt)
+	}
+}

@@ -176,7 +176,11 @@ func (m *taskManager) capsReading(ctx context.Context, taskID string) (TaskCaps,
 		reading.Own = &WorkerCaps{InputTokens: own.InputTokens, OutputTokens: own.OutputTokens, RuntimeSeconds: own.RuntimeSeconds}
 		reading.InForce = withOwn(defaults, own)
 	}
-	if reading.Used, err = m.usageOf(ctx, taskID); err != nil {
+	used, err := m.usageOf(ctx, taskID)
+	if err == nil {
+		reading.Used, err = m.stopIfIdle(ctx, used)
+	}
+	if err != nil {
 		return TaskCaps{}, fmt.Errorf("GetTaskCaps: %w", err)
 	}
 	return reading, nil
@@ -243,6 +247,10 @@ func (m *taskManager) WriteTaskUsage(ctx context.Context, requesterID, taskID st
 	if usage.InputTokens < 0 || usage.OutputTokens < 0 || usage.SecondsUsed < 0 {
 		return TaskCaps{}, ErrInvalidCaps
 	}
+	previous, err := m.usageOf(ctx, taskID)
+	if err != nil {
+		return TaskCaps{}, fmt.Errorf("WriteTaskUsage: %w", err)
+	}
 	row := TaskUsage{
 		ID: taskID, TaskID: taskID,
 		InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens, SecondsUsed: usage.SecondsUsed,
@@ -251,6 +259,7 @@ func (m *taskManager) WriteTaskUsage(ctx context.Context, requesterID, taskID st
 	if err := m.upsertRow(ctx, roleTaskUsage, row); err != nil {
 		return TaskCaps{}, fmt.Errorf("WriteTaskUsage: %w", err)
 	}
+	m.logRestart(ctx, taskID, previous, usage)
 	reading, err := m.capsReading(ctx, taskID)
 	if err != nil {
 		return TaskCaps{}, err

@@ -7,5 +7,6 @@ type TaskNote struct {
 	Kind      string   `json:"kind"`
 	Text      string   `json:"text"`
 	Links     []string `json:"links,omitempty"`
+	Automatic bool     `json:"automatic,omitempty"`
 	CreatedAt string   `json:"created_at"`
 }

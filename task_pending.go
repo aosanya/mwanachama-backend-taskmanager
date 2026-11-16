@@ -15,6 +15,7 @@ const (
 	pendingMaxLimit     = 100
 	noStepName          = "No step"
 	likeEscape          = " ESCAPE '\\'"
+	pendingColumns      = `id, code, title, status, priority, backlog, step, "rank"`
 )
 
 var priorityOrder = []TaskPriority{
@@ -44,13 +45,7 @@ func (m *taskManager) PendingTasks(ctx context.Context, filter PendingFilter) (P
 	if filter.Offset < 0 {
 		return PendingTasks{}, fmt.Errorf("PendingTasks: %w: offset %d", ErrInvalidFilter, filter.Offset)
 	}
-	limit := filter.Limit
-	if limit <= 0 {
-		limit = pendingDefaultLimit
-	}
-	if limit > pendingMaxLimit {
-		limit = pendingMaxLimit
-	}
+	limit := pageLimit(filter.Limit)
 	backlogs, err := m.backlogs(ctx)
 	if err != nil {
 		return PendingTasks{}, fmt.Errorf("PendingTasks: %w", err)
@@ -73,24 +68,38 @@ func (m *taskManager) PendingTasks(ctx context.Context, filter PendingFilter) (P
 		return PendingTasks{}, fmt.Errorf("PendingTasks: %w", err)
 	}
 	var rows []pendingRow
-	if err := rowQuery.Select(`id, code, title, status, priority, backlog, step, "rank"`).
-		Order(taskOrder).Limit(limit).Offset(filter.Offset).Scan(&rows).Error; err != nil {
+	if err := rowQuery.Select(pendingColumns).Order(taskOrder).Limit(limit).Offset(filter.Offset).Scan(&rows).Error; err != nil {
 		return PendingTasks{}, fmt.Errorf("PendingTasks: %w", err)
 	}
+	if out.Items, err = m.compactItems(ctx, backlogs, rows); err != nil {
+		return PendingTasks{}, fmt.Errorf("PendingTasks: %w", err)
+	}
+	return out, nil
+}
+
+func pageLimit(asked int) int {
+	if asked <= 0 {
+		return pendingDefaultLimit
+	}
+	return min(asked, pendingMaxLimit)
+}
+
+func (m *taskManager) compactItems(ctx context.Context, backlogs []models.Backlog, rows []pendingRow) ([]PendingItem, error) {
 	states, err := m.taskStates(ctx)
 	if err != nil {
-		return PendingTasks{}, fmt.Errorf("PendingTasks: %w", err)
+		return nil, err
 	}
 	tags := m.tagNamesOf(ctx, rowIDs(rows))
+	items := []PendingItem{}
 	for _, r := range rows {
 		backlogName, stepName := placeNames(backlogs, r)
-		out.Items = append(out.Items, PendingItem{
+		items = append(items, PendingItem{
 			ID: r.ID, Code: r.Code, Title: r.Title, State: models.StateNameFor(states, TaskStatus(r.Status)),
 			Backlog: backlogName, Step: stepName, Priority: TaskPriority(r.Priority),
 			Tags: tags[r.ID], Rank: r.Rank, Blocked: isBlocked(tags[r.ID]), Waiting: isWaiting(tags[r.ID]), Sinbin: isSinbin(tags[r.ID]),
 		})
 	}
-	return out, nil
+	return items, nil
 }
 
 func (m *taskManager) pendingTallies(ctx context.Context, filter PendingFilter, closed bool) ([]pendingTally, error) {
@@ -105,7 +114,10 @@ func (m *taskManager) pendingTallies(ctx context.Context, filter PendingFilter, 
 }
 
 func (m *taskManager) pendingBase(ctx context.Context, filter PendingFilter, closed bool) (*gorm.DB, error) {
-	q := m.store.Query(ctx, roleTask).Where("deleted = ?", false)
+	q, err := m.scopedTasks(ctx, filter.Backlog, filter.Step, filter.Tag, filter.RequesterID)
+	if err != nil {
+		return nil, err
+	}
 	if closed {
 		q = q.Where("status IN ?", closedStatuses)
 	} else {
@@ -114,26 +126,38 @@ func (m *taskManager) pendingBase(ctx context.Context, filter PendingFilter, clo
 	if filter.Priority != "" {
 		q = q.Where("priority = ?", string(filter.Priority))
 	}
-	q, err := m.narrowToPlace(ctx, q, TaskFilter{Backlog: filter.Backlog, Step: filter.Step})
+	for _, word := range strings.Fields(strings.ToLower(filter.Q)) {
+		q = m.matchWord(ctx, q, word, false)
+	}
+	return q, nil
+}
+
+func (m *taskManager) scopedTasks(ctx context.Context, backlog, step string, tags []string, requesterID string) (*gorm.DB, error) {
+	q := m.store.Query(ctx, roleTask).Where("deleted = ?", false)
+	q, err := m.narrowToPlace(ctx, q, TaskFilter{Backlog: backlog, Step: step})
 	if err != nil {
 		return nil, err
 	}
-	q, err = m.narrowToVisible(ctx, q, filter.RequesterID)
+	q, err = m.narrowToVisible(ctx, q, requesterID)
 	if err != nil {
 		return nil, err
 	}
-	for _, tag := range filter.Tag {
+	for _, tag := range tags {
 		if tag != "" {
 			q = q.Where("id IN (?)", m.taskIDsWithTag(ctx, tag))
 		}
 	}
-	for _, word := range strings.Fields(strings.ToLower(filter.Q)) {
-		pattern := "%" + likeLiteral(word) + "%"
-		tagged := m.store.Query(ctx, roleTagging).Select("task_id").
-			Where("tag_id IN (?)", m.store.Query(ctx, roleTag).Select("id").Where("LOWER(name) LIKE ?"+likeEscape, pattern))
-		q = q.Where("(LOWER(title) LIKE ?"+likeEscape+" OR LOWER(code) LIKE ?"+likeEscape+" OR id IN (?))", pattern, pattern, tagged)
-	}
 	return q, nil
+}
+
+func (m *taskManager) matchWord(ctx context.Context, q *gorm.DB, word string, inDescription bool) *gorm.DB {
+	pattern := "%" + likeLiteral(word) + "%"
+	tagged := m.store.Query(ctx, roleTagging).Select("task_id").
+		Where("tag_id IN (?)", m.store.Query(ctx, roleTag).Select("id").Where("LOWER(name) LIKE ?"+likeEscape, pattern))
+	if inDescription {
+		return q.Where("(LOWER(title) LIKE ?"+likeEscape+" OR LOWER(code) LIKE ?"+likeEscape+" OR LOWER(description) LIKE ?"+likeEscape+" OR id IN (?))", pattern, pattern, pattern, tagged)
+	}
+	return q.Where("(LOWER(title) LIKE ?"+likeEscape+" OR LOWER(code) LIKE ?"+likeEscape+" OR id IN (?))", pattern, pattern, tagged)
 }
 
 func likeLiteral(word string) string {

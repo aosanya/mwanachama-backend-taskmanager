@@ -105,6 +105,15 @@ func (m *taskManager) UpdateTaskAs(ctx context.Context, requesterID string, task
 			return Task{}, err
 		}
 	}
+	current, err := m.GetTask(ctx, task.ID)
+	if err != nil {
+		return Task{}, err
+	}
+	if task.Priority != "" {
+		if err := refuseDonePriorityChange(current, task.Priority); err != nil {
+			return Task{}, err
+		}
+	}
 	return m.UpdateTask(ctx, task)
 }
 

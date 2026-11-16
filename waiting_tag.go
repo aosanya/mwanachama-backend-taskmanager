@@ -97,7 +97,7 @@ func labelOf(t Task) string {
 
 func (m *taskManager) logAsHub(ctx context.Context, taskID, text string) {
 	note := TaskNote{
-		ID: newSpecID(), TaskID: taskID, Kind: noteByWorker,
+		ID: newSpecID(), TaskID: taskID, Kind: noteByWorker, Automatic: true,
 		Text: text, CreatedAt: time.Now().UTC().Format(noteTimeForm),
 	}
 	if err := m.store.Insert(ctx, roleTaskNote, note); err != nil {

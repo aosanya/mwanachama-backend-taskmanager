@@ -31,6 +31,8 @@ type TaskManager interface {
 
 	PendingTasks(ctx context.Context, filter PendingFilter) (PendingTasks, error)
 
+	FindTasks(ctx context.Context, filter FindFilter) (FoundTasks, error)
+
 	ListTaskStates(ctx context.Context) (TaskStateList, error)
 
 	MoveTaskToState(ctx context.Context, taskID, state string) (Task, error)

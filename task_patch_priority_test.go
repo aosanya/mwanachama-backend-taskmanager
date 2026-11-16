@@ -2,6 +2,7 @@ package mwanachamataskmanager_test
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -109,5 +110,59 @@ func TestPatchTask_ChangingThePriorityWritesOneLogEntry(t *testing.T) {
 	}
 	if notes[0].Text != "Priority medium to high" || notes[0].AuthorID != "owner-1" || notes[0].Kind != "worker" {
 		t.Fatalf("got %+v", notes[0])
+	}
+}
+
+func finishedIssue(t *testing.T, mgr mwanachamataskmanager.TaskManager) mwanachamataskmanager.Task {
+	t.Helper()
+	made := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "finished", Priority: mwanachamataskmanager.TaskPriorityHigh})
+	done, err := mgr.MoveTaskToStep(context.Background(), made.ID, "backlog", "done")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if done.Status != mwanachamataskmanager.TaskStatusCompleted {
+		t.Fatalf("status %q, want completed", done.Status)
+	}
+	return done
+}
+
+func TestPatchTask_APriorityChangeForAnIssueInDoneIsRefusedAndNothingChanges(t *testing.T) {
+	ctx := context.Background()
+	mgr := newTestManager(t)
+	done := finishedIssue(t, mgr)
+
+	_, err := mgr.PatchTaskAs(ctx, "", mwanachamataskmanager.TaskPatch{ID: done.ID, Priority: priorityOf(mwanachamataskmanager.TaskPriorityLow)})
+	if !errors.Is(err, mwanachamataskmanager.ErrPriorityLocked) {
+		t.Fatalf("err %v, want ErrPriorityLocked", err)
+	}
+	read, err := mgr.GetTask(ctx, done.ID)
+	if err != nil || read.Priority != mwanachamataskmanager.TaskPriorityHigh {
+		t.Fatalf("priority %q, err %v, want high", read.Priority, err)
+	}
+	notes, err := mgr.ListTaskNotes(ctx, "", done.ID)
+	if err != nil || len(notes) != 0 {
+		t.Fatalf("got %d notes, err %v, want none", len(notes), err)
+	}
+}
+
+func TestUpdateTask_APriorityChangeForAnIssueInDoneIsRefused(t *testing.T) {
+	ctx := context.Background()
+	mgr := newTestManager(t)
+	done := finishedIssue(t, mgr)
+	done.Priority = mwanachamataskmanager.TaskPriorityLow
+
+	if _, err := mgr.UpdateTaskAs(ctx, "", done); !errors.Is(err, mwanachamataskmanager.ErrPriorityLocked) {
+		t.Fatalf("err %v, want ErrPriorityLocked", err)
+	}
+}
+
+func TestPatchTask_AnIssueInDoneStillTakesAPatchThatLeavesThePriorityAlone(t *testing.T) {
+	ctx := context.Background()
+	mgr := newTestManager(t)
+	done := finishedIssue(t, mgr)
+
+	got, err := mgr.PatchTaskAs(ctx, "", mwanachamataskmanager.TaskPatch{ID: done.ID, Priority: priorityOf(mwanachamataskmanager.TaskPriorityHigh), Title: text("finished renamed")})
+	if err != nil || got.Title != "finished renamed" {
+		t.Fatalf("title %q, err %v", got.Title, err)
 	}
 }

@@ -11,6 +11,8 @@ type (
 	OverdueFilter      = models.OverdueFilter
 	OverdueTask        = models.OverdueTask
 	PendingFilter      = models.PendingFilter
+	FindFilter         = models.FindFilter
+	FoundTasks         = models.FoundTasks
 	PendingCount       = models.PendingCount
 	PendingItem        = models.PendingItem
 	PendingTasks       = models.PendingTasks

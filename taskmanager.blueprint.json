@@ -1434,6 +1434,7 @@
         {"name": "kind", "type": "string", "description": "person or worker.", "required": true},
         {"name": "text", "type": "text", "description": "A line or a longer write-up.", "required": true},
         {"name": "links", "type": "json", "description": "Links to the work: a commit, a file, a drawing, a CI run."},
+        {"name": "automatic", "type": "bool", "description": "Whether the hub wrote it by itself, such as a dependency note or an idle stop; an automatic entry never starts the working-time clock."},
         {"name": "created_at", "type": "timestamp", "description": "When it was written."}
       ],
       "indexes": [
@@ -1461,6 +1462,7 @@
         {"name": "output_tokens", "type": "int", "description": "Output tokens used so far."},
         {"name": "seconds_used", "type": "int", "description": "Seconds of working time used so far."},
         {"name": "clock_stopped", "type": "bool", "description": "Whether the runtime clock is stopped because the worker waits for the owner's answer."},
+        {"name": "idle_stopped", "type": "bool", "description": "Whether the hub stopped the clock itself because no usage write arrived for the idle limit; the run is then read as interrupted or idle, not as passing a cap. The next usage write clears it."},
         {"name": "updated_at", "type": "timestamp", "description": "When the hook last wrote it."}
       ]
     },
@@ -1742,6 +1744,12 @@
       "type": "int",
       "description": "The runtime cap of one worker on one issue in one session, in seconds of working time, for every issue that carries no number of its own. The wait for the owner's answer does not count.",
       "default": 900
+    },
+    {
+      "name": "worker_idle_stop_seconds",
+      "type": "int",
+      "description": "How many seconds without a usage write the hub waits before it stops the working-time clock of a running issue itself and logs that the run was interrupted or idle. The next usage write starts the clock again.",
+      "default": 600
     },
     {
       "name": "overdue_grace_hours",

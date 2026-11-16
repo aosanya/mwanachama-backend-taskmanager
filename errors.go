@@ -7,6 +7,7 @@ var ErrInvalidPlacement = errors.New("invalid card placement")
 
 var ErrInvalidEffort = errors.New("effort is unknown, very_low, low, medium, high or very_high")
 var ErrTaskMoveConflict = errors.New("the task changed while it was being moved; read it and move it again")
+var ErrPriorityLocked = errors.New("the priority of an issue in Done cannot be changed; move it back to an open step first")
 
 var ErrInvalidOverdueFilter = errors.New("invalid overdue filter")
 

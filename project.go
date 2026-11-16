@@ -10,13 +10,10 @@ import (
 	"github.com/aosanya/mwanachama-backend-shared/specstore"
 )
 
-// toSlug converts a project name to a URL-safe slug: lowercase with spaces
-// replaced by underscores.
 func toSlug(name string) string {
 	return strings.ToLower(strings.ReplaceAll(name, " ", "_"))
 }
 
-// CreateProject creates a new Project row.
 func (m *taskManager) CreateProject(ctx context.Context, p Project) (Project, error) {
 	if p.Name == "" {
 		return Project{}, fmt.Errorf("%w: Project.Name is required", ErrInvalidTask)
@@ -27,13 +24,31 @@ func (m *taskManager) CreateProject(ctx context.Context, p Project) (Project, er
 	p.CreatedAt = now
 	p.UpdatedAt = now
 
+	if err := m.checkProjectNameFree(ctx, p.ProjectName, ""); err != nil {
+		return Project{}, err
+	}
 	if err := m.store.Insert(ctx, roleProject, p); err != nil {
 		return Project{}, fmt.Errorf("CreateProject: %w", err)
 	}
 	return p, nil
 }
 
-// GetProject reads a single Project by its ID.
+func (m *taskManager) checkProjectNameFree(ctx context.Context, projectName, exceptID string) error {
+	q := m.store.Query(ctx, roleProject).
+		Where("project_name = ? AND deleted = ?", projectName, false)
+	if exceptID != "" {
+		q = q.Where("id <> ?", exceptID)
+	}
+	var holders int64
+	if err := q.Count(&holders).Error; err != nil {
+		return fmt.Errorf("checkProjectNameFree: %w", err)
+	}
+	if holders > 0 {
+		return fmt.Errorf("%w: %q", ErrProjectAlreadyExists, projectName)
+	}
+	return nil
+}
+
 func (m *taskManager) GetProject(ctx context.Context, projectID string) (Project, error) {
 	var p Project
 	q := m.store.Query(ctx, roleProject).Where("id = ? AND deleted = ?", projectID, false)
@@ -46,10 +61,6 @@ func (m *taskManager) GetProject(ctx context.Context, projectID string) (Project
 	return p, nil
 }
 
-// GetProjectByName retrieves a Project by its slug (project_name column).
-// The caller-supplied projectName is normalized through [toSlug] so that
-// display-name casing (e.g. "SharedFarms") resolves to the stored lowercase
-// slug ("sharedfarms"), symmetric with [CreateProject].
 func (m *taskManager) GetProjectByName(ctx context.Context, projectName string) (Project, error) {
 	slug := toSlug(projectName)
 	var p Project
@@ -63,7 +74,6 @@ func (m *taskManager) GetProjectByName(ctx context.Context, projectName string) 
 	return p, nil
 }
 
-// UpdateProject patches the mutable fields of an existing Project.
 func (m *taskManager) UpdateProject(ctx context.Context, p Project) (Project, error) {
 	current, err := m.GetProject(ctx, p.ID)
 	if err != nil {
@@ -71,6 +81,9 @@ func (m *taskManager) UpdateProject(ctx context.Context, p Project) (Project, er
 	}
 	if p.Name == "" {
 		return Project{}, fmt.Errorf("%w: Project.Name is required", ErrInvalidTask)
+	}
+	if err := m.checkProjectNameFree(ctx, toSlug(p.Name), p.ID); err != nil {
+		return Project{}, err
 	}
 	p.CreatedAt = current.CreatedAt
 	p.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
@@ -90,8 +103,6 @@ func (m *taskManager) UpdateProject(ctx context.Context, p Project) (Project, er
 	return p, nil
 }
 
-// DeleteProject soft-deletes the Project row AND removes every inbound
-// `member_of` edge.
 func (m *taskManager) DeleteProject(ctx context.Context, projectID string) error {
 	if _, err := m.GetProject(ctx, projectID); err != nil {
 		return err
@@ -107,7 +118,6 @@ func (m *taskManager) DeleteProject(ctx context.Context, projectID string) error
 	return nil
 }
 
-// ListProjects returns all non-deleted Projects.
 func (m *taskManager) ListProjects(ctx context.Context) ([]Project, error) {
 	q := m.store.Query(ctx, roleProject).Where("deleted = ?", false).Limit(maxListPage)
 	out, err := specstore.List[Project](m.store, q, roleProject)
@@ -117,7 +127,6 @@ func (m *taskManager) ListProjects(ctx context.Context) ([]Project, error) {
 	return out, nil
 }
 
-// AddTaskToProject creates the `member_of` edge from taskID to projectID.
 func (m *taskManager) AddTaskToProject(ctx context.Context, taskID, projectID string) error {
 	_, err := m.CreateRelationship(ctx, Relationship{
 		Label:  RelLabelMemberOf,
@@ -130,12 +139,10 @@ func (m *taskManager) AddTaskToProject(ctx context.Context, taskID, projectID st
 	return nil
 }
 
-// RemoveTaskFromProject removes the `member_of` edge from taskID to projectID.
 func (m *taskManager) RemoveTaskFromProject(ctx context.Context, taskID, projectID string) error {
 	return m.DeleteRelationship(ctx, taskID, projectID, RelLabelMemberOf)
 }
 
-// ListTasksInProject returns the Tasks that are members of the given project.
 func (m *taskManager) ListTasksInProject(ctx context.Context, projectID string) ([]Task, error) {
 	edges, err := m.TraverseRelationships(ctx, projectID, RelLabelMemberOf, DirectionInbound)
 	if err != nil {
@@ -159,7 +166,6 @@ func (m *taskManager) ListTasksInProject(ctx context.Context, projectID string) 
 	return out, nil
 }
 
-// ListProjectsForTask returns the Projects the given Task belongs to.
 func (m *taskManager) ListProjectsForTask(ctx context.Context, taskID string) ([]Project, error) {
 	edges, err := m.TraverseRelationships(ctx, taskID, RelLabelMemberOf, DirectionOutbound)
 	if err != nil {
@@ -182,7 +188,6 @@ func (m *taskManager) ListProjectsForTask(ctx context.Context, taskID string) ([
 	return out, nil
 }
 
-// GetTaskByName retrieves a task by its project-scoped task_name.
 func (m *taskManager) GetTaskByName(ctx context.Context, projectName, taskName string) (Task, error) {
 	project, err := m.GetProjectByName(ctx, projectName)
 	if err != nil {
@@ -200,8 +205,6 @@ func (m *taskManager) GetTaskByName(ctx context.Context, projectName, taskName s
 	return Task{}, ErrTaskNotFound
 }
 
-// CreateTaskInProject creates a task, auto-generates its task_name from the
-// project's task prefix, and writes the member_of edge.
 func (m *taskManager) CreateTaskInProject(ctx context.Context, projectName string, task Task) (Task, error) {
 	project, err := m.GetProjectByName(ctx, projectName)
 	if err != nil {

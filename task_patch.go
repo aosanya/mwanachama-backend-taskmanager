@@ -11,6 +11,9 @@ func (m *taskManager) PatchTaskAs(ctx context.Context, requesterID string, patch
 		return Task{}, err
 	}
 	patched := applyPatch(current, patch)
+	if err := refuseDonePriorityChange(current, patched.Priority); err != nil {
+		return Task{}, err
+	}
 	if _, err := m.UpdateTask(ctx, patched); err != nil {
 		return Task{}, err
 	}
@@ -54,4 +57,11 @@ func applyPatch(task Task, p TaskPatch) Task {
 		task.Context = *p.Context
 	}
 	return task
+}
+
+func refuseDonePriorityChange(current Task, priority TaskPriority) error {
+	if current.Status == TaskStatusCompleted && priority != current.Priority {
+		return ErrPriorityLocked
+	}
+	return nil
 }

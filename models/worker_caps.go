@@ -36,6 +36,7 @@ type TaskUsage struct {
 	OutputTokens int64  `json:"output_tokens"`
 	SecondsUsed  int64  `json:"seconds_used"`
 	ClockStopped bool   `json:"clock_stopped"`
+	IdleStopped  bool   `json:"idle_stopped,omitempty"`
 	UpdatedAt    string `json:"updated_at"`
 }
 
@@ -68,6 +69,9 @@ type CapsNearest struct {
 	TaskID  string      `json:"task_id"`
 	InForce WorkerCaps  `json:"in_force"`
 	Nearest *NearestCap `json:"nearest,omitempty"`
+
+	StartedAt   string `json:"started_at,omitempty"`
+	Interrupted bool   `json:"interrupted,omitempty"`
 }
 
 type CapsNearestList struct {
