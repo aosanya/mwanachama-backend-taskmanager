@@ -1,17 +1,3 @@
-// relationship_impl.go — the generic CreateRelationship/DeleteRelationship/
-// TraverseRelationships dispatcher.
-//
-// Every RelLabel* is either:
-//   - a denormalised FK column on the FROM row (assigned_to, subtask_of,
-//     todo_assigned_to) — CreateRelationship writes ToID into that column;
-//   - a denormalised FK column on the TO row (has_todo, started_task,
-//     started_todo, has_deliverable, has_acceptance_criteria) —
-//     CreateRelationship writes FromID into that column;
-//   - a join-table row (blocks, depends_on, member_of, has_tag) — the only
-//     labels that are genuinely many-to-many on both ends.
-//
-// This mirrors relationshipEndpointTypes' whitelist from the pre-GORM
-// implementation one-for-one; see models/relationship.go for the constants.
 package mwanachamataskmanager
 
 import (
@@ -22,7 +8,6 @@ import (
 	"time"
 )
 
-// relFieldKind selects which side of the edge holds the FK column.
 type relFieldKind int
 
 const (
@@ -31,26 +16,19 @@ const (
 	relFieldJoinTable
 )
 
-// relSpec describes how one RelLabel* is stored.
 type relSpec struct {
 	kind relFieldKind
 
-	// fromTable/toTable name the tables id-lookups for FromID/ToID go
-	// against, for existence checks and not-found mapping.
 	fromNotFound error
 	toNotFound   error
 
-	// For relFieldOnFrom/relFieldOnTo: the table + column holding the FK,
-	// and the table's primary-key lookup used to validate the OTHER
-	// endpoint exists.
 	fkTable  string
 	fkColumn string
 
-	// For relFieldJoinTable: the join table name and its two columns.
 	joinTable    string
 	joinFromCol  string
 	joinToCol    string
-	joinExtraCol string // optional third column stamped with the current timestamp (created_at/added_at/tagged_at)
+	joinExtraCol string
 }
 
 func (m *taskManager) relSpecs() map[string]relSpec {
@@ -106,7 +84,6 @@ func (m *taskManager) relSpecs() map[string]relSpec {
 	}
 }
 
-// rowExists reports whether a row with the given id exists in table.
 func (m *taskManager) rowExists(ctx context.Context, table, id string) (bool, error) {
 	var count int64
 	if err := m.onTable(m.db.WithContext(ctx), table).Where("id = ?", id).Count(&count).Error; err != nil {
@@ -115,13 +92,6 @@ func (m *taskManager) rowExists(ctx context.Context, table, id string) (bool, er
 	return count > 0, nil
 }
 
-// vertexTables lists every table that holds a distinct relationship
-// endpoint "type". Unlike the pre-GORM entitygraph implementation (one
-// shared `entities` table keyed by id, so any id's TypeID was a single
-// lookup away), each type now lives in its own physical table — so
-// distinguishing "id does not exist at all" from "id exists, but as the
-// wrong type" (see [taskManager.checkEndpoint]) means checking each table
-// in turn.
 func (m *taskManager) vertexTables() []string {
 	return []string{
 		m.store.Table(roleTask), m.store.Table(roleAgent), m.store.Table(roleProject), m.store.Table(roleTag),
@@ -129,10 +99,6 @@ func (m *taskManager) vertexTables() []string {
 	}
 }
 
-// checkEndpoint verifies id exists in wantTable. Returns notFoundErr if id
-// exists in no vertex table at all; returns ErrInvalidRelationship if id
-// exists but in a different table than wantTable (the entitygraph-era
-// "endpoint type does not match label" case).
 func (m *taskManager) checkEndpoint(ctx context.Context, id, wantTable string, notFoundErr error) error {
 	if ok, err := m.rowExists(ctx, wantTable, id); err != nil {
 		return err
@@ -152,8 +118,6 @@ func (m *taskManager) checkEndpoint(ctx context.Context, id, wantTable string, n
 	return notFoundErr
 }
 
-// CreateRelationship validates the (label, FromID, ToID) triple and writes
-// the edge. Re-creating an existing edge is idempotent.
 func (m *taskManager) CreateRelationship(ctx context.Context, rel Relationship) (Relationship, error) {
 	spec, ok := m.relSpecs()[rel.Label]
 	if !ok {
@@ -217,6 +181,9 @@ func (m *taskManager) CreateRelationship(ctx context.Context, rel Relationship) 
 			rel.CreatedAt = now
 			rel.ID = syntheticEdgeID(rel.FromID, rel.Label, rel.ToID)
 			m.publish(ctx, TopicRelationshipCreated, RelationshipCreatedPayload{FromID: rel.FromID, ToID: rel.ToID, Label: rel.Label})
+			if rel.Label == RelLabelDependsOn {
+				m.markWaitingIfOpen(ctx, rel.FromID)
+			}
 			return rel, nil
 		}
 		rel.ID = syntheticEdgeID(rel.FromID, rel.Label, rel.ToID)
@@ -225,7 +192,6 @@ func (m *taskManager) CreateRelationship(ctx context.Context, rel Relationship) 
 	return Relationship{}, fmt.Errorf("%w: unhandled label %q", ErrInvalidRelationship, rel.Label)
 }
 
-// DeleteRelationship removes the single edge identified by (fromID, toID, label).
 func (m *taskManager) DeleteRelationship(ctx context.Context, fromID, toID, label string) error {
 	spec, ok := m.relSpecs()[label]
 	if !ok {
@@ -258,13 +224,14 @@ func (m *taskManager) DeleteRelationship(ctx context.Context, fromID, toID, labe
 		if res.RowsAffected == 0 {
 			return ErrRelationshipNotFound
 		}
+		if label == RelLabelDependsOn {
+			m.dropWaitingIfClear(ctx, fromID, "The last open dependency edge was removed: Waiting dropped and Ready added.")
+		}
 		return nil
 	}
 	return ErrRelationshipNotFound
 }
 
-// TraverseRelationships returns the single-hop edges incident on vertexID
-// matching label and direction.
 func (m *taskManager) TraverseRelationships(ctx context.Context, vertexID, label string, dir Direction) ([]Relationship, error) {
 	spec, ok := m.relSpecs()[label]
 	if !ok {
@@ -281,14 +248,10 @@ func (m *taskManager) TraverseRelationships(ctx context.Context, vertexID, label
 	return nil, nil
 }
 
-// traverseFK handles both relFieldOnFrom (fkOnFrom=true) and relFieldOnTo
-// (fkOnFrom=false) labels.
 func (m *taskManager) traverseFK(ctx context.Context, spec relSpec, vertexID string, dir Direction, label string, fkOnFrom bool) ([]Relationship, error) {
-	// outboundIsOwner reports whether traversing outbound from vertexID
-	// means vertexID is the row that OWNS the fk column (true for
-	// fkOnFrom labels) or the row the fk column POINTS AT (fkOnTo labels).
+
 	if (dir == DirectionOutbound) == fkOnFrom {
-		// vertexID is the owning row; read its fk column.
+
 		ownerTable := spec.fkTable
 		var value string
 		err := m.onTable(m.db.WithContext(ctx), ownerTable).Where("id = ?", vertexID).
@@ -308,7 +271,7 @@ func (m *taskManager) traverseFK(ctx context.Context, spec relSpec, vertexID str
 		}
 		return []Relationship{{ID: syntheticEdgeID(from, label, to), Label: label, FromID: from, ToID: to}}, nil
 	}
-	// vertexID is the value every matching row's fk column points at.
+
 	var ids []string
 	if err := m.onTable(m.db.WithContext(ctx), spec.fkTable).Where(spec.fkColumn+" = ?", vertexID).
 		Pluck("id", &ids).Error; err != nil {
@@ -316,11 +279,7 @@ func (m *taskManager) traverseFK(ctx context.Context, spec relSpec, vertexID str
 	}
 	out := make([]Relationship, 0, len(ids))
 	for _, id := range ids {
-		// vertexID is the value fkColumn points at, so it's the same side as
-		// the FIRST branch's `value` above — mirror that branch's swap
-		// exactly (swap when fkOnFrom, not when !fkOnFrom): the row owning
-		// the fk column (spec.fkTable, i.e. this `id`) is the FROM side for
-		// relFieldOnFrom labels and the TO side for relFieldOnTo labels.
+
 		from, to := vertexID, id
 		if fkOnFrom {
 			from, to = id, vertexID
@@ -351,9 +310,6 @@ func (m *taskManager) traverseJoin(ctx context.Context, spec relSpec, vertexID s
 	return out, nil
 }
 
-// fkEndpoints resolves, for a relFieldOnFrom/relFieldOnTo CreateRelationship
-// call, which table/id owns the fk column and which table/id is just being
-// existence-checked.
 func (m *taskManager) fkEndpoints(spec relSpec, rel Relationship) (otherTable, ownerTable, ownerID, otherID string, ownerNotFound, otherNotFound error) {
 	if spec.kind == relFieldOnFrom {
 		return m.joinToEndpointTable(rel.Label), spec.fkTable, rel.FromID, rel.ToID, spec.fromNotFound, spec.toNotFound
@@ -368,13 +324,6 @@ func (m *taskManager) fkOwnerFor(spec relSpec, fromID, toID string) (ownerTable,
 	return spec.fkTable, toID, fromID
 }
 
-// joinFromEndpointTable/joinToEndpointTable name the table the FromID/ToID
-// of a given label must exist in, for existence-check purposes. Every label
-// here has exactly one meaning per side (unlike has_deliverable/
-// has_acceptance_criteria's dual fromTypes in the entitygraph-era whitelist,
-// which allowed Task OR TaskTodo — this package only ever creates those
-// edges from a Task in practice, so the narrower check is intentional; see
-// relationship_test.go for coverage).
 func (m *taskManager) joinFromEndpointTable(label string) string {
 	switch label {
 	case RelLabelAssignedTo, RelLabelBlocks, RelLabelSubtaskOf, RelLabelDependsOn,
@@ -410,9 +359,6 @@ func (m *taskManager) joinToEndpointTable(label string) string {
 	return m.store.Table(roleTask)
 }
 
-// syntheticEdgeID builds a stable, opaque edge identifier — this package
-// never stored a real edge-id table even before the GORM migration
-// (Relationship.ID was already documented as opaque to callers).
 func syntheticEdgeID(fromID, label, toID string) string {
 	return fromID + "→" + label + "→" + toID
 }

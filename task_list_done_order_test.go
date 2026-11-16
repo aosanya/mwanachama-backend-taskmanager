@@ -9,7 +9,7 @@ import (
 
 func completeAt(t *testing.T, mgr mwanachamataskmanager.TaskManager, stamp func(id, at string), title, at string) mwanachamataskmanager.Task {
 	t.Helper()
-	created := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: title})
+	created := createOrderTask(t, mgr, mwanachamataskmanager.Task{Title: title})
 	if _, err := mgr.MoveTaskToStep(context.Background(), created.ID, "backlog", "doing"); err != nil {
 		t.Fatalf("move %q to doing: %v", title, err)
 	}
@@ -50,9 +50,9 @@ func wantOrder(t *testing.T, got []string, want ...string) {
 }
 
 func TestListTasks_TheDoneStepListsTheLatestCompletionFirst(t *testing.T) {
-	mgr, db, tables := newTestManagerWithTables(t, nil)
+	mgr, db, table := newTestManagerWithDB(t)
 	stamp := func(id, at string) {
-		if err := db.Table(tables.Tasks).Where("id = ?", id).UpdateColumn("completed_at", at).Error; err != nil {
+		if err := db.Table(table).Where("id = ?", id).UpdateColumn("completed_at", at).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -66,15 +66,15 @@ func TestListTasks_TheDoneStepListsTheLatestCompletionFirst(t *testing.T) {
 
 func TestListTasks_AnIssueThatReturnsToDoneIsPlacedByItsLatestCompletion(t *testing.T) {
 	ctx := context.Background()
-	mgr, db, tables := newTestManagerWithTables(t, nil)
+	mgr, db, table := newTestManagerWithDB(t)
 	stamp := func(id, at string) {
-		if err := db.Table(tables.Tasks).Where("id = ?", id).UpdateColumn("completed_at", at).Error; err != nil {
+		if err := db.Table(table).Where("id = ?", id).UpdateColumn("completed_at", at).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
 	completeAt(t, mgr, stamp, "finished once", "2026-11-11T12:00:00Z")
 	back := completeAt(t, mgr, stamp, "finished again", "2026-11-11T09:00:00Z")
-	if err := db.Table(tables.Tasks).Where("id = ?", back.ID).UpdateColumn("status", "in_progress").Error; err != nil {
+	if err := db.Table(table).Where("id = ?", back.ID).UpdateColumn("status", "in_progress").Error; err != nil {
 		t.Fatal(err)
 	}
 	if _, err := mgr.MoveTaskToStep(ctx, back.ID, "backlog", "done"); err != nil {
@@ -88,8 +88,8 @@ func TestListTasks_AnIssueThatReturnsToDoneIsPlacedByItsLatestCompletion(t *test
 func TestListTasks_EveryOtherStepKeepsRankOrder(t *testing.T) {
 	ctx := context.Background()
 	mgr := newTestManager(t)
-	low := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "low rank", Rank: 10})
-	high := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "high rank", Rank: 20})
+	low := createOrderTask(t, mgr, mwanachamataskmanager.Task{Title: "low rank", Rank: 10})
+	high := createOrderTask(t, mgr, mwanachamataskmanager.Task{Title: "high rank", Rank: 20})
 	for _, id := range []string{high.ID, low.ID} {
 		if _, err := mgr.MoveTaskToStep(ctx, id, "backlog", "doing"); err != nil {
 			t.Fatalf("move to doing: %v", err)
@@ -97,4 +97,13 @@ func TestListTasks_EveryOtherStepKeepsRankOrder(t *testing.T) {
 	}
 
 	wantOrder(t, orderedTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "backlog", Step: "doing"}), "low rank", "high rank")
+}
+
+func createOrderTask(t *testing.T, mgr mwanachamataskmanager.TaskManager, task mwanachamataskmanager.Task) mwanachamataskmanager.Task {
+	t.Helper()
+	out, err := mgr.CreateTask(context.Background(), task)
+	if err != nil {
+		t.Fatalf("CreateTask %q: %v", task.Title, err)
+	}
+	return out
 }

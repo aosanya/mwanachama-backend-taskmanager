@@ -10,8 +10,14 @@ func (m *taskManager) PatchTaskAs(ctx context.Context, requesterID string, patch
 	if err != nil {
 		return Task{}, err
 	}
-	if _, err := m.UpdateTask(ctx, applyPatch(current, patch)); err != nil {
+	patched := applyPatch(current, patch)
+	if _, err := m.UpdateTask(ctx, patched); err != nil {
 		return Task{}, err
+	}
+	if patched.Priority != current.Priority {
+		if err := m.settleNewPriority(ctx, requesterID, current, patched.Priority); err != nil {
+			return Task{}, err
+		}
 	}
 	return m.GetTask(ctx, patch.ID)
 }

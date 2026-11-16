@@ -53,7 +53,7 @@
     "patch_task": {
       "method": "PATCH", "path": "/tasks/{taskID}", "call": "PatchTaskAs", "action": "taskmanager.task.patch",
       "title": "Patch task",
-      "description": "Change only the fields you send and leave every other field of the issue as it is: tags, project, priority, effort (unknown, very_low, low, medium, high or very_high), rank, place and the rest. Use this to edit one field in one call. Sending tags replaces the whole tag list; an empty list clears it. A status change is checked against the lifecycle. To move an issue between steps use taskmanager_task_move_to_step.",
+      "description": "Change only the fields you send and leave every other field of the issue as it is: tags, project, priority, effort (unknown, very_low, low, medium, high or very_high), rank, place and the rest. Use this to edit one field in one call. Sending tags replaces the whole tag list; an empty list clears it. A status change is checked against the lifecycle. To move an issue between steps use taskmanager_task_move_to_step. A changed priority puts the issue at the top of its new priority group in its step and adds a Log entry such as Priority medium to high.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue is in."},
                {"from": "body", "whole": true},
                {"from": "path", "as": "taskID", "refers": "taskmanager.task", "into": "ID", "description": "The task to patch."}],
