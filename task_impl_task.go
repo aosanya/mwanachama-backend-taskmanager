@@ -178,34 +178,38 @@ func (m *taskManager) updateTask(ctx context.Context, task Task, replace bool) (
 		})
 	}
 	if current.Status != out.Status {
-		m.publish(ctx, TopicTaskStatusChanged, TaskStatusChangedPayload{
-			TaskID:        out.ID,
-			From:          current.Status,
-			To:            out.Status,
-			WorkflowRunID: out.WorkflowRunID,
-		})
-		if isTerminalStatus(out.Status) {
-			completedAt := out.CompletedAt
-			if completedAt == "" {
-				completedAt = now
-			}
-			m.publish(ctx, TopicTaskCompleted, TaskCompletedPayload{
-				TaskID:         out.ID,
-				TerminalStatus: out.Status,
-				CompletedAt:    completedAt,
-				WorkflowRunID:  out.WorkflowRunID,
-			})
-		}
-		if finishesDependency(out.Status) {
-			m.freeDependents(ctx, out)
-		}
-		if settlesCase(out.Status) {
-			if err := m.closeCaseIfSettled(ctx, out.ID); err != nil {
-				slog.WarnContext(ctx, "UpdateTask: closeCaseIfSettled", "task_id", out.ID, "err", err)
-			}
-		}
+		m.announceStatusChange(ctx, out, current.Status, now)
 	}
 	return out, nil
+}
+
+func (m *taskManager) announceStatusChange(ctx context.Context, out Task, from TaskStatus, now string) {
+	m.publish(ctx, TopicTaskStatusChanged, TaskStatusChangedPayload{
+		TaskID:        out.ID,
+		From:          from,
+		To:            out.Status,
+		WorkflowRunID: out.WorkflowRunID,
+	})
+	if isTerminalStatus(out.Status) {
+		completedAt := out.CompletedAt
+		if completedAt == "" {
+			completedAt = now
+		}
+		m.publish(ctx, TopicTaskCompleted, TaskCompletedPayload{
+			TaskID:         out.ID,
+			TerminalStatus: out.Status,
+			CompletedAt:    completedAt,
+			WorkflowRunID:  out.WorkflowRunID,
+		})
+	}
+	if finishesDependency(out.Status) {
+		m.freeDependents(ctx, out)
+	}
+	if settlesCase(out.Status) {
+		if err := m.closeCaseIfSettled(ctx, out.ID); err != nil {
+			slog.WarnContext(ctx, "UpdateTask: closeCaseIfSettled", "task_id", out.ID, "err", err)
+		}
+	}
 }
 
 func (m *taskManager) DeleteTask(ctx context.Context, taskID string) error {

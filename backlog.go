@@ -455,39 +455,68 @@ func (m *taskManager) MoveTaskToStep(ctx context.Context, taskID, backlogID, ste
 		}
 		path = reached
 	}
-	originalBacklog, originalStep := m.storedPlace(ctx, taskID)
-	startedAs := task.Status
-	if err := m.writePlace(ctx, taskID, backlogID, stepID); err != nil {
+	if err := m.refuseWhileBlocked(ctx, task, path); err != nil {
 		return Task{}, err
 	}
-	for _, next := range path {
-		task.Status = next
-		if task, err = m.updateTask(ctx, task, false); err != nil {
-			m.restorePlace(ctx, taskID, originalBacklog, originalStep, startedAs)
-			return Task{}, err
-		}
+	if err := m.writeMove(ctx, task, path, backlogID, stepID); err != nil {
+		return Task{}, err
 	}
+	m.announceMove(ctx, task, path)
 	return m.GetTask(ctx, taskID)
 }
 
-func (m *taskManager) writePlace(ctx context.Context, taskID, backlogID, stepID string) error {
-	res := m.store.Query(ctx, roleTask).Where("id = ? AND deleted = ?", taskID, false).
-		Updates(map[string]any{"backlog": backlogID, "step": stepID})
-	if res.Error != nil {
-		return fmt.Errorf("MoveTaskToStep: %w", res.Error)
+func (m *taskManager) refuseWhileBlocked(ctx context.Context, task Task, path []TaskStatus) error {
+	if task.Status != TaskStatusPending || len(path) == 0 || path[0] != TaskStatusInProgress {
+		return nil
+	}
+	blockers, err := m.findActiveBlockers(ctx, task.ID)
+	if err != nil {
+		return err
+	}
+	if len(blockers) > 0 {
+		return &BlockedError{BlockerTaskIDs: blockers}
 	}
 	return nil
 }
 
-func (m *taskManager) restorePlace(ctx context.Context, taskID, backlogID, stepID string, startedAs TaskStatus) {
-	var now struct{ Status TaskStatus }
-	m.store.Query(ctx, roleTask).Where("id = ?", taskID).Select("status").Scan(&now)
-	if now.Status != startedAs {
-		if backlogs, err := m.backlogs(ctx); err == nil {
-			backlogID, stepID = models.StepAfterStatusChange(backlogs, models.Task{Backlog: backlogID, Step: stepID, Status: now.Status})
+func (m *taskManager) writeMove(ctx context.Context, task Task, path []TaskStatus, backlogID, stepID string) error {
+	columns := map[string]any{"backlog": backlogID, "step": stepID}
+	if len(path) > 0 {
+		final := path[len(path)-1]
+		now := time.Now().UTC().Format(time.RFC3339)
+		columns["status"] = string(final)
+		columns["updated_at"] = now
+		if final != TaskStatusBlocked {
+			columns["held_by"] = ""
+		}
+		if isTerminalStatus(final) {
+			columns["completed_at"] = now
 		}
 	}
-	m.writePlace(ctx, taskID, backlogID, stepID)
+	res := m.store.Query(ctx, roleTask).
+		Where("id = ? AND deleted = ? AND status = ?", task.ID, false, string(task.Status)).
+		Updates(columns)
+	if res.Error != nil {
+		return fmt.Errorf("MoveTaskToStep: %w", res.Error)
+	}
+	if res.RowsAffected > 0 {
+		return nil
+	}
+	if _, err := m.GetTask(ctx, task.ID); err != nil {
+		return err
+	}
+	return ErrTaskMoveConflict
+}
+
+func (m *taskManager) announceMove(ctx context.Context, task Task, path []TaskStatus) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	from := task.Status
+	for _, next := range path {
+		hop := task
+		hop.Status = next
+		m.announceStatusChange(ctx, hop, from, now)
+		from = next
+	}
 }
 
 func (m *taskManager) placeAfterStatusChange(ctx context.Context, task Task) (string, string, error) {

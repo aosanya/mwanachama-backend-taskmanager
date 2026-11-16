@@ -12,7 +12,7 @@
     "list_tasks": {
       "method": "GET", "path": "/tasks", "call": "ListTasks", "action": "taskmanager.task.list",
       "title": "List tasks",
-      "description": "List the tasks matching the filter. Narrow by status, priority, run, the outside holder of blocked work (held_by), tag (repeat it to ask for tasks that carry every tag given), repo (the task's project_name), backlog (its id or name), step (the id or name of a step of that backlog, or of the first backlog when none is given) or untouched_days (not changed for more than that many days, 0 or more), and pass a limit unless you genuinely need the whole board. Tag, backlog and step match without regard to case. A task whose backlog is empty or no longer exists is in the first backlog, at the step its status names (or at no step). A page holds at most 500 tasks in rank order: pass offset (0 or more) to read the next page of the same filter, until a page comes back short.",
+      "description": "List the tasks matching the filter. Narrow by status, priority, run, the outside holder of blocked work (held_by), tag (repeat it to ask for tasks that carry every tag given), repo (the task's project_name), backlog (its id or name), step (the id or name of a step of that backlog, or of the first backlog when none is given) or untouched_days (not changed for more than that many days, 0 or more), and pass a limit (1 or more; 0 or less is refused with 400) unless you genuinely need the whole board. Tag, backlog and step match without regard to case. A task whose backlog is empty or no longer exists is in the first backlog, at the step its status names (or at no step). A page holds at most 500 tasks in rank order: pass offset (0 or more) to read the next page of the same filter, until a page comes back short.",
       "args": [{"from": "query", "whole": true},
                {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."}],
       "returns": [{"body": true}]
@@ -1059,6 +1059,7 @@
     "ErrNoPathToState": 409,
     "ErrInvalidPlacement": 400,
     "ErrInvalidEffort": 400,
+    "ErrTaskMoveConflict": 409,
     "ErrCaseNotFound": 404,
     "ErrRepeatingTaskNotFound": 404,
     "ErrInvalidRepeatingTask": 400,
