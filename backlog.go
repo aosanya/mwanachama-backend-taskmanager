@@ -193,6 +193,9 @@ func (m *taskManager) saveBacklogs(ctx context.Context, change backlogChange) er
 		if err := models.CheckBacklogs(next); err != nil {
 			return fmt.Errorf("%w: %s", ErrInvalidBacklog, err)
 		}
+		if err := models.CheckChangedNames(current, next); err != nil {
+			return fmt.Errorf("%w: %s", ErrInvalidBacklog, err)
+		}
 		rows, err := m.taskPlaces(tx)
 		if err != nil {
 			return fmt.Errorf("backlogs: %w", err)

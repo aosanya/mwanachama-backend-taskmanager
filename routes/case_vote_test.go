@@ -25,7 +25,7 @@ func TestAMemberVotesTakesTheVoteBackAndTheListFollowsTheVotes(t *testing.T) {
 	if rec.Code != 200 || voteRanked(t, rec.Body.Bytes()).Votes != 2 {
 		t.Fatalf("vote %d %s", rec.Code, rec.Body)
 	}
-	rec = w73Do(t, m, "hub-steward", "POST", "/cases/"+loud.ID+"/votes", map[string]any{"member_id": "neema"})
+	rec = w73Do(t, m, "neema", "POST", "/cases/"+loud.ID+"/votes", map[string]any{"member_id": "juma"})
 	if rec.Code != 200 || voteRanked(t, rec.Body.Bytes()).Votes != 3 {
 		t.Fatalf("vote for neema %d %s", rec.Code, rec.Body)
 	}
@@ -48,7 +48,7 @@ func TestAMemberVotesTakesTheVoteBackAndTheListFollowsTheVotes(t *testing.T) {
 	for _, v := range votes {
 		castFor[v.MemberID] = v.CastBy
 	}
-	if castFor["juma"] != "juma" || castFor["neema"] != "hub-steward" {
+	if castFor["juma"] != "juma" || castFor["neema"] != "neema" {
 		t.Fatalf("who cast what: %+v", castFor)
 	}
 

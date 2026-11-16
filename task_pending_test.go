@@ -302,6 +302,27 @@ func TestPendingTasks_IsFarCheaperThanPagingTheList(t *testing.T) {
 	}
 }
 
+func TestPendingTasks_BlockedMeansTheBlockedTagOnly(t *testing.T) {
+	mgr := newTestManager(t)
+	paused := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "paused"})
+	paused.Status = mwanachamataskmanager.TaskStatusBlocked
+	if _, err := mgr.UpdateTask(context.Background(), paused); err != nil {
+		t.Fatalf("UpdateTask: %v", err)
+	}
+	mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "tagged", Tags: []string{"Blocked"}})
+
+	got := map[string]bool{}
+	for _, item := range pendingOf(t, mgr, mwanachamataskmanager.PendingFilter{}).Items {
+		got[item.Title] = item.Blocked
+	}
+	if _, ok := got["paused"]; !ok {
+		t.Fatalf("the paused issue is not listed: %v", got)
+	}
+	if got["paused"] || !got["tagged"] {
+		t.Fatalf("blocked flags %v, want only the tagged issue", got)
+	}
+}
+
 func TestPendingTasks_CountsDoneAndCancelledByStepOnlyWhenAsked(t *testing.T) {
 	mgr := newTestManager(t)
 	seedPending(t, mgr)
@@ -346,26 +367,5 @@ func TestPendingTasks_ClosedCountsFollowTheTagFilter(t *testing.T) {
 
 	if got := countOf(out.ByStep, "Cancelled"); got != 1 {
 		t.Fatalf("Cancelled %d, want 1: %+v", got, out.ByStep)
-	}
-}
-
-func TestPendingTasks_BlockedMeansTheBlockedTagOnly(t *testing.T) {
-	mgr := newTestManager(t)
-	paused := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "paused"})
-	paused.Status = mwanachamataskmanager.TaskStatusBlocked
-	if _, err := mgr.UpdateTask(context.Background(), paused); err != nil {
-		t.Fatalf("UpdateTask: %v", err)
-	}
-	mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "tagged", Tags: []string{"Blocked"}})
-
-	got := map[string]bool{}
-	for _, item := range pendingOf(t, mgr, mwanachamataskmanager.PendingFilter{}).Items {
-		got[item.Title] = item.Blocked
-	}
-	if _, ok := got["paused"]; !ok {
-		t.Fatalf("the paused issue is not listed: %v", got)
-	}
-	if got["paused"] || !got["tagged"] {
-		t.Fatalf("blocked flags %v, want only the tagged issue", got)
 	}
 }

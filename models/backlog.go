@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/aosanya/mwanachama-backend-shared/plaintext"
 )
 
 type BacklogStep struct {
@@ -122,6 +124,33 @@ func CheckBacklogs(backlogs []Backlog) error {
 		return fmt.Errorf("backlogs: the first backlog keeps steps, a smart backlog cannot be first")
 	}
 	return nil
+}
+
+func CheckChangedNames(current, next []Backlog) error {
+	for _, b := range next {
+		before, existed := backlogNamed(current, b.ID)
+		if !existed || before.Name != b.Name {
+			if problem := plaintext.Problem("backlog name", b.Name); problem != "" {
+				return fmt.Errorf("backlogs: %s", problem)
+			}
+		}
+		for _, s := range b.Steps {
+			if i, ok := FindStep(before, s.ID); existed && ok && before.Steps[i].Name == s.Name {
+				continue
+			}
+			if problem := plaintext.Problem("step name", s.Name); problem != "" {
+				return fmt.Errorf("backlogs: %s", problem)
+			}
+		}
+	}
+	return nil
+}
+
+func backlogNamed(backlogs []Backlog, id string) (Backlog, bool) {
+	if i, ok := FindBacklog(backlogs, id); ok {
+		return backlogs[i], true
+	}
+	return Backlog{}, false
 }
 
 func checkSmart(b Backlog) error {

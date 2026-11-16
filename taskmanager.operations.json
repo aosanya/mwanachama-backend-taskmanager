@@ -802,7 +802,7 @@
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue of the run is in."},
                {"from": "path", "as": "runID", "refers": "taskmanager.workflow_run", "description": "The run to cancel."},
                {"from": "body", "as": "reason", "description": "Why it is being cancelled."},
-               {"from": "body", "as": "cancelled_by", "description": "Who issued the cancel."},
+               {"from": "caller", "as": "cancelled_by", "description": "Who issued the cancel, from the session."},
                {"from": "body", "as": "quiesce_deadline", "required": true, "description": "When in-flight work must have stopped by, as an RFC 3339 string."}],
       "returns": [{"body": true}]
     },
@@ -946,9 +946,9 @@
     "vote_case": {
       "method": "POST", "path": "/cases/{caseID}/votes", "call": "VoteCase", "action": "taskmanager.case.vote",
       "title": "Vote on case",
-      "description": "Give one open case a member's vote. The member is the body's member_id, or the caller when none is given; the caller is recorded as who cast it, so a vote cast for a member who said so shows both. A member votes on a case once, however often it is cast. The requester already counts as the first vote. member_kind is member, or left out; owner or agent is refused. Returns the case with its votes.",
+      "description": "Give one open case a member's vote. The vote counts for the caller, from the session, and the caller is recorded as who cast it. A member votes on a case once, however often it is cast. The requester already counts as the first vote. member_kind is member, or left out; owner or agent is refused. Returns the case with its votes.",
       "args": [{"from": "path", "as": "caseID", "refers": "taskmanager.case", "description": "The open case to vote on."},
-               {"from": "body", "as": "member_id", "description": "The member the vote counts for. The caller when left out."},
+               {"from": "caller", "as": "member_id", "description": "The member the vote counts for, from the session."},
                {"from": "caller", "as": "cast_by", "description": "Who casts the vote, from the session."},
                {"from": "body", "as": "member_kind", "description": "What the voter is in the agency: member, owner or agent. Owners and agents are refused."}],
       "returns": [{"body": true}]
@@ -995,6 +995,10 @@
     "ErrBacklogHoldsIssues": 409,
     "ErrBacklogForbidden": 403,
     "ErrOwnerGroupNotSet": 409,
+    "ErrWorkflowNotPublished": 400,
+    "ErrStepNotInWorkflow": 409,
+    "ErrStepOutOfOrder": 409,
+    "ErrStepRoleNotHeld": 403,
     "ErrNoPathToState": 409,
     "ErrInvalidPlacement": 400,
     "ErrInvalidEffort": 400,
