@@ -12,8 +12,6 @@ import (
 	"github.com/aosanya/mwanachama-backend-taskmanager/routes"
 )
 
-type callerKey struct{}
-
 func w73Mux(tm mwanachamataskmanager.TaskManager) *http.ServeMux {
 	m := http.NewServeMux()
 	mount := routes.Mount{Caller: func(ctx context.Context) string {

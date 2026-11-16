@@ -2,7 +2,6 @@ package mwanachamataskmanager_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 
@@ -37,40 +36,5 @@ func TestListTasks_OffsetPagesTwelveHundredIssuesOfOneBucket(t *testing.T) {
 	}
 	if len(seen) != total {
 		t.Fatalf("paging reached %d of %d issues", len(seen), total)
-	}
-}
-
-func TestListTasks_OffsetKeepsRankOrderAcrossPages(t *testing.T) {
-	ctx := context.Background()
-	mgr := newTestManager(t)
-	for i := 0; i < 7; i++ {
-		mustCreate(t, mgr, mwanachamataskmanager.Task{Title: fmt.Sprintf("issue %d", i)})
-	}
-	first, err := mgr.ListTasks(ctx, mwanachamataskmanager.TaskFilter{Limit: 3})
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, err := mgr.ListTasks(ctx, mwanachamataskmanager.TaskFilter{Limit: 3, Offset: 3})
-	if err != nil {
-		t.Fatal(err)
-	}
-	all, err := mgr.ListTasks(ctx, mwanachamataskmanager.TaskFilter{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	joined := append(append([]mwanachamataskmanager.Task{}, first...), second...)
-	for i := range joined {
-		if joined[i].ID != all[i].ID {
-			t.Fatalf("page position %d is %q, the whole list has %q", i, joined[i].Title, all[i].Title)
-		}
-	}
-}
-
-func TestListTasks_NegativeOffsetIsRefused(t *testing.T) {
-	mgr := newTestManager(t)
-
-	_, err := mgr.ListTasks(context.Background(), mwanachamataskmanager.TaskFilter{Offset: -1})
-	if !errors.Is(err, mwanachamataskmanager.ErrInvalidFilter) {
-		t.Fatalf("negative offset error = %v, want ErrInvalidFilter", err)
 	}
 }

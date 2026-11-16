@@ -17,6 +17,8 @@ import (
 	"github.com/aosanya/mwanachama-backend-taskmanager/routes"
 )
 
+type callerKey struct{}
+
 type accessHub struct {
 	t   *testing.T
 	mux *http.ServeMux

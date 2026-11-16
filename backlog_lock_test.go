@@ -7,10 +7,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/aosanya/mwanachama-backend-shared/spec"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 
+	"github.com/aosanya/mwanachama-backend-shared/spec"
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
@@ -21,7 +21,7 @@ func newFileBackedManager(t *testing.T) mwanachamataskmanager.TaskManager {
 	if err != nil {
 		t.Fatalf("gorm.Open: %v", err)
 	}
-	workSpec, _ := specAndTablesForInstance(t, "spec/examples/work.taskmanager.json", "test")
+	workSpec := specForInstance(t, "spec/examples/agency.taskmanager.json", "test")
 	if err := spec.Migrate(db, workSpec); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}

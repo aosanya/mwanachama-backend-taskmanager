@@ -241,8 +241,7 @@ func TestBacklogOwnerGroup_ANewBacklogIsSeenByTheOwnerGroupAndNobodyElse(t *test
 
 func TestBacklogAccess_AnIssueWhoseBacklogNoLongerExistsStaysVisibleInTheFirstBacklog(t *testing.T) {
 	ctx := context.Background()
-	mgr, db, tables := newTestManagerWithTables(t, nil)
-	table := tables.Tasks
+	mgr, db, table := newTestManagerWithDB(t)
 	mgr.UseGroups(groupsOfPeople())
 	mgr.UseGroupExists(knownGroups(ownerGroup, devGroup))
 	if _, err := mgr.CreateBacklog(ctx, "Software", []string{"Open"}); err != nil {
@@ -281,7 +280,7 @@ func TestBacklogAccess_GivingToDifferentGroupsAtOnceLosesNoGrant(t *testing.T) {
 		t.Fatal(err)
 	}
 	pool.SetMaxOpenConns(1)
-	workSpec, _ := specAndTablesForInstance(t, "spec/examples/work.taskmanager.json", "test")
+	workSpec := specForInstance(t, "spec/examples/agency.taskmanager.json", "test")
 	if err := spec.Migrate(db, workSpec); err != nil {
 		t.Fatal(err)
 	}
