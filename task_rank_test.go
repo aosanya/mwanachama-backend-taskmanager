@@ -204,3 +204,51 @@ func TestAProjectListsItsCardsInRankOrder(t *testing.T) {
 		t.Fatalf("list = %s", got)
 	}
 }
+
+func TestACardCreatedWithARankKeepsItAndListsInThatOrder(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+	for _, c := range []struct {
+		title string
+		rank  int
+	}{{"third", 3}, {"first", 1}, {"second", 2}} {
+		made, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: c.title, Rank: c.rank})
+		if err != nil {
+			t.Fatalf("CreateTask %s: %v", c.title, err)
+		}
+		if made.Rank != c.rank {
+			t.Fatalf("%s created with rank %d came back with %d", c.title, c.rank, made.Rank)
+		}
+	}
+	if got := listedTitles(t, mgr); got != "first,second,third" {
+		t.Fatalf("list = %s", got)
+	}
+	later := createTitled(t, mgr, "later")[0]
+	if later.Rank <= 3 {
+		t.Fatalf("a card with no rank got %d, want one below every ranked card", later.Rank)
+	}
+	if got := listedTitles(t, mgr); got != "first,second,third,later" {
+		t.Fatalf("list = %s", got)
+	}
+}
+
+func TestACardSentWithARankBelowOneGetsAMintedRankAtTheBottom(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+	for _, rank := range []int{1, 7, 500} {
+		made, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: fmt.Sprintf("kept %d", rank), Rank: rank})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if made.Rank != rank {
+			t.Fatalf("rank %d came back as %d", rank, made.Rank)
+		}
+	}
+	minted, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "negative", Rank: -4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if minted.Rank <= 500 {
+		t.Fatalf("a negative rank became %d, want one below the bottom card (above 500)", minted.Rank)
+	}
+}
