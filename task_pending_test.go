@@ -11,15 +11,6 @@ import (
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
-func mustCreate(t *testing.T, mgr mwanachamataskmanager.TaskManager, task mwanachamataskmanager.Task) mwanachamataskmanager.Task {
-	t.Helper()
-	out, err := mgr.CreateTask(context.Background(), task)
-	if err != nil {
-		t.Fatalf("CreateTask %q: %v", task.Title, err)
-	}
-	return out
-}
-
 func pendingOf(t *testing.T, mgr mwanachamataskmanager.TaskManager, filter mwanachamataskmanager.PendingFilter) mwanachamataskmanager.PendingTasks {
 	t.Helper()
 	out, err := mgr.PendingTasks(context.Background(), filter)

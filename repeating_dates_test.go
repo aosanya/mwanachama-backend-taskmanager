@@ -97,7 +97,7 @@ func TestTheSweepReadsEveryRunningRepeatingTaskAndNoStoppedOne(t *testing.T) {
 }
 
 func TestATickThatLosesTheRaceForAPeriodAnswersAlreadyMade(t *testing.T) {
-	m, db, _ := newTestManagerWithDB(t, nil)
+	m, db, _ := newTestManagerWithTables(t, nil)
 	ctx := context.Background()
 	rec, err := m.CreateRepeatingTask(ctx, storedMonthlyReview(t))
 	if err != nil {

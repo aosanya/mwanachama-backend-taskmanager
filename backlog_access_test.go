@@ -143,7 +143,7 @@ func TestBacklogAccess_MovingNeedsCanMoveOnBothBacklogs(t *testing.T) {
 	mgr := managerWithTwoBacklogs(t)
 	ctx := context.Background()
 	mgr.SetBacklogOwnerGroup(ctx, ownerGroup)
-	task := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "a"})
+	task := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "a"})
 	mgr.GiveBacklogAccess(ctx, "software", devGroup, "move")
 	if _, err := mgr.MoveTaskToStepAs(ctx, "dev", task.ID, "software", "open"); !errors.Is(err, mwanachamataskmanager.ErrBacklogForbidden) {
 		t.Fatalf("dev moves out of a backlog it cannot see: %v", err)
@@ -164,7 +164,7 @@ func TestBacklogAccess_CallsWithoutAPersonAreNotNarrowed(t *testing.T) {
 	mgr := managerWithTwoBacklogs(t)
 	ctx := context.Background()
 	mgr.SetBacklogOwnerGroup(ctx, ownerGroup)
-	task := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "a"})
+	task := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "a"})
 	if got := visibleIDs(t, mgr, ""); len(got) != 2 {
 		t.Fatalf("got %v", got)
 	}

@@ -27,7 +27,7 @@ type testTables struct {
 	CodeSequences          string
 }
 
-func specForInstance(t *testing.T, path, instance string) (*spec.Spec, testTables) {
+func specAndTablesForInstance(t *testing.T, path, instance string) (*spec.Spec, testTables) {
 	t.Helper()
 
 	raw, err := os.ReadFile(path)

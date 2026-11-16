@@ -2,34 +2,10 @@ package mwanachamataskmanager_test
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
-
-func TestTaskFilter_TagAcceptsOneNameOrAList(t *testing.T) {
-	for raw, want := range map[string]int{`{"tag":"Docs"}`: 1, `{"tag":["Docs","Blocked"]}`: 2, `{}`: 0} {
-		var filter mwanachamataskmanager.TaskFilter
-		if err := json.Unmarshal([]byte(raw), &filter); err != nil {
-			t.Fatalf("%s: %v", raw, err)
-		}
-		if len(filter.Tag) != want {
-			t.Fatalf("%s gave %v, want %d tags", raw, filter.Tag, want)
-		}
-	}
-	var bad mwanachamataskmanager.TaskFilter
-	if err := json.Unmarshal([]byte(`{"tag":5}`), &bad); err == nil {
-		t.Fatal("a number is not a tag")
-	}
-}
-
-func TestListTasks_EmptyTagIsIgnored(t *testing.T) {
-	mgr := newTestManager(t)
-	createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "any"})
-
-	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Tag: []string{""}}), "any")
-}
 
 func TestCreateTask_ARankTheCallerSendsIsKept(t *testing.T) {
 	mgr := newTestManager(t)
@@ -62,9 +38,9 @@ func TestCreateTask_NoRankMintsOneBelowTheBottom(t *testing.T) {
 
 func TestListTasks_ReturnsTheLoadersOrderNotTheCreationOrder(t *testing.T) {
 	mgr := newTestManager(t)
-	createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "third", Rank: 3})
-	createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "first", Rank: 1})
-	createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "second", Rank: 2})
+	mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "third", Rank: 3})
+	mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "first", Rank: 1})
+	mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "second", Rank: 2})
 
 	tasks, err := mgr.ListTasks(context.Background(), mwanachamataskmanager.TaskFilter{})
 	if err != nil {

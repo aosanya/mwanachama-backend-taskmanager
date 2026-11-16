@@ -20,7 +20,7 @@ func newOverdueManager(t *testing.T, graceHours any) mwanachamataskmanager.TaskM
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, _ := specForInstance(t, "spec/examples/work.taskmanager.json", "test")
+	s, _ := specAndTablesForInstance(t, "spec/examples/work.taskmanager.json", "test")
 	if graceHours != nil {
 		for i := range s.Settings {
 			if s.Settings[i].Name == "overdue_grace_hours" {
@@ -139,7 +139,7 @@ func TestANegativeGraceIsRefusedWhenTheManagerIsBuilt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, _ := specForInstance(t, "spec/examples/work.taskmanager.json", "test")
+	s, _ := specAndTablesForInstance(t, "spec/examples/work.taskmanager.json", "test")
 	for i := range s.Settings {
 		if s.Settings[i].Name == "overdue_grace_hours" {
 			s.Settings[i].Default = float64(-1)

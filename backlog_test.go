@@ -41,7 +41,7 @@ func TestBacklogManager_StartWithOneBacklogOfFiveSteps(t *testing.T) {
 
 func TestBacklogManager_NewTaskReadsAtTheStepOfItsStatus(t *testing.T) {
 	mgr := newTestManager(t)
-	task := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "a"})
+	task := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "a"})
 	got, err := mgr.GetTask(context.Background(), task.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -58,7 +58,7 @@ func TestBacklogManager_NewTaskReadsAtTheStepOfItsStatus(t *testing.T) {
 func TestBacklogManager_MoveToStepWalksTheStatusAndPlacesTheTask(t *testing.T) {
 	mgr := newTestManager(t)
 	ctx := context.Background()
-	task := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "a"})
+	task := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "a"})
 	moved, err := mgr.MoveTaskToStep(ctx, task.ID, "backlog", "doing")
 	if err != nil {
 		t.Fatalf("MoveTaskToStep: %v", err)
@@ -78,7 +78,7 @@ func TestBacklogManager_AnIssueMovesToAnotherBacklogAndUpdatesKeepTheStep(t *tes
 	if created.ID != "research" || !equalIDs(stepIDs(created), []string{"ideas", "reading", "writing"}) {
 		t.Fatalf("got %+v", created)
 	}
-	task := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "a"})
+	task := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "a"})
 	moved, err := mgr.MoveTaskToStep(ctx, task.ID, "research", "reading")
 	if err != nil {
 		t.Fatal(err)
@@ -103,7 +103,7 @@ func TestBacklogManager_AStepHoldingIssuesCannotBeRemoved(t *testing.T) {
 	if _, err := mgr.CreateBacklog(ctx, "Research", []string{"Ideas", "Reading"}); err != nil {
 		t.Fatal(err)
 	}
-	task := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "a"})
+	task := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "a"})
 	if _, err := mgr.MoveTaskToStep(ctx, task.ID, "research", "reading"); err != nil {
 		t.Fatal(err)
 	}
@@ -125,14 +125,14 @@ func TestBacklogManager_ABacklogHoldingIssuesCannotBeDeleted(t *testing.T) {
 	if _, err := mgr.CreateBacklog(ctx, "Research", nil); err != nil {
 		t.Fatal(err)
 	}
-	task := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "a"})
+	task := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "a"})
 	if _, err := mgr.MoveTaskToStep(ctx, task.ID, "research", "to-do"); err != nil {
 		t.Fatal(err)
 	}
 	if err := mgr.DeleteBacklog(ctx, "research"); !errors.Is(err, mwanachamataskmanager.ErrBacklogHoldsIssues) {
 		t.Fatalf("got %v", err)
 	}
-	createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "unplaced"})
+	mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "unplaced"})
 	if err := mgr.DeleteBacklog(ctx, "backlog"); !errors.Is(err, mwanachamataskmanager.ErrBacklogHoldsIssues) {
 		t.Fatalf("the first backlog holds the unplaced issues, got %v", err)
 	}
@@ -178,13 +178,4 @@ func TestBacklogManager_ReplaceKeepsAtLeastOneBacklog(t *testing.T) {
 	if _, err := mgr.ReplaceBacklogs(context.Background(), nil); !errors.Is(err, mwanachamataskmanager.ErrInvalidBacklog) {
 		t.Fatalf("got %v", err)
 	}
-}
-
-func createForBacklogTest(t *testing.T, mgr mwanachamataskmanager.TaskManager, task mwanachamataskmanager.Task) mwanachamataskmanager.Task {
-	t.Helper()
-	out, err := mgr.CreateTask(context.Background(), task)
-	if err != nil {
-		t.Fatalf("CreateTask: %v", err)
-	}
-	return out
 }

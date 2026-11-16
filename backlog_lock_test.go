@@ -21,7 +21,7 @@ func newFileBackedManager(t *testing.T) mwanachamataskmanager.TaskManager {
 	if err != nil {
 		t.Fatalf("gorm.Open: %v", err)
 	}
-	workSpec, _ := specForInstance(t, "spec/examples/work.taskmanager.json", "test")
+	workSpec, _ := specAndTablesForInstance(t, "spec/examples/work.taskmanager.json", "test")
 	if err := spec.Migrate(db, workSpec); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}

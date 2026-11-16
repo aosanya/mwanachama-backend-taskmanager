@@ -1,11 +1,3 @@
-// postgres_integration_test.go exercises TaskManager against a real
-// Postgres database, rather than the in-memory sqlite-backed manager the
-// rest of this package's tests use.
-//
-// Skipped unless POSTGRES_URL is set. The unit tests elsewhere in this
-// package already exhaustively cover TaskManager's business logic; this
-// file's job is narrower — prove the real Postgres wiring (GORM AutoMigrate,
-// the join tables, jsonb array round-trips) works end-to-end.
 package mwanachamataskmanager_test
 
 import (
@@ -48,9 +40,7 @@ func newPostgresTaskManager(t *testing.T) (mwanachamataskmanager.TaskManager, *r
 		t.Fatalf("gorm.Open: %v", err)
 	}
 
-	// A unique-enough prefix per test keeps concurrent -run invocations from
-	// colliding on the same physical tables.
-	workSpec, tables := specForInstance(t, "spec/examples/work.taskmanager.json", "workit")
+	workSpec, tables := specAndTablesForInstance(t, "spec/examples/work.taskmanager.json", "workit")
 	if err := spec.Migrate(db, workSpec); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
@@ -217,9 +207,6 @@ func TestPostgres_ImportProject_EndToEnd(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// depends_on entries are the short (prefix-stripped) id, not the full
-	// task_prefix-qualified name — runImport looks them up in idMap by
-	// shortKey, matching CodeValdWork's original import.go contract.
 	doc := `{
 		"project": "Postgres Import Smoke",
 		"task_prefix": "PGI-",

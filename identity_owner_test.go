@@ -18,7 +18,7 @@ var _ identity.Owner = mwanachamataskmanager.TaskManager(nil)
 func seedOwnedThings(t *testing.T) (mwanachamataskmanager.TaskManager, map[string]string) {
 	t.Helper()
 	ctx := context.Background()
-	mgr, db, tables := newTestManagerWithDB(t, nil)
+	mgr, db, tables := newTestManagerWithTables(t, nil)
 
 	task, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "Draft the minutes"})
 	if err != nil {

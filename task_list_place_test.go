@@ -10,13 +10,13 @@ import (
 
 func TestListTasks_AStaleStoredBacklogIdIsInTheFirstBacklog(t *testing.T) {
 	ctx := context.Background()
-	mgr, db, tables := newTestManagerWithDB(t, nil)
+	mgr, db, tables := newTestManagerWithTables(t, nil)
 	if _, err := mgr.CreateBacklog(ctx, "Release", []string{"Plan", "Ship"}); err != nil {
 		t.Fatalf("CreateBacklog: %v", err)
 	}
-	stale := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "stale id"})
-	empty := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "empty id"})
-	moved := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "moved"})
+	stale := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "stale id"})
+	empty := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "empty id"})
+	moved := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "moved"})
 	if err := db.Table(tables.Tasks).Where("id = ?", stale.ID).Updates(map[string]any{"backlog": "ghost", "step": "x"}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -27,15 +27,15 @@ func TestListTasks_AStaleStoredBacklogIdIsInTheFirstBacklog(t *testing.T) {
 		t.Fatalf("MoveTaskToStep: %v", err)
 	}
 
-	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "backlog"}), "stale id", "empty id")
-	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "Release"}), "moved")
-	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "Release", Step: "ship"}), "moved")
+	wantTitles(t, listTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "backlog"}), "stale id", "empty id")
+	wantTitles(t, listTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "Release"}), "moved")
+	wantTitles(t, listTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "Release", Step: "ship"}), "moved")
 }
 
 func TestListTasks_AStaleIdTaskMatchesTheStepItsStatusNamesAndNoOtherStep(t *testing.T) {
 	ctx := context.Background()
-	mgr, db, tables := newTestManagerWithDB(t, nil)
-	stale := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "stale id"})
+	mgr, db, tables := newTestManagerWithTables(t, nil)
+	stale := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "stale id"})
 	if err := db.Table(tables.Tasks).Where("id = ?", stale.ID).Updates(map[string]any{"backlog": "ghost", "step": "x"}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -47,20 +47,20 @@ func TestListTasks_AStaleIdTaskMatchesTheStepItsStatusNamesAndNoOtherStep(t *tes
 		t.Fatalf("GetTask places it at %q/%q, want backlog/to-do", got.Backlog, got.Step)
 	}
 
-	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "backlog", Step: "To do"}), "stale id")
-	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Step: "To do"}), "stale id")
-	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "backlog", Step: "Doing"}))
+	wantTitles(t, listTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "backlog", Step: "To do"}), "stale id")
+	wantTitles(t, listTitles(t, mgr, mwanachamataskmanager.TaskFilter{Step: "To do"}), "stale id")
+	wantTitles(t, listTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "backlog", Step: "Doing"}))
 }
 
 func TestListTasks_AStaleIdTaskWhoseStatusNoStepNamesIsInTheBacklogAtNoStep(t *testing.T) {
 	ctx := context.Background()
-	mgr, db, tables := newTestManagerWithDB(t, nil)
+	mgr, db, tables := newTestManagerWithTables(t, nil)
 	if _, err := mgr.ReplaceBacklogs(ctx, []models.Backlog{{ID: "backlog", Name: "Backlog", Steps: []models.BacklogStep{
 		{ID: "open", Name: "Open", Statuses: []models.TaskStatus{models.TaskStatusPending}},
 	}}}); err != nil {
 		t.Fatalf("ReplaceBacklogs: %v", err)
 	}
-	stale := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "stale id"})
+	stale := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "stale id"})
 	if err := db.Table(tables.Tasks).Where("id = ?", stale.ID).Updates(map[string]any{"backlog": "ghost", "step": "x", "status": "completed"}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -72,6 +72,6 @@ func TestListTasks_AStaleIdTaskWhoseStatusNoStepNamesIsInTheBacklogAtNoStep(t *t
 		t.Fatalf("GetTask places it at %q/%q, want backlog at no step", got.Backlog, got.Step)
 	}
 
-	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "backlog"}), "stale id")
-	wantFilterTitles(t, filterListTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "backlog", Step: "Open"}))
+	wantTitles(t, listTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "backlog"}), "stale id")
+	wantTitles(t, listTitles(t, mgr, mwanachamataskmanager.TaskFilter{Backlog: "backlog", Step: "Open"}))
 }

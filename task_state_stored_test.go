@@ -19,7 +19,7 @@ func storedStatesFixture(t *testing.T) (mwanachamataskmanager.TaskManager, *gorm
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, _ := specForInstance(t, "spec/examples/work.taskmanager.json", "test")
+	s, _ := specAndTablesForInstance(t, "spec/examples/work.taskmanager.json", "test")
 	if err := spec.Migrate(db, s); err != nil {
 		t.Fatal(err)
 	}

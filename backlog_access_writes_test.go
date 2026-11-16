@@ -35,7 +35,7 @@ func restrictedManager(t *testing.T) mwanachamataskmanager.TaskManager {
 
 func softwareTask(t *testing.T, mgr mwanachamataskmanager.TaskManager) mwanachamataskmanager.Task {
 	t.Helper()
-	return createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "in software", Backlog: "software", Step: "open"})
+	return mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "in software", Backlog: "software", Step: "open"})
 }
 
 func wantForbidden(t *testing.T, what string, err error) {
@@ -126,7 +126,7 @@ func TestBacklogWrites_RelationshipsNeedCanMoveOnTheFromIssueAndCanSeeOnTheOther
 	ctx := context.Background()
 	mgr := restrictedManager(t)
 	waiting := softwareTask(t, mgr)
-	hidden := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "hidden"})
+	hidden := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "hidden"})
 	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "see"); err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestBacklogOwnerGroup_ANewBacklogIsSeenByTheOwnerGroupAndNobodyElse(t *test
 
 func TestBacklogAccess_AnIssueWhoseBacklogNoLongerExistsStaysVisibleInTheFirstBacklog(t *testing.T) {
 	ctx := context.Background()
-	mgr, db, tables := newTestManagerWithDB(t, nil)
+	mgr, db, tables := newTestManagerWithTables(t, nil)
 	table := tables.Tasks
 	mgr.UseGroups(groupsOfPeople())
 	mgr.UseGroupExists(knownGroups(ownerGroup, devGroup))
@@ -251,7 +251,7 @@ func TestBacklogAccess_AnIssueWhoseBacklogNoLongerExistsStaysVisibleInTheFirstBa
 	if err := mgr.SetBacklogOwnerGroup(ctx, ownerGroup); err != nil {
 		t.Fatal(err)
 	}
-	stray := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "stray"})
+	stray := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "stray"})
 	if err := db.Table(table).Where("id = ?", stray.ID).Update("backlog", "ghost").Error; err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +281,7 @@ func TestBacklogAccess_GivingToDifferentGroupsAtOnceLosesNoGrant(t *testing.T) {
 		t.Fatal(err)
 	}
 	pool.SetMaxOpenConns(1)
-	workSpec, _ := specForInstance(t, "spec/examples/work.taskmanager.json", "test")
+	workSpec, _ := specAndTablesForInstance(t, "spec/examples/work.taskmanager.json", "test")
 	if err := spec.Migrate(db, workSpec); err != nil {
 		t.Fatal(err)
 	}

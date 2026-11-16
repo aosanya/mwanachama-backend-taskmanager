@@ -14,7 +14,7 @@ func TestListTasks_OffsetPagesTwelveHundredIssuesOfOneBucket(t *testing.T) {
 	mgr := newTestManager(t)
 	const total = 1200
 	for i := 0; i < total; i++ {
-		createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: fmt.Sprintf("issue %04d", i), Priority: mwanachamataskmanager.TaskPriorityHigh})
+		mustCreate(t, mgr, mwanachamataskmanager.Task{Title: fmt.Sprintf("issue %04d", i), Priority: mwanachamataskmanager.TaskPriorityHigh})
 	}
 	seen := map[string]bool{}
 	for offset := 0; ; offset += 500 {
@@ -44,7 +44,7 @@ func TestListTasks_OffsetKeepsRankOrderAcrossPages(t *testing.T) {
 	ctx := context.Background()
 	mgr := newTestManager(t)
 	for i := 0; i < 7; i++ {
-		createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: fmt.Sprintf("issue %d", i)})
+		mustCreate(t, mgr, mwanachamataskmanager.Task{Title: fmt.Sprintf("issue %d", i)})
 	}
 	first, err := mgr.ListTasks(ctx, mwanachamataskmanager.TaskFilter{Limit: 3})
 	if err != nil {

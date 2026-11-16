@@ -28,7 +28,7 @@ func twoStepBacklog() []models.Backlog {
 func TestBacklogConsistency_AStatusChangeMovesAPlacedTaskToTheStepThatNamesTheStatus(t *testing.T) {
 	ctx := context.Background()
 	mgr := newTestManager(t)
-	task := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "a"})
+	task := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "a"})
 	if _, err := mgr.MoveTaskToStep(ctx, task.ID, "backlog", "doing"); err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestBacklogConsistency_AStatusNoStepNamesLeavesTheTaskAtNoStepButInItsBackl
 	if _, err := mgr.ReplaceBacklogs(ctx, twoStepBacklog()); err != nil {
 		t.Fatal(err)
 	}
-	task := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "a"})
+	task := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "a"})
 	if _, err := mgr.MoveTaskToStep(ctx, task.ID, "work", "open"); err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestBacklogConsistency_AStepThatNamesNoStatusKeepsTheTaskWhenItsStatusChang
 	if _, err := mgr.CreateBacklog(ctx, "Research", []string{"Ideas", "Reading"}); err != nil {
 		t.Fatal(err)
 	}
-	task := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "a"})
+	task := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "a"})
 	if _, err := mgr.MoveTaskToStep(ctx, task.ID, "research", "reading"); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestBacklogConsistency_AStepThatNamesNoStatusKeepsTheTaskWhenItsStatusChang
 func TestBacklogConsistency_ReorderingTheFirstBacklogKeepsUnplacedIssuesWhereTheyWere(t *testing.T) {
 	ctx := context.Background()
 	mgr := newTestManager(t)
-	unplaced := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "loaded from a board"})
+	unplaced := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "loaded from a board"})
 	research := models.Backlog{ID: "research", Name: "Research", Steps: []models.BacklogStep{{ID: "ideas", Name: "Ideas"}}}
 	next := append([]models.Backlog{research}, models.DefaultBacklogs()...)
 	if _, err := mgr.ReplaceBacklogs(ctx, next); err != nil {
@@ -109,7 +109,7 @@ func TestBacklogConsistency_ReorderingTheFirstBacklogKeepsUnplacedIssuesWhereThe
 func TestBacklogConsistency_ClearingAStepsStatusesKeepsUnplacedIssuesInThatStep(t *testing.T) {
 	ctx := context.Background()
 	mgr := newTestManager(t)
-	unplaced := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "a"})
+	unplaced := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "a"})
 	next := models.DefaultBacklogs()
 	next[0].Steps[0].Statuses = nil
 	if _, err := mgr.ReplaceBacklogs(ctx, next); err != nil {
@@ -125,9 +125,9 @@ func TestBacklogConsistency_ClearingAStepsStatusesKeepsUnplacedIssuesInThatStep(
 
 func TestBacklogConsistency_ATaskNamingAnUnknownBacklogReadsAsUnplacedAndDoesNotBlockSaves(t *testing.T) {
 	ctx := context.Background()
-	mgr, db, tables := newTestManagerWithDB(t, nil)
-	task := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "a"})
-	if err := db.Table(tables.Tasks).Where("id = ?", task.ID).Updates(map[string]any{"backlog": "ghost", "step": "x"}).Error; err != nil {
+	mgr, db, table := newTestManagerWithDB(t)
+	task := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "a"})
+	if err := db.Table(table).Where("id = ?", task.ID).Updates(map[string]any{"backlog": "ghost", "step": "x"}).Error; err != nil {
 		t.Fatal(err)
 	}
 	if backlog, step := placeOf(t, mgr, task.ID); backlog != "backlog" || step != "to-do" {
@@ -141,7 +141,7 @@ func TestBacklogConsistency_ATaskNamingAnUnknownBacklogReadsAsUnplacedAndDoesNot
 func TestBacklogConsistency_AFailedMoveLeavesThePlaceAndTheStatusAsTheyWere(t *testing.T) {
 	ctx := context.Background()
 	mgr := newTestManager(t)
-	task := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "a"})
+	task := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "a"})
 	if _, err := mgr.MoveTaskToState(ctx, task.ID, "Done"); err != nil {
 		t.Fatal(err)
 	}

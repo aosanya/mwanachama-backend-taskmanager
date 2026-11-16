@@ -35,7 +35,7 @@ func sharedCacheManager(t *testing.T, name string) (mwanachamataskmanager.TaskMa
 	sqlDB.SetMaxOpenConns(4)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 
-	workSpec, tables := specForInstance(t, "spec/examples/work.taskmanager.json", name)
+	workSpec, tables := specAndTablesForInstance(t, "spec/examples/work.taskmanager.json", name)
 	if err := spec.Migrate(db, workSpec); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}

@@ -229,7 +229,7 @@ func TestStopWorkflowRun_NoWorkflowToStartAgainStopsNothing(t *testing.T) {
 }
 
 func TestUnderWayIndex_IsOneIndexOnlyTheRunsStillGoing(t *testing.T) {
-	_, db, tables := newTestManagerWithDB(t, nil)
+	_, db, tables := newTestManagerWithTables(t, nil)
 	var defs []string
 	if err := db.Raw(`select sql from sqlite_master where type='index' and tbl_name = ? and sql like '%under_way_workflow%'`, tables.WorkflowRuns).Scan(&defs).Error; err != nil {
 		t.Fatal(err)
@@ -271,7 +271,7 @@ func TestUnderWayIndex_NameFitsUnderAnAgencyInstanceIDAndItsTestTwin(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	agencySpec, _ := specForInstance(t, "spec/examples/work.taskmanager.json", "agyd1662f9a")
+	agencySpec, _ := specAndTablesForInstance(t, "spec/examples/work.taskmanager.json", "agyd1662f9a")
 	if err := spec.Migrate(db, agencySpec); err != nil {
 		t.Fatalf("Migrate under a real agency instance id: %v", err)
 	}

@@ -50,7 +50,7 @@ func TestBacklogs_AStepHoldingIssuesCannotBeRemoved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateBacklog: %v", err)
 	}
-	issue := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "write the loader"})
+	issue := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "write the loader"})
 	if _, err := mgr.MoveTaskToStep(ctx, issue.ID, made.ID, "build"); err != nil {
 		t.Fatalf("MoveTaskToStep: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestBacklogs_ABacklogHoldingIssuesCannotBeDeleted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateBacklog: %v", err)
 	}
-	issue := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "write the loader"})
+	issue := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "write the loader"})
 	if _, err := mgr.MoveTaskToStep(ctx, issue.ID, made.ID, "ideas"); err != nil {
 		t.Fatalf("MoveTaskToStep: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestBacklogs_ReplaceCannotSidestepTheRefusals(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateBacklog: %v", err)
 	}
-	issue := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "write the loader"})
+	issue := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "write the loader"})
 	if _, err := mgr.MoveTaskToStep(ctx, issue.ID, made.ID, "build"); err != nil {
 		t.Fatalf("MoveTaskToStep: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestBacklogs_AnIssueIsInOneBacklogAtOneStep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateBacklog: %v", err)
 	}
-	issue := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "one place only"})
+	issue := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "one place only"})
 
 	if _, err := mgr.MoveTaskToStep(ctx, issue.ID, a.ID, "build"); err != nil {
 		t.Fatalf("move into %s: %v", a.ID, err)
@@ -160,7 +160,7 @@ func TestBacklogs_MovingToAStepThatDoesNotExistIsRefused(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateBacklog: %v", err)
 	}
-	issue := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "stay put"})
+	issue := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "stay put"})
 	if _, err := mgr.MoveTaskToStep(ctx, issue.ID, made.ID, "build"); err != nil {
 		t.Fatalf("MoveTaskToStep: %v", err)
 	}

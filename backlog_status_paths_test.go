@@ -10,7 +10,7 @@ import (
 
 func placedAt(t *testing.T, mgr mwanachamataskmanager.TaskManager, title, step string) mwanachamataskmanager.Task {
 	t.Helper()
-	task := createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: title})
+	task := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: title})
 	if _, err := mgr.MoveTaskToStep(context.Background(), task.ID, "backlog", step); err != nil {
 		t.Fatalf("MoveTaskToStep %s: %v", step, err)
 	}
@@ -30,7 +30,7 @@ func assignedAndWaiting(t *testing.T, mgr mwanachamataskmanager.TaskManager) (wa
 	if _, err := mgr.UpsertAgent(ctx, mwanachamataskmanager.Agent{AgentID: "worker"}); err != nil {
 		t.Fatal(err)
 	}
-	gate = createForBacklogTest(t, mgr, mwanachamataskmanager.Task{Title: "gate"})
+	gate = mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "gate"})
 	waiting = placedAt(t, mgr, "waits", "to-do")
 	if _, err := mgr.CreateRelationship(ctx, mwanachamataskmanager.Relationship{
 		Label: mwanachamataskmanager.RelLabelDependsOn, FromID: waiting.ID, ToID: gate.ID,

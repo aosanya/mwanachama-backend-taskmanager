@@ -9,7 +9,7 @@ import (
 
 func completeAt(t *testing.T, mgr mwanachamataskmanager.TaskManager, stamp func(id, at string), title, at string) mwanachamataskmanager.Task {
 	t.Helper()
-	created := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: title})
+	created := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: title})
 	if _, err := mgr.MoveTaskToStep(context.Background(), created.ID, "backlog", "doing"); err != nil {
 		t.Fatalf("move %q to doing: %v", title, err)
 	}
@@ -50,7 +50,7 @@ func wantOrder(t *testing.T, got []string, want ...string) {
 }
 
 func TestListTasks_TheDoneStepListsTheLatestCompletionFirst(t *testing.T) {
-	mgr, db, tables := newTestManagerWithDB(t, nil)
+	mgr, db, tables := newTestManagerWithTables(t, nil)
 	stamp := func(id, at string) {
 		if err := db.Table(tables.Tasks).Where("id = ?", id).UpdateColumn("completed_at", at).Error; err != nil {
 			t.Fatal(err)
@@ -66,7 +66,7 @@ func TestListTasks_TheDoneStepListsTheLatestCompletionFirst(t *testing.T) {
 
 func TestListTasks_AnIssueThatReturnsToDoneIsPlacedByItsLatestCompletion(t *testing.T) {
 	ctx := context.Background()
-	mgr, db, tables := newTestManagerWithDB(t, nil)
+	mgr, db, tables := newTestManagerWithTables(t, nil)
 	stamp := func(id, at string) {
 		if err := db.Table(tables.Tasks).Where("id = ?", id).UpdateColumn("completed_at", at).Error; err != nil {
 			t.Fatal(err)
@@ -88,8 +88,8 @@ func TestListTasks_AnIssueThatReturnsToDoneIsPlacedByItsLatestCompletion(t *test
 func TestListTasks_EveryOtherStepKeepsRankOrder(t *testing.T) {
 	ctx := context.Background()
 	mgr := newTestManager(t)
-	low := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "low rank", Rank: 10})
-	high := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "high rank", Rank: 20})
+	low := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "low rank", Rank: 10})
+	high := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "high rank", Rank: 20})
 	for _, id := range []string{high.ID, low.ID} {
 		if _, err := mgr.MoveTaskToStep(ctx, id, "backlog", "doing"); err != nil {
 			t.Fatalf("move to doing: %v", err)

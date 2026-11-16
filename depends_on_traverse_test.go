@@ -38,9 +38,9 @@ func traverseOverHTTP(t *testing.T, mgr mwanachamataskmanager.TaskManager, verte
 
 func TestTraverse_DependsOnListsWhatATaskWaitsOn(t *testing.T) {
 	mgr := newTestManager(t)
-	waiting := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "waiting"})
-	first := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "first"})
-	second := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "second"})
+	waiting := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "waiting"})
+	first := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "first"})
+	second := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "second"})
 	linkDependsOn(t, mgr, waiting, first)
 	linkDependsOn(t, mgr, waiting, second)
 
@@ -66,8 +66,8 @@ func TestTraverse_DependsOnListsWhatATaskWaitsOn(t *testing.T) {
 
 func TestTraverse_DependsOnInboundListsWhatWaitsOnATask(t *testing.T) {
 	mgr := newTestManager(t)
-	waiting := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "waiting"})
-	first := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "first"})
+	waiting := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "waiting"})
+	first := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "first"})
 	linkDependsOn(t, mgr, waiting, first)
 
 	edges, err := mgr.TraverseRelationships(context.Background(), first.ID, mwanachamataskmanager.RelLabelDependsOn, mwanachamataskmanager.DirectionInbound)
@@ -81,7 +81,7 @@ func TestTraverse_DependsOnInboundListsWhatWaitsOnATask(t *testing.T) {
 
 func TestTraverse_DependsOnOfATaskWithNoneIsAnEmptyList(t *testing.T) {
 	mgr := newTestManager(t)
-	alone := createFilterTask(t, mgr, mwanachamataskmanager.Task{Title: "alone"})
+	alone := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "alone"})
 
 	code, body := traverseOverHTTP(t, mgr, alone.ID, "outbound")
 	if code != http.StatusOK {

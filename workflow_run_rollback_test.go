@@ -8,8 +8,6 @@ import (
 	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
 )
 
-// helpers -------------------------------------------------------------------
-
 func newManagerWithPublisher(t *testing.T) (mwanachamataskmanager.TaskManager, *recordingPublisher) {
 	t.Helper()
 	pub := &recordingPublisher{}
@@ -54,8 +52,6 @@ func createRunAtStatus(t *testing.T, mgr mwanachamataskmanager.TaskManager, targ
 	}
 	return run
 }
-
-// ── RollbackWorkflowRun ────────────────────────────────────────────────────
 
 func TestRollbackWorkflowRun_FailedRun_ReachesRolledBack(t *testing.T) {
 	ctx := context.Background()
@@ -113,7 +109,7 @@ func TestRollbackWorkflowRun_PendingRun_ReturnsInvalidTransition(t *testing.T) {
 func TestRollbackWorkflowRun_AlreadyRollingBack_ReturnsConflict(t *testing.T) {
 	ctx := context.Background()
 	pub := &recordingPublisher{}
-	mgr, db, tables := newTestManagerWithDB(t, pub)
+	mgr, db, tables := newTestManagerWithTables(t, pub)
 	run := createRunAtStatus(t, mgr, mwanachamataskmanager.WorkflowRunStatusFailed)
 
 	if err := db.Table(tables.WorkflowRuns).Where("id = ?", run.ID).
@@ -136,8 +132,6 @@ func TestRollbackWorkflowRun_NotFound_ReturnsNotFound(t *testing.T) {
 		t.Errorf("err = %v, want ErrWorkflowRunNotFound", err)
 	}
 }
-
-// ── DeleteWorkflowRunArtifacts ─────────────────────────────────────────────
 
 func TestDeleteWorkflowRunArtifacts_ResetsTasksToPendingAndEmitsEvents(t *testing.T) {
 	ctx := context.Background()
@@ -162,7 +156,6 @@ func TestDeleteWorkflowRunArtifacts_ResetsTasksToPendingAndEmitsEvents(t *testin
 		t.Fatalf("RollbackWorkflowRun: %v", err)
 	}
 
-	// Task must still exist, reset to pending with workflow_run_id cleared.
 	after, err := mgr.GetTask(ctx, task.ID)
 	if err != nil {
 		t.Fatalf("GetTask after rollback: %v", err)
@@ -173,7 +166,7 @@ func TestDeleteWorkflowRunArtifacts_ResetsTasksToPendingAndEmitsEvents(t *testin
 	if after.WorkflowRunID != "" {
 		t.Errorf("task.WorkflowRunID = %q, want empty", after.WorkflowRunID)
 	}
-	// work.task.rolled_back event must have fired.
+
 	if !contains(pub.topicList(), mwanachamataskmanager.TopicTaskRolledBack) {
 		t.Errorf("expected work.task.rolled_back event; got %v", pub.topicList())
 	}
@@ -202,8 +195,6 @@ func TestDeleteWorkflowRunArtifacts_ClearsStaleCompletedAt(t *testing.T) {
 		t.Fatalf("LinkTaskToRun: %v", err)
 	}
 
-	// Drive the task to COMPLETED so completed_at gets populated by the
-	// state-machine path (UpdateTask sets it on terminal transitions).
 	task.Status = mwanachamataskmanager.TaskStatusInProgress
 	if task, err = mgr.UpdateTask(ctx, task); err != nil {
 		t.Fatalf("UpdateTask → in_progress: %v", err)
@@ -217,7 +208,6 @@ func TestDeleteWorkflowRunArtifacts_ClearsStaleCompletedAt(t *testing.T) {
 	}
 	staleCompletedAt := task.CompletedAt
 
-	// Now roll back. The task should reset to pending AND completed_at MUST be cleared.
 	if _, err := rollBack(t, mgr, run.ID, ""); err != nil {
 		t.Fatalf("RollbackWorkflowRun: %v", err)
 	}
@@ -252,7 +242,6 @@ func TestDeleteWorkflowRunArtifacts_DeletesTaskTodosForRun(t *testing.T) {
 		t.Fatalf("CreateTask: %v", err)
 	}
 
-	// Seed: two todos for THIS run, one for a different run.
 	mineA, err := mgr.CreateTaskTodo(ctx, mwanachamataskmanager.TaskTodo{
 		Title: "mine-a", Instructions: "do a", ParentTaskID: task.ID,
 		Ordinality: 1, WorkflowRunID: run.ID,
@@ -279,14 +268,13 @@ func TestDeleteWorkflowRunArtifacts_DeletesTaskTodosForRun(t *testing.T) {
 		t.Fatalf("RollbackWorkflowRun: %v", err)
 	}
 
-	// mineA / mineB must be gone.
 	if _, err := mgr.GetTaskTodo(ctx, mineA.ID); !errors.Is(err, mwanachamataskmanager.ErrTaskTodoNotFound) {
 		t.Errorf("expected mineA deleted (ErrTaskTodoNotFound); got err=%v", err)
 	}
 	if _, err := mgr.GetTaskTodo(ctx, mineB.ID); !errors.Is(err, mwanachamataskmanager.ErrTaskTodoNotFound) {
 		t.Errorf("expected mineB deleted (ErrTaskTodoNotFound); got err=%v", err)
 	}
-	// The other-run todo must still exist.
+
 	if _, err := mgr.GetTaskTodo(ctx, other.ID); err != nil {
 		t.Errorf("expected other-run todo to remain; got err=%v", err)
 	}
@@ -315,8 +303,6 @@ func TestDeleteWorkflowRunArtifacts_ForeignRunDependency_ReturnsError(t *testing
 	taskA, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "a", WorkflowRunID: runA.ID})
 	taskB, _ := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "b", WorkflowRunID: runB.ID})
 
-	// taskB (run B) depends on taskA (run A).
-	// Deleting run A's artifacts would break run B's dependency.
 	if _, err := mgr.CreateRelationship(ctx, mwanachamataskmanager.Relationship{
 		Label:  mwanachamataskmanager.RelLabelDependsOn,
 		FromID: taskB.ID,
@@ -329,11 +315,11 @@ func TestDeleteWorkflowRunArtifacts_ForeignRunDependency_ReturnsError(t *testing
 	if !errors.Is(err, mwanachamataskmanager.ErrForeignRunDependency) {
 		t.Errorf("err = %v, want ErrForeignRunDependency", err)
 	}
-	// The refusal leaves the run saying so rather than claiming it rolled back.
+
 	if rolled.Status != mwanachamataskmanager.WorkflowRunStatusRollbackFailed {
 		t.Errorf("status = %s, want rollback_failed", rolled.Status)
 	}
-	// Run A's task keeps its anchor, because nothing was compensated.
+
 	after, err := mgr.GetTask(ctx, taskA.ID)
 	if err != nil {
 		t.Fatalf("GetTask: %v", err)
@@ -417,8 +403,6 @@ func TestRollbackWorkflowRun_ReachesRolledBackThroughTheCoordinator(t *testing.T
 	}
 }
 
-// ── RollbackWorkflowRun event ordering ────────────────────────────────────
-
 func TestRollbackWorkflowRun_PublishesRollingBackBeforeRolledBack(t *testing.T) {
 	ctx := context.Background()
 	mgr, pub := newManagerWithPublisher(t)
@@ -445,8 +429,6 @@ func TestRollbackWorkflowRun_PublishesRollingBackBeforeRolledBack(t *testing.T) 
 		t.Errorf("rolling_back (idx %d) must precede rolled_back (idx %d)", rollingIdx, rolledIdx)
 	}
 }
-
-// ── helpers ─────────────────────────────────────────────────────────────────
 
 func (p *recordingPublisher) topicList() []string {
 	out := make([]string, len(p.full))

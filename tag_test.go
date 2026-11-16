@@ -1,6 +1,3 @@
-// tag_test.go exercises Tag.Code minting: Tags are created on demand via
-// upsertTagByName (called from CreateTask/UpdateTask's setTaskTags), the
-// only real creation path for Tag rows in this package.
 package mwanachamataskmanager_test
 
 import (
@@ -24,7 +21,7 @@ func newTagTestManager(t *testing.T) (mwanachamataskmanager.TaskManager, *gorm.D
 	if err != nil {
 		t.Fatalf("gorm.Open: %v", err)
 	}
-	workSpec, tables := specForInstance(t, "spec/examples/work.taskmanager.json", "test")
+	workSpec, tables := specAndTablesForInstance(t, "spec/examples/work.taskmanager.json", "test")
 	if err := spec.Migrate(db, workSpec); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
@@ -92,7 +89,6 @@ func TestTagCode_UnchangedWhenTagReused(t *testing.T) {
 		t.Fatal("shared tag Code is empty after first create")
 	}
 
-	// A second task reusing the same tag name must not re-mint its Code.
 	if _, err := mgr.CreateTask(ctx, mwanachamataskmanager.Task{Title: "t2", Tags: []string{"shared"}}); err != nil {
 		t.Fatalf("CreateTask 2: %v", err)
 	}
@@ -101,8 +97,6 @@ func TestTagCode_UnchangedWhenTagReused(t *testing.T) {
 		t.Errorf("Code changed after reuse via CreateTask: got %q, want %q", afterSecondCreate.Code, original.Code)
 	}
 
-	// UpdateTask re-running setTaskTags over the same tag name must also
-	// leave the Code untouched.
 	task1.Tags = []string{"shared"}
 	task1.Description = "updated"
 	if _, err := mgr.UpdateTask(ctx, task1); err != nil {
