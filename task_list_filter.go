@@ -19,10 +19,10 @@ var (
 
 func (m *taskManager) narrowList(ctx context.Context, q *gorm.DB, filter TaskFilter, now time.Time) (*gorm.DB, error) {
 	if filter.UntouchedDays < 0 {
-		return nil, fmt.Errorf("%w: untouched_days %d is negative", ErrInvalidFilter, filter.UntouchedDays)
+		return nil, fmt.Errorf("%w: untouched_days %d", ErrInvalidFilter, filter.UntouchedDays)
 	}
 	if filter.Offset < 0 {
-		return nil, fmt.Errorf("%w: offset %d is negative", ErrInvalidFilter, filter.Offset)
+		return nil, fmt.Errorf("%w: offset %d", ErrInvalidFilter, filter.Offset)
 	}
 	if filter.Repo != "" {
 		q = q.Where("project_name = ?", filter.Repo)
@@ -116,6 +116,6 @@ func stepNamed(b models.Backlog, name string) (models.BacklogStep, bool) {
 }
 
 func (m *taskManager) taskIDsWithTag(ctx context.Context, name string) *gorm.DB {
-	tagIDs := m.store.Query(ctx, roleTag).Select("id").Where("lower(name) = ?", strings.ToLower(name))
+	tagIDs := m.store.Query(ctx, roleTag).Select("id").Where("LOWER(name) = ?", strings.ToLower(name))
 	return m.store.Query(ctx, roleTagging).Select("task_id").Where("tag_id IN (?)", tagIDs)
 }

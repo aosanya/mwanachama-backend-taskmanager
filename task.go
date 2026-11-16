@@ -168,6 +168,7 @@ type TaskManager interface {
 	VoteCase(ctx context.Context, caseID, memberID, castBy, memberKind string) (RankedCase, error)
 	TakeBackVote(ctx context.Context, caseID, memberID string) (RankedCase, error)
 	ListCaseVotes(ctx context.Context, caseID string) ([]CaseVote, error)
+	ListCasesByVotes(ctx context.Context, filter CaseFilter) ([]RankedCase, error)
 	AddTaskNote(ctx context.Context, requesterID, taskID, kind, text string, links []string) (TaskNote, error)
 	ListTaskNotes(ctx context.Context, requesterID, taskID string) ([]TaskNote, error)
 	ListTodosOfIssue(ctx context.Context, requesterID, issueID string) (IssueTodoList, error)
@@ -188,7 +189,6 @@ type TaskManager interface {
 	ConfirmTaskReference(ctx context.Context, requesterID, taskID, referenceID string) (TaskReference, error)
 	ListTaskReferences(ctx context.Context, requesterID, taskID string) ([]TaskReference, error)
 	RemoveTaskReference(ctx context.Context, requesterID, taskID, referenceID string) error
-	ListCasesByVotes(ctx context.Context, filter CaseFilter) ([]RankedCase, error)
 
 	GetTaskByName(ctx context.Context, projectName, taskName string) (Task, error)
 

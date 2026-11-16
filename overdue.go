@@ -55,6 +55,10 @@ func (m *taskManager) ListOverdueTasks(ctx context.Context, filter OverdueFilter
 	if err != nil {
 		return nil, fmt.Errorf("ListOverdueTasks: %w", err)
 	}
+	states, err := m.taskStates(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("ListOverdueTasks: %w", err)
+	}
 	scope, err := m.readScope(ctx, filter.RequesterID)
 	if err != nil {
 		return nil, fmt.Errorf("ListOverdueTasks: %w", err)
@@ -63,10 +67,6 @@ func (m *taskManager) ListOverdueTasks(ctx context.Context, filter OverdueFilter
 		return nil, fmt.Errorf("ListOverdueTasks: %w", err)
 	}
 	tasks = scope.keep(tasks)
-	states, err := m.taskStates(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("ListOverdueTasks: %w", err)
-	}
 	cutoff := asOf.Add(-m.overdueGrace)
 	var overdue []OverdueTask
 	dueAt := map[string]time.Time{}
