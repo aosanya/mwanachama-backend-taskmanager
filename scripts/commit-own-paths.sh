@@ -107,6 +107,24 @@ while [ "$attempt" -le 3 ]; do
 
   subject=$(printf '%s\n' "$message" | sed -n '1p')
   if git update-ref -m "commit-own-paths: $subject" "$ref" "$new" "$old" 2>/dev/null; then
+    while IFS= read -r path; do
+      shown=$(git ls-files -s -- ":(literal)$path" | awk '{ print $1, $2, $3 }')
+      before=$(git ls-tree "$old" -- "$path" | awk '{ print $1, $3 }')
+      if [ "$shown" != "$before 0" ]; then
+        if [ -n "$shown" ] || [ -n "$before" ]; then continue; fi
+      fi
+      after=$(git ls-tree "$new" -- "$path" | awk '{ print $1 "," $3 }')
+      tries=1
+      while [ "$tries" -le 5 ]; do
+        if [ -z "$after" ]; then
+          git update-index --force-remove -- "$path" 2>/dev/null && break
+        else
+          git update-index --add --cacheinfo "$after,$path" 2>/dev/null && break
+        fi
+        tries=$((tries + 1))
+        sleep 0.1
+      done
+    done < "$work/changed"
     printf '%s\n' "$new"
     exit 0
   fi

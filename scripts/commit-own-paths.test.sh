@@ -59,20 +59,35 @@ printf 'o\n' > "$repo/other-new.txt"
 commit_own -m "add new" new.txt >/dev/null 2>&1 || fail "adding a named untracked file failed"
 git -C "$repo" cat-file -e HEAD:new.txt || fail "the named untracked file was not committed"
 if git -C "$repo" cat-file -e HEAD:other-new.txt 2>/dev/null; then fail "an untracked file that was not named was committed"; fi
+[ -z "$(git -C "$repo" status --porcelain -- new.txt)" ] || fail "new.txt still shows in git status after its commit"
+[ "$(git -C "$repo" status --porcelain -- other-new.txt)" = "?? other-new.txt" ] || fail "other-new.txt lost its untracked state"
 
 new_repo three
 printf 'a1\n' > "$repo/a.txt"
 printf 'b1\n' > "$repo/b.txt"
 git -C "$repo" add b.txt
-index_before=$(git -C "$repo" ls-files -s | cksum)
+staged_b=$(git -C "$repo" ls-files -s b.txt)
 commit_own -m "change a" a.txt >/dev/null 2>&1 || fail "the commit failed with another path staged"
-[ "$(git -C "$repo" ls-files -s | cksum)" = "$index_before" ] || fail "the real index was touched"
+[ "$(git -C "$repo" ls-files -s b.txt)" = "$staged_b" ] || fail "the staged b.txt entry in the real index was touched"
+git -C "$repo" diff --cached --quiet HEAD -- a.txt || fail "the real index still differs from HEAD for the committed a.txt"
+[ -z "$(git -C "$repo" status --porcelain -- a.txt)" ] || fail "a.txt still shows in git status after its commit"
 git -C "$repo" diff --cached --name-only HEAD | grep -q '^b.txt$' || fail "the staged b.txt was lost from the real index"
 if git -C "$repo" cat-file -e HEAD:b.txt 2>/dev/null && [ "$(git -C "$repo" show HEAD:b.txt)" = "b1" ]; then fail "the staged b.txt was committed"; fi
+
+new_repo three_b
+printf 'a1\n' > "$repo/a.txt"
+printf 'a-staged-by-someone\n' > "$repo/a.txt"
+git -C "$repo" add a.txt
+printf 'a1\n' > "$repo/a.txt"
+staged_a=$(git -C "$repo" ls-files -s a.txt)
+commit_own -m "change a" a.txt >/dev/null 2>&1 || fail "the commit failed when a different version of the path was staged"
+[ "$(git -C "$repo" ls-files -s a.txt)" = "$staged_a" ] || fail "a different staged version of the named path was overwritten in the real index"
 
 new_repo four
 rm "$repo/a.txt"
 commit_own -m "remove a" a.txt >/dev/null 2>&1 || fail "committing the removal of a named file failed"
+[ -z "$(git -C "$repo" ls-files -- a.txt)" ] || fail "the removed a.txt is still in the real index"
+[ -z "$(git -C "$repo" status --porcelain -- a.txt)" ] || fail "a.txt still shows in git status after its removal"
 [ "$(changed_in_head)" = "$(printf 'D\ta.txt')" ] || fail "the removal commit touched more than a.txt: $(changed_in_head)"
 
 new_repo five
