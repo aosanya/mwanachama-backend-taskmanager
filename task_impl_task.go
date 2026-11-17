@@ -1,3 +1,4 @@
+// task_impl_task.go — core Task CRUD implementation for [taskManager].
 package mwanachamataskmanager
 
 import (
@@ -36,6 +37,9 @@ func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
 	if err := checkEffort(task.Effort); err != nil {
 		return Task{}, fmt.Errorf("CreateTask: %w", err)
 	}
+	if task.Files, err = checkFiles(task.Files); err != nil {
+		return Task{}, fmt.Errorf("CreateTask: %w", err)
+	}
 	task.CompletedAt = ""
 	if task.Rank <= 0 {
 		if task.Rank, err = m.nextRank(ctx); err != nil {
@@ -70,6 +74,7 @@ func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
 	return out, nil
 }
 
+// GetTask reads a single Task row.
 func (m *taskManager) GetTask(ctx context.Context, taskID string) (Task, error) {
 	var t Task
 	q := m.store.Query(ctx, roleTask).Where("id = ? AND deleted = ?", taskID, false)
@@ -91,6 +96,12 @@ func (m *taskManager) GetTask(ctx context.Context, taskID string) (Task, error) 
 	return t, nil
 }
 
+// UpdateTask validates the requested status transition then patches the
+// stored row.
+//
+// The pending → in_progress transition is additionally gated by the blocker
+// rule: any inbound `blocks` edge whose source task has not reached a
+// terminal status returns a *BlockedError listing the offending blocker task IDs.
 func (m *taskManager) UpdateTask(ctx context.Context, task Task) (Task, error) {
 	return m.updateTask(ctx, task, true)
 }
@@ -104,6 +115,12 @@ func (m *taskManager) updateTask(ctx context.Context, task Task, replace bool) (
 		task.Effort = current.Effort
 	}
 	if err := checkEffort(task.Effort); err != nil {
+		return Task{}, fmt.Errorf("UpdateTask: %w", err)
+	}
+	if task.Files == nil {
+		task.Files = current.Files
+	}
+	if task.Files, err = checkFiles(task.Files); err != nil {
 		return Task{}, fmt.Errorf("UpdateTask: %w", err)
 	}
 	if current.Status != task.Status && !current.Status.CanTransitionTo(task.Status) {
@@ -212,6 +229,7 @@ func (m *taskManager) announceStatusChange(ctx context.Context, out Task, from T
 	}
 }
 
+// DeleteTask soft-deletes the Task row.
 func (m *taskManager) DeleteTask(ctx context.Context, taskID string) error {
 	if _, err := m.GetTask(ctx, taskID); err != nil {
 		return err
@@ -267,6 +285,9 @@ func (m *taskManager) ListTasks(ctx context.Context, filter TaskFilter) ([]Task,
 	return tasks, nil
 }
 
+// loadTagNames returns the names of every Tag linked to taskID via has_tag.
+// Errors are silently swallowed — a missing or unreadable tag is omitted
+// rather than failing the parent call.
 func (m *taskManager) loadTagNames(ctx context.Context, taskID string) []string {
 	var tagIDs []string
 	if err := m.store.Query(ctx, roleTagging).Where("task_id = ?", taskID).Pluck("tag_id", &tagIDs).Error; err != nil || len(tagIDs) == 0 {
@@ -279,6 +300,8 @@ func (m *taskManager) loadTagNames(ctx context.Context, taskID string) []string 
 	return names
 }
 
+// setTaskTags replaces taskID's has_tag edges with one per name in tagNames,
+// upserting each Tag by its unique Name.
 func (m *taskManager) setTaskTags(ctx context.Context, taskID string, tagNames []string) error {
 	if err := m.store.Query(ctx, roleTagging).Where("task_id = ?", taskID).Delete(nil).Error; err != nil {
 		return fmt.Errorf("setTaskTags: clear: %w", err)
@@ -298,6 +321,9 @@ func (m *taskManager) setTaskTags(ctx context.Context, taskID string, tagNames [
 	return nil
 }
 
+// upsertTagByName finds or creates a Tag row by its unique Name and returns
+// its ID. A newly created row is minted a Code inside the same transaction
+// as its insert; an existing row's Code is never touched.
 func (m *taskManager) upsertTagByName(ctx context.Context, name string) (string, error) {
 	var found Tag
 	q := m.store.Query(ctx, roleTag).Where("name = ?", name)
@@ -334,6 +360,9 @@ func (m *taskManager) upsertTagByName(ctx context.Context, name string) (string,
 	return tag.ID, nil
 }
 
+// publish emits an event via the optional Publisher. A nil publisher is
+// silently skipped; errors are swallowed — events are best-effort and must
+// not fail the originating operation.
 func (m *taskManager) publish(ctx context.Context, topic string, payload any) {
 	log.Printf("mwanachamataskmanager: publish: topic=%q payloadType=%T publisherNil=%v payload=%+v",
 		topic, payload, m.publisher == nil, payload)
@@ -343,6 +372,8 @@ func (m *taskManager) publish(ctx context.Context, topic string, payload any) {
 	_ = m.publisher.Publish(ctx, topic, payload)
 }
 
+// isTerminalStatus reports whether the status is one of the terminal
+// lifecycle states (completed, failed, cancelled).
 func isTerminalStatus(s TaskStatus) bool {
 	switch s {
 	case TaskStatusCompleted, TaskStatusFailed, TaskStatusCancelled:
@@ -352,6 +383,9 @@ func isTerminalStatus(s TaskStatus) bool {
 	}
 }
 
+// nonStatusChangedFields lists the mutable Task property names that differ
+// between before and after, excluding Status (reported separately via
+// [TopicTaskStatusChanged]). Returns nil when nothing non-status differs.
 func nonStatusChangedFields(before, after Task) []string {
 	var out []string
 	if before.Description != after.Description {
@@ -375,9 +409,14 @@ func nonStatusChangedFields(before, after Task) []string {
 	if before.Context != after.Context {
 		out = append(out, "context")
 	}
+	if !stringSlicesEqual(before.Files, after.Files) {
+		out = append(out, "files")
+	}
 	return out
 }
 
+// stringSlicesEqual reports whether two string slices have identical
+// length and elements in order.
 func stringSlicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -390,6 +429,8 @@ func stringSlicesEqual(a, b []string) bool {
 	return true
 }
 
+// findActiveBlockers returns the IDs of tasks that block taskID via inbound
+// `blocks` edges and are themselves still non-terminal.
 func (m *taskManager) findActiveBlockers(ctx context.Context, taskID string) ([]string, error) {
 	edges, err := m.TraverseRelationships(ctx, taskID, RelLabelBlocks, DirectionInbound)
 	if err != nil {

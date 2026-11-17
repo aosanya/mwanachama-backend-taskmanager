@@ -36,6 +36,7 @@ var operationsNotBoundToABacklog = map[string]bool{
 	"confirm_task_reference":  true,
 	"remove_task_reference":   true,
 	"set_worker_caps_default": true,
+	"claim_next":              true,
 }
 
 var readsSentAsPost = map[string]bool{
@@ -90,6 +91,7 @@ func writesOnAnIssue(f *moreWritesFixture, other string) map[string]probeCall {
 		"patch_task":               {"PATCH", issue, map[string]any{"title": "patched"}},
 		"move_task_to_state":       {"POST", issue + "/move", map[string]string{"state": "Done"}},
 		"move_task_to_step":        {"POST", issue + "/move-to-step", map[string]string{"backlog": f.docs, "step": "done"}},
+		"claim_task":               {"POST", issue + "/claim", nil},
 		"place_task":               {"POST", issue + "/place", map[string]string{"after": other}},
 		"delete_task":              {"DELETE", issue, nil},
 		"unblock_task":             {"POST", issue + "/unblock", map[string]any{"note": "go"}},
@@ -111,6 +113,8 @@ func writesOnAnIssue(f *moreWritesFixture, other string) map[string]probeCall {
 		"set_task_caps":            {"PUT", issue + "/caps", map[string]any{"input_tokens": 5}},
 		"clear_task_caps":          {"DELETE", issue + "/caps", nil},
 		"write_task_usage":         {"PUT", issue + "/usage", map[string]any{"input_tokens": 5}},
+		"release_task":             {"POST", issue + "/release", map[string]any{"mode": "sinbin", "reason": "stopped"}},
+		"heartbeat":                {"POST", issue + "/heartbeat", map[string]any{"agent": "worker"}},
 		"generate_tasks":           {"POST", "/generated-tasks", map[string]any{"run": "r1", "template": map[string]any{"title": "per subject"}, "subjects": []string{"s1"}}},
 	}
 }

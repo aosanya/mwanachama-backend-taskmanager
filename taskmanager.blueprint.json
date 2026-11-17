@@ -69,6 +69,11 @@
           "description": "The deadline. Empty when there is none."
         },
         {
+          "name": "lease_until",
+          "type": "timestamp",
+          "description": "When the lease of the agent that took this issue runs out; empty when no lease is held. An issue still In Progress past it goes back to To do."
+        },
+        {
           "name": "tags",
           "type": "json",
           "description": "The labels attached to this task, denormalised from the tagging rows so a listing never joins. The tagging rows remain the authority."
@@ -82,6 +87,11 @@
           "name": "context",
           "type": "text",
           "description": "The working memory an agent carries between attempts at this task."
+        },
+        {
+          "name": "files",
+          "type": "json",
+          "description": "The paths this issue will touch, a list of strings, each relative to its repo and optionally prefixed with the repo name and a colon; a trailing slash means everything under that folder. Empty when none are named."
         },
         {
           "name": "created_at",
@@ -358,6 +368,16 @@
           "name": "blocked_reason",
           "type": "text",
           "description": "Why a person marked this step blocked by hand. Empty unless the step is blocked, and cleared when the block is lifted."
+        },
+        {
+          "name": "started_at",
+          "type": "string",
+          "description": "When the step first became In progress, as an RFC 3339 time. Empty until then, and cleared when the step is reopened to To do."
+        },
+        {
+          "name": "done_at",
+          "type": "string",
+          "description": "When the step became Done, as an RFC 3339 time. Empty unless the step is Done."
         },
         {
           "name": "status",

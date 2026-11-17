@@ -41,6 +41,13 @@ func (m *taskManager) narrowList(ctx context.Context, q *gorm.DB, filter TaskFil
 		}
 		q = q.Where("id IN (?)", m.taskIDsWithTag(ctx, tag))
 	}
+	q, err = m.narrowOrchestration(ctx, q, filter.Orchestration())
+	if err != nil {
+		return nil, err
+	}
+	if lead := sortOrders[filter.Sort]; lead != "" {
+		q = q.Order(lead)
+	}
 	if filter.UntouchedDays > 0 {
 		cutoff := now.AddDate(0, 0, -filter.UntouchedDays).Format(time.RFC3339)
 		q = q.Where("updated_at < ?", cutoff)

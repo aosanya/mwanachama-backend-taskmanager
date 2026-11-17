@@ -1,13 +1,26 @@
 package models
 
 type PendingFilter struct {
-	Tag      TagList      `query:"tag"`
-	Backlog  string       `query:"backlog"`
-	Step     string       `query:"step"`
-	Priority TaskPriority `query:"priority"`
-	Q        string       `query:"q"`
-	Limit    int          `query:"limit"`
-	Offset   int          `query:"offset"`
+	Tag          TagList      `query:"tag"`
+	Backlog      string       `query:"backlog"`
+	Step         string       `query:"step"`
+	Priority     TaskPriority `query:"priority"`
+	Q            string       `query:"q"`
+	Limit        int          `query:"limit"`
+	Offset       int          `query:"offset"`
+	Assignee     string       `query:"assignee"`
+	Unassigned   bool         `query:"unassigned"`
+	Blocked      *bool        `query:"blocked"`
+	Waiting      *bool        `query:"waiting"`
+	Sinbin       *bool        `query:"sinbin"`
+	HasTodos     *bool        `query:"has_todos"`
+	TodosOpen    bool         `query:"todos_open"`
+	Effort       string       `query:"effort"`
+	CreatedSince string       `query:"created_since"`
+	UpdatedSince string       `query:"updated_since"`
+	HasFiles     *bool        `query:"has_files"`
+	IDs          []string     `query:"ids"`
+	Sort         string       `query:"sort"`
 
 	IncludeClosed bool `query:"include_closed"`
 

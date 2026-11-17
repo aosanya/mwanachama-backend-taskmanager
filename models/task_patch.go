@@ -12,4 +12,5 @@ type TaskPatch struct {
 	DueAt          *string       `json:"due_at,omitempty"`
 	EstimatedHours *float64      `json:"estimated_hours,omitempty"`
 	Context        *string       `json:"context,omitempty"`
+	Files          *FileList     `json:"files,omitempty"`
 }

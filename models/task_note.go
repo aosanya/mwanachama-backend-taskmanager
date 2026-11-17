@@ -10,3 +10,12 @@ type TaskNote struct {
 	Automatic bool     `json:"automatic,omitempty"`
 	CreatedAt string   `json:"created_at"`
 }
+
+type TaskNoteFilter struct {
+	After string  `query:"after"`
+	Kind  TagList `query:"kind"`
+	Limit int     `query:"limit,min=1"`
+
+	RequesterID string `query:"-" json:"-"`
+	TaskID      string `query:"-" json:"-"`
+}

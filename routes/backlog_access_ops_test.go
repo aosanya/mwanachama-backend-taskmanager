@@ -26,7 +26,12 @@ type accessHub struct {
 
 func newAccessHub(t *testing.T, groupsOf map[string][]string) *accessHub {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	return newAccessHubOn(t, ":memory:", groupsOf)
+}
+
+func newAccessHubOn(t *testing.T, dsn string, groupsOf map[string][]string) *accessHub {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}

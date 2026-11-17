@@ -12,26 +12,48 @@ import (
 	"github.com/aosanya/mwanachama-backend-shared/spec"
 )
 
+// TaskManager is the primary interface for task lifecycle management.
+// Implementations must be safe for concurrent use.
 type TaskManager interface {
 	identity.Owner
 
 	ForRun(runID string) (TaskManager, error)
 
+	// CreateTask creates a new task.
+	// The task is assigned a server-generated ID and starts in [TaskStatusPending].
 	CreateTask(ctx context.Context, task Task) (Task, error)
 
+	// GetTask retrieves a single task by its ID.
+	// Returns [ErrTaskNotFound] if no matching task exists.
 	GetTask(ctx context.Context, taskID string) (Task, error)
 
+	// UpdateTask replaces the mutable fields of an existing task.
+	// Status transitions are validated — returns [ErrInvalidStatusTransition]
+	// if the new status is not reachable from the current status.
+	// Returns [ErrTaskNotFound] if the task does not exist.
 	UpdateTask(ctx context.Context, task Task) (Task, error)
 
+	// DeleteTask soft-deletes a task.
+	// Returns [ErrTaskNotFound] if the task does not exist.
 	DeleteTask(ctx context.Context, taskID string) error
 
+	// ListTasks returns all non-deleted tasks that match the filter. Returns
+	// an empty slice (not an error) when no tasks match.
 	ListTasks(ctx context.Context, filter TaskFilter) ([]Task, error)
 
 	ListOverdueTasks(ctx context.Context, filter OverdueFilter) ([]OverdueTask, error)
 
 	PendingTasks(ctx context.Context, filter PendingFilter) (PendingTasks, error)
 
+	PendingTodos(ctx context.Context, filter PendingTodosFilter) (PendingTodos, error)
+	TimedOut(ctx context.Context, filter TimedOutFilter) (TimedOut, error)
+
+	BoardSnapshot(ctx context.Context, filter BoardSnapshotFilter) (BoardSnapshot, error)
+
 	FindTasks(ctx context.Context, filter FindFilter) (FoundTasks, error)
+
+	NextReady(ctx context.Context, filter NextReadyFilter) (NextReady, error)
+	ReleaseTaskAs(ctx context.Context, requesterID string, req ReleaseTask) (TaskReleased, error)
 
 	ListTaskStates(ctx context.Context) (TaskStateList, error)
 
@@ -72,8 +94,12 @@ type TaskManager interface {
 	ListTasksForRunFor(ctx context.Context, requesterID, runID string) ([]Task, error)
 	ListCaseTasksFor(ctx context.Context, requesterID, caseID string) ([]Task, error)
 	TraverseRelationshipsFor(ctx context.Context, requesterID, vertexID, label string, dir Direction) ([]Relationship, error)
+	TaskDependenciesFor(ctx context.Context, requesterID, taskID string) (TaskDependencies, error)
+	ClaimTaskAs(ctx context.Context, requesterID, taskID string) (TaskClaim, error)
 	ListBacklogAccess(ctx context.Context, backlogID string) (BacklogAccess, error)
 	GiveBacklogAccess(ctx context.Context, backlogID, groupID, level string) (BacklogAccess, error)
+	ClaimNext(ctx context.Context, requesterID string, req ClaimNextRequest) (NextClaim, error)
+	Heartbeat(ctx context.Context, requesterID string, req HeartbeatRequest) (LeaseRenewed, error)
 	TakeBacklogAccess(ctx context.Context, backlogID, groupID string) (BacklogAccess, error)
 	SetBacklogOwnerGroup(ctx context.Context, groupID string) error
 	UseGroups(g Groups)
@@ -104,20 +130,66 @@ type TaskManager interface {
 
 	PlaceTask(ctx context.Context, taskID, afterID, beforeID string) (Task, error)
 
+	// CreateRelationship creates a directed edge between two Work vertices.
+	// rel.Label must be one of the RelLabel* constants and the (FromID, ToID)
+	// vertex types must match the label's whitelist entry, otherwise
+	// [ErrInvalidRelationship] is returned.
+	//
+	// Both endpoints must already exist. A missing endpoint returns
+	// [ErrTaskNotFound], [ErrAgentNotFound], or [ErrProjectNotFound]
+	// depending on the label's expected vertex type.
+	//
+	// Re-creating an existing (FromID, ToID, Label) edge is idempotent — the
+	// existing edge is returned with no error and no second edge is written.
 	CreateRelationship(ctx context.Context, rel Relationship) (Relationship, error)
 
+	// DeleteRelationship removes a single edge identified by the
+	// (fromID, toID, label) triple. Returns [ErrRelationshipNotFound] if no
+	// such edge exists.
 	DeleteRelationship(ctx context.Context, fromID, toID, label string) error
 
+	// TraverseRelationships returns the single-hop edges incident on
+	// vertexID with the given label and direction.
+	//
+	// Returns an empty slice (not an error) when no edges match.
 	TraverseRelationships(ctx context.Context, vertexID, label string, dir Direction) ([]Relationship, error)
 
+	// UpsertAgent creates or merges an Agent vertex keyed by the
+	// (agent.AgentID) natural key. On the merge branch, display_name
+	// and capability are updated; agent_id is immutable.
 	UpsertAgent(ctx context.Context, agent Agent) (Agent, error)
 
+	// GetAgent retrieves a single Agent by either its entity ID or its
+	// AgentID slug (e.g. "developer-01"). ID lookup is tried first; on
+	// NotFound it falls back to a slug match. Returns [ErrAgentNotFound] if
+	// neither form resolves.
 	GetAgent(ctx context.Context, idOrSlug string) (Agent, error)
 
+	// GetAgentByAgentID retrieves an Agent by its external slug
+	// (the same `agent_id` UpsertAgent uses as the natural key). Returns
+	// [ErrAgentNotFound] when no Agent has the slug.
 	GetAgentByAgentID(ctx context.Context, agentIDSlug string) (Agent, error)
 
+	// ListAgents returns all non-deleted Agents. Returns an empty slice (not
+	// an error) when none exist.
 	ListAgents(ctx context.Context) ([]Agent, error)
 
+	// AssignTask sets the assignee of a Task by writing the `assigned_to`
+	// edge (Task → Agent). Replaces any prior assignee — a Task has at
+	// most one outbound `assigned_to` edge.
+	//
+	// workflowRunID propagates the WorkflowRun anchor from the inbound event
+	// payload onto the Task per the chain-through rule. Semantics when
+	// non-empty:
+	//   • If the Task's stored WorkflowRunID is empty, it is set to the new
+	//     value AND the started_task edge from run→task is written.
+	//   • If the stored WorkflowRunID equals the new value, it is a no-op.
+	//   • If the stored WorkflowRunID differs, returns [ErrWorkflowRunMismatch]
+	//     — a task belonging to two runs breaks the rollback invariant.
+	// Empty workflowRunID is permitted and preserves the existing value.
+	//
+	// Returns [ErrTaskNotFound] or [ErrAgentNotFound] when the respective
+	// vertex is missing.
 	AssignTask(ctx context.Context, taskID, agentID, workflowRunID string) error
 
 	UnassignTask(ctx context.Context, taskID string) error
@@ -136,26 +208,56 @@ type TaskManager interface {
 	ListTaskAssignments(ctx context.Context, taskID string) ([]Assignment, error)
 	ListHeldTasks(ctx context.Context, query HolderTasksQuery) ([]Task, error)
 
+	// UnblockDependents transitions every Task with an inbound `depends_on`
+	// edge from completedTaskID out of [TaskStatusBlocked] when all of its
+	// outbound `depends_on` edges now point to terminal Tasks, and re-fires
+	// [TopicTaskAssigned] for the cached assignee so the dispatch it
+	// previously missed is seen. Tasks without an `assigned_to` edge are
+	// left blocked (nothing to dispatch). Idempotent — invoking it on the
+	// same completedTaskID a second time is a no-op once each dependent has
+	// already moved out of blocked. Per-dependent failures are logged and
+	// other dependents continue.
 	UnblockDependents(ctx context.Context, completedTaskID string) error
 
+	// CreateProject creates a new Project vertex. Returns
+	// [ErrInvalidTask] when Name is empty and [ErrProjectAlreadyExists]
+	// when the underlying store reports a duplicate.
 	CreateProject(ctx context.Context, p Project) (Project, error)
 
+	// GetProject retrieves a single Project by entity ID. Returns
+	// [ErrProjectNotFound] if no matching project exists.
 	GetProject(ctx context.Context, projectID string) (Project, error)
 
+	// GetProjectByName retrieves a single Project by its slug (project_name).
+	// Returns [ErrProjectNotFound] if no project with that slug exists.
 	GetProjectByName(ctx context.Context, projectName string) (Project, error)
 
+	// UpdateProject replaces the mutable fields of an existing Project.
+	// Returns [ErrProjectNotFound] if the project does not exist.
 	UpdateProject(ctx context.Context, p Project) (Project, error)
 
+	// DeleteProject soft-deletes the Project vertex AND removes every
+	// inbound `member_of` edge so member Tasks lose the membership.
+	// Member Tasks themselves are not deleted.
 	DeleteProject(ctx context.Context, projectID string) error
 
+	// ListProjects returns all non-deleted Projects.
 	ListProjects(ctx context.Context) ([]Project, error)
 
+	// AddTaskToProject writes the `member_of` edge from taskID to projectID.
+	// Idempotent — returns nil whether or not the edge already existed.
 	AddTaskToProject(ctx context.Context, taskID, projectID string) error
 
+	// RemoveTaskFromProject removes the `member_of` edge from taskID to
+	// projectID. Returns [ErrRelationshipNotFound] if no membership existed.
 	RemoveTaskFromProject(ctx context.Context, taskID, projectID string) error
 
+	// ListTasksInProject returns the Tasks belonging to the given project via
+	// inbound `member_of` edges.
 	ListTasksInProject(ctx context.Context, projectID string) ([]Task, error)
 
+	// ListProjectsForTask returns the Projects the given Task belongs to
+	// via outbound `member_of` edges.
 	ListProjectsForTask(ctx context.Context, taskID string) ([]Project, error)
 
 	OpenCase(ctx context.Context, requesterID string, c Case) (Case, error)
@@ -171,7 +273,15 @@ type TaskManager interface {
 	ListCasesByVotes(ctx context.Context, filter CaseFilter) ([]RankedCase, error)
 	AddTaskNote(ctx context.Context, requesterID, taskID, kind, text string, links []string) (TaskNote, error)
 	ListTaskNotes(ctx context.Context, requesterID, taskID string) ([]TaskNote, error)
+	ListTaskNotesFiltered(ctx context.Context, filter TaskNoteFilter) ([]TaskNote, error)
 	ListTodosOfIssue(ctx context.Context, requesterID, issueID string) (IssueTodoList, error)
+	ReadyTodosFor(ctx context.Context, requesterID, issueID string) (ReadyTodos, error)
+	TaskReportFor(ctx context.Context, requesterID, issueID string) (TaskReport, error)
+	TaskBriefFor(ctx context.Context, filter TaskBriefFilter) (TaskBrief, error)
+	FileOverlaps(ctx context.Context, filter FileOverlapsFilter) (FileOverlaps, error)
+	NextReadyBatch(ctx context.Context, filter NextReadyBatchFilter) (NextReadyBatch, error)
+	UnblockImpact(ctx context.Context, filter UnblockImpactFilter) (UnblockImpact, error)
+	Lint(ctx context.Context, filter LintFilter) (Lint, error)
 	CountTodosOfIssues(ctx context.Context, filter TodoCountsFilter) (IssueTodoCounts, error)
 	EditTodoFor(ctx context.Context, requesterID, todoID string, change TodoChange) (TodoView, error)
 	ReorderTodosOfIssue(ctx context.Context, requesterID, issueID string, order TodoOrder) (IssueTodoList, error)
@@ -190,18 +300,40 @@ type TaskManager interface {
 	ListTaskReferences(ctx context.Context, requesterID, taskID string) ([]TaskReference, error)
 	RemoveTaskReference(ctx context.Context, requesterID, taskID, referenceID string) error
 
+	// GetTaskByName retrieves a task by its project-scoped name (task_name)
+	// within a project (project_name). Returns [ErrTaskNotFound] if no task
+	// with that name exists in the project.
 	GetTaskByName(ctx context.Context, projectName, taskName string) (Task, error)
 
+	// CreateTaskInProject creates a task, auto-generates its task_name from the
+	// project's task_prefix, and writes the member_of edge in one atomic sequence.
+	// Returns [ErrProjectNotFound] if the project does not exist.
 	CreateTaskInProject(ctx context.Context, projectName string, task Task) (Task, error)
 
+	// ImportProject parses a JSON import document and creates a Project,
+	// Tasks, member_of edges, and depends_on edges in a single call.
+	// Returns [ErrInvalidImport] when the document is malformed.
 	ImportProject(ctx context.Context, document string) (ImportResult, error)
 
+	// StartImportProject begins an async import of a JSON project document.
+	// Returns immediately with an [ImportProjectJob] whose ID can be passed to
+	// [GetImportProjectStatus] to poll for progress.
+	// Returns [ErrInvalidImport] when the document cannot be parsed.
 	StartImportProject(ctx context.Context, document string) (ImportProjectJob, error)
 
+	// GetImportProjectStatus returns the current state of an async import job.
+	// Returns [ErrImportJobNotFound] if no job with the given ID exists.
 	GetImportProjectStatus(ctx context.Context, jobID string) (ImportProjectJob, error)
 
+	// CancelImportProject cancels a pending or running import job. Returns
+	// [ErrImportJobNotFound] if the job does not exist, or
+	// [ErrImportJobNotCancellable] if it has already reached a terminal state.
 	CancelImportProject(ctx context.Context, jobID string) error
 
+	// UnblockTask transitions a task from the `blocked` status (entered when a
+	// human chose mark-blocked) back to `awaiting-direction`, re-opening the
+	// direction form for a new resolution cycle. Returns [ErrInvalidStatusTransition]
+	// if the task is not currently blocked. Returns [ErrTaskNotFound] if missing.
 	UnblockTask(ctx context.Context, taskID, note string) (Task, error)
 
 	CreateTaskTodo(ctx context.Context, todo TaskTodo) (TaskTodo, error)
@@ -228,6 +360,14 @@ type TaskManager interface {
 
 	CheckTodoCycle(ctx context.Context, todoID string, dependsOn []string) error
 
+	// CreateWorkflowRun anchors a new orchestrated execution. The returned
+	// run is in [WorkflowRunStatusPending]; producers transition it to
+	// in_progress / completed / failed via UpdateWorkflowRunStatus.
+	//
+	// name may be empty — the server generates a unique label of the form
+	// `pipeline-YYYY-MM-DD-HHMMSS-<6hex>` in that case. When name is set,
+	// it must not have leading/trailing whitespace and must not collide
+	// with an existing run (otherwise [ErrWorkflowRunNameExists]).
 	CreateWorkflowRun(ctx context.Context, name, triggerEvent, initiator string) (WorkflowRun, error)
 
 	StartWorkflowRun(ctx context.Context, name, workflowCode string, workflowVersion int, triggerEvent, initiator string) (WorkflowRun, error)
@@ -244,59 +384,180 @@ type TaskManager interface {
 
 	CloseWorkflowRunsPastLimit(ctx context.Context, asOf string) ([]WorkflowRun, error)
 
+	// CreateRecoveryWorkflowRun mints a child WorkflowRun spawned by a
+	// failure dispatch. The child carries parent_workflow_run_id and
+	// root_workflow_run_id; the budget counter lives on the root and is
+	// incremented by IncrementFailureBudget.
 	CreateRecoveryWorkflowRun(ctx context.Context, name, triggerEvent, initiator, parentRunID, rootRunID string) (WorkflowRun, error)
 
+	// SetFailureBudget locks the failure_pipeline_budget on a root
+	// WorkflowRun. The budget is frozen for the lifetime of the run;
+	// resetting it returns [ErrFailureBudgetAlreadySet]. Acting on a
+	// non-root run returns [ErrNotRootWorkflowRun].
 	SetFailureBudget(ctx context.Context, runID string, budget int) (WorkflowRun, error)
 
+	// IncrementFailureBudget atomically increments failure_pipelines_used on
+	// the root WorkflowRun. Idempotent on childRunID: repeated calls with
+	// the same childRunID return the current counter state without
+	// double-incrementing. The exhausted return is true iff `used > budget`
+	// after the increment; the caller must skip the recovery dispatch and
+	// fail the run on exhausted.
 	IncrementFailureBudget(ctx context.Context, rootRunID, childRunID string) (used, budget int, exhausted bool, err error)
 
+	// GetWorkflowRun reads a single WorkflowRun by entity ID.
+	// Returns [ErrWorkflowRunNotFound] when no matching entity exists.
 	GetWorkflowRun(ctx context.Context, runID string) (WorkflowRun, error)
 
+	// GetWorkflowRunByName looks up a single run by its unique name.
+	// Returns [ErrWorkflowRunNotFound] when no match exists.
 	GetWorkflowRunByName(ctx context.Context, name string) (WorkflowRun, error)
 
+	// ListWorkflowRuns returns every WorkflowRun, newest first. When name is
+	// non-empty the result is filtered to runs whose Name matches exactly
+	// (at most one row).
 	ListWorkflowRuns(ctx context.Context, name string) ([]WorkflowRun, error)
 
+	// LinkTaskToRun writes the `started_task` edge from runID to taskID.
+	// Idempotent — re-linking is a no-op.
 	LinkTaskToRun(ctx context.Context, runID, taskID string) error
 
+	// LinkTodoToRun writes the `started_todo` edge from runID to todoID.
+	// Idempotent.
 	LinkTodoToRun(ctx context.Context, runID, todoID string) error
 
+	// GetWorkflowRunClosure returns the run plus every entity and edge
+	// reachable from it. See [WorkflowRunClosure] for the closure semantics.
 	GetWorkflowRunClosure(ctx context.Context, runID string) (WorkflowRunClosure, error)
 
+	// UpdateWorkflowRunStatus transitions a WorkflowRun to a new lifecycle status.
+	// Valid transitions are defined by [WorkflowRunStatus.CanTransitionTo].
+	// reason is stored in the failure_reason field when transitioning to failed
+	// or rollback_failed.
 	UpdateWorkflowRunStatus(ctx context.Context, runID string, newStatus WorkflowRunStatus, reason string) (WorkflowRun, error)
 
+	// RollbackWorkflowRun orchestrates the compensation sequence for the given
+	// run. Valid only when the run is in failed or completed status.
+	//
+	// Sequence:
+	//  1. Transitions run → rolling_back; publishes work.run.rolling_back.
+	//  2. Calls per-service compensation stubs (cross-service legs are no-ops
+	//     until each service implements DELETE /by-workflow-run/{id}).
+	//  3. Hard-deletes this package's artifacts (Tasks + TaskTodos + their edges)
+	//     via [DeleteWorkflowRunArtifacts].
+	//  4. On success: transitions run → rolled_back; publishes work.run.rolled_back.
+	//     On partial failure: transitions run → rollback_failed; publishes
+	//     work.run.rollback_failed. Operator can re-trigger after remediation.
+	//
+	// Step 3's own work (the foreign-dependency guard check, every Task
+	// reset, and every TaskTodo delete) runs inside a single database
+	// transaction — a crash or error partway through leaves every artifact
+	// at its pre-rollback state rather than partially compensated. The run
+	// status transitions (steps 1 and 4) stay separate, non-transactional
+	// steps either side of it, matching [WorkflowRunStatus.CanTransitionTo]:
+	// rolling_back is a durably-committed transient state, not something
+	// step 3 failing should silently revert.
+	//
+	// Returns [ErrWorkflowRunNotFound] when the run does not exist,
+	// [ErrRollbackConflict] when already rolling_back,
+	// [ErrInvalidRunStatusTransition] for any other disallowed source status,
+	// [ErrForeignRunDependency] when a Task in the closure is depended on by
+	// a Task from a different run (the dependent run must be rolled back first).
 	RollbackWorkflowRun(ctx context.Context, runID, reason string) (WorkflowRun, error)
 
+	// DeleteWorkflowRunArtifacts hard-deletes every Task and TaskTodo whose
+	// workflow_run_id matches runID, along with all edges incident on those
+	// entities (started_task, started_todo, has_todo, assigned_to, depends_on).
+	// Emits work.task.rolled_back for each deleted Task for observability.
+	//
+	// This is this package's leg of the per-service DELETE contract. Called
+	// by [RollbackWorkflowRun] as part of the orchestration; may also be
+	// called directly for operator-driven remediation.
+	//
+	// Returns [ErrWorkflowRunNotFound] when the run does not exist.
+	// A run with no Tasks is a valid no-op.
 	DeleteWorkflowRunArtifacts(ctx context.Context, runID string) error
 
+	// CancelWorkflowRun flips an in_progress WorkflowRun to the cancelling
+	// transient state, persists the (cancelledBy, reason, quiesceDeadline)
+	// envelope on the run row, cascades work.task.cancelled to every
+	// non-terminal Task in the run, and publishes work.run.cancelling.
+	//
+	// Idempotent: a repeated call on an already-cancelling run returns the
+	// stored cancellation envelope without re-firing events or shifting the
+	// quiesce deadline.
+	//
+	// Returns:
+	//   - [ErrWorkflowRunNotFound] when the run does not exist.
+	//   - [ErrCannotCancelTerminalRun] when the run is in any status other than
+	//     in_progress or cancelling.
 	CancelWorkflowRun(ctx context.Context, runID, reason, cancelledBy string, quiesceDeadline time.Time) (WorkflowRun, error)
 
+	// FinalizeWorkflowRunCancellation transitions a cancelling WorkflowRun to
+	// the cancelled terminal state and publishes work.run.cancelled. Best-
+	// effort: called by the finalization goroutine after the quiesce deadline
+	// elapses, but may be called directly by tests.
+	//
+	// Idempotent: a call on a run that is no longer in cancelling status (e.g.
+	// already cancelled) returns the current run without effect.
+	//
+	// Returns [ErrWorkflowRunNotFound] when the run does not exist.
 	FinalizeWorkflowRunCancellation(ctx context.Context, runID string) (WorkflowRun, error)
 
+	// TouchWorkflowRunLastEventAt bumps last_event_at to ts for the given run.
+	// Best-effort: returns nil on NotFound (the run may have been deleted or
+	// rolled back concurrently with the event that triggered this call).
+	// Called on every published event that carries a workflow_run_id.
 	TouchWorkflowRunLastEventAt(ctx context.Context, runID, ts string) error
 
+	// ListWorkflowRunsStaleSince returns all non-terminal, unpaused WorkflowRuns
+	// whose last_event_at is before cutoff and whose timeout_published is false.
+	// Used by the watchdog sweeper.
 	ListWorkflowRunsStaleSince(ctx context.Context, cutoff time.Time) ([]WorkflowRun, error)
 
+	// ListWorkflowRunsStepStaleSince returns non-terminal, unpaused WorkflowRuns
+	// that have a current_step_id set and current_step_started_at before cutoff.
+	// Used by the watchdog per-step sweep pass.
 	ListWorkflowRunsStepStaleSince(ctx context.Context, cutoff time.Time) ([]WorkflowRun, error)
 
+	// MarkTimeoutPublished sets timeout_published=true on the run so the sweeper
+	// skips it on subsequent ticks. Called before publishing work.run.timeout
+	// for idempotency.
 	MarkTimeoutPublished(ctx context.Context, runID string) error
 
+	// HandleRunTimeout processes a work.run.timeout event: flips the run to
+	// failed (if not already terminal) and cascades to non-terminal tasks.
 	HandleRunTimeout(ctx context.Context, runID string) error
 
+	// HandleTaskTimeout processes a work.task.timeout event: flips the task to
+	// failed.
 	HandleTaskTimeout(ctx context.Context, taskOrTodoID string, runID string) error
 
+	// ListTasksForRun returns every Task linked to runID.
 	ListTasksForRun(ctx context.Context, runID string) ([]Task, error)
 
+	// ListTaskTodos returns all TaskTodos, optionally filtered by
+	// workflowRunID. When workflowRunID is empty, all todos are returned.
 	ListTaskTodos(ctx context.Context, workflowRunID string) ([]TaskTodo, error)
 
+	// ListDeliverablesForTask returns all Deliverable entities linked to taskID
+	// via a has_deliverable edge. Returns an empty slice when none exist.
 	ListDeliverablesForTask(ctx context.Context, taskID string) ([]Deliverable, error)
 
+	// ListAcceptanceCriteriaForTask returns all AcceptanceCriteria entities linked
+	// to taskID via a has_acceptance_criteria edge. Returns an empty slice when none exist.
 	ListAcceptanceCriteriaForTask(ctx context.Context, taskID string) ([]AcceptanceCriteria, error)
 
+	// WriteAcceptanceCriteriaResult writes the reviewer's result and result_notes
+	// onto a single AcceptanceCriteria entity. Returns [ErrAcceptanceCriteriaNotFound]
+	// if the entity does not exist.
 	WriteAcceptanceCriteriaResult(ctx context.Context, criteriaID, result, notes string) error
 }
 
+// Publisher is a type alias for [events.Publisher] — the mwanachama-backend-shared
+// package that unifies the publish contract across this project's services.
 type Publisher = events.Publisher
 
+// taskManager is the concrete implementation of [TaskManager].
 type taskManager struct {
 	db            *gorm.DB
 	store         *store

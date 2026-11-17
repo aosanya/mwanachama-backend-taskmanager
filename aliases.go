@@ -2,6 +2,9 @@ package mwanachamataskmanager
 
 import "github.com/aosanya/mwanachama-backend-taskmanager/models"
 
+// Root-level aliases so callers need only this package's import, not
+// models's directly — see doc.go and the org's entitygraph-to-GORM
+// migration convention (established by orgsettings/orgpolicy).
 type (
 	Task               = models.Task
 	TaskStatus         = models.TaskStatus
@@ -46,6 +49,7 @@ type (
 	CaseFilter         = models.CaseFilter
 	CaseVote           = models.CaseVote
 	TaskNote           = models.TaskNote
+	TaskNoteFilter     = models.TaskNoteFilter
 	WorkerCaps         = models.WorkerCaps
 	TaskCapsChange     = models.TaskCapsChange
 	TaskCapsOverride   = models.TaskCapsOverride
@@ -58,6 +62,7 @@ type (
 	CapsNearestList    = models.CapsNearestList
 	TaskReference      = models.TaskReference
 	TaskPatch          = models.TaskPatch
+	FileList           = models.FileList
 	RankedCase         = models.RankedCase
 	CodeSequence       = models.CodeSequence
 )

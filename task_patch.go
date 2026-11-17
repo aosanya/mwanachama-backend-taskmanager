@@ -56,6 +56,9 @@ func applyPatch(task Task, p TaskPatch) Task {
 	if p.Context != nil {
 		task.Context = *p.Context
 	}
+	if p.Files != nil {
+		task.Files = *p.Files
+	}
 	return task
 }
 

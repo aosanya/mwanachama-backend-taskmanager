@@ -26,6 +26,11 @@ type TaskTodo struct {
 
 	BlockedReason string `json:"blocked_reason,omitempty"`
 
+	StartedAt string `json:"started_at,omitempty"`
+	DoneAt    string `json:"done_at,omitempty"`
+
+	ElapsedSeconds *int64 `json:"elapsed_seconds,omitempty" spec:"-"`
+
 	Status       TodoStatus `json:"status"`
 	ParentTaskID string     `json:"parent_task_id"`
 	DecompRunID  string     `json:"decomp_run_id,omitempty"`

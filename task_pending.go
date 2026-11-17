@@ -68,7 +68,7 @@ func (m *taskManager) PendingTasks(ctx context.Context, filter PendingFilter) (P
 		return PendingTasks{}, fmt.Errorf("PendingTasks: %w", err)
 	}
 	var rows []pendingRow
-	if err := rowQuery.Select(pendingColumns).Order(taskOrder).Limit(limit).Offset(filter.Offset).Scan(&rows).Error; err != nil {
+	if err := rowQuery.Select(pendingColumns).Order(sortedBy(filter.Sort, taskOrder)).Limit(limit).Offset(filter.Offset).Scan(&rows).Error; err != nil {
 		return PendingTasks{}, fmt.Errorf("PendingTasks: %w", err)
 	}
 	if out.Items, err = m.compactItems(ctx, backlogs, rows); err != nil {
@@ -129,7 +129,7 @@ func (m *taskManager) pendingBase(ctx context.Context, filter PendingFilter, clo
 	for _, word := range strings.Fields(strings.ToLower(filter.Q)) {
 		q = m.matchWord(ctx, q, word, false)
 	}
-	return q, nil
+	return m.narrowOrchestration(ctx, q, filter.Orchestration())
 }
 
 func (m *taskManager) scopedTasks(ctx context.Context, backlog, step string, tags []string, requesterID string) (*gorm.DB, error) {
