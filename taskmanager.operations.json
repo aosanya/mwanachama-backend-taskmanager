@@ -12,7 +12,7 @@
     "list_tasks": {
       "method": "GET", "path": "/tasks", "call": "ListTasks", "action": "taskmanager.task.list",
       "title": "List tasks",
-      "description": "List the tasks matching the filter. Narrow by status, priority, run, the outside holder of blocked work (held_by), tag (repeat it to ask for tasks that carry every tag given), repo (the task's project_name), backlog (its id or name), step (the id or name of a step of that backlog, or of the first backlog when none is given) or untouched_days (not changed for more than that many days, 0 or more), and pass a limit (1 or more; 0 or less is refused with 400) unless you genuinely need the whole board. Tag, backlog and step match without regard to case. A task whose backlog is empty or no longer exists is in the first backlog, at the step its status names (or at no step). Also narrow by assignee (who holds it) or unassigned (true; not both), blocked, waiting and sinbin (true or false), has_todos (true or false), todos_open (true: at least one todo not Done), effort (unknown, very_low, low, medium, high or very_high), created_since and updated_since (RFC 3339, changed at or after), has_files (true or false: the files list is not empty or is), ids (repeat it, at most 100) and sort (rank, priority, updated or created; default rank). A bad value is refused with 400. A page holds at most 500 tasks in rank order: pass offset (0 or more) to read the next page of the same filter, until a page comes back short.",
+      "description": "List the tasks matching the filter. Narrow by status, priority, run, the outside holder of blocked work (held_by), tag (repeat it to ask for tasks that carry every tag given), repo (the task's project_name), backlog (its id or name), step (the id or name of a step of that backlog, or of the first backlog when none is given) or untouched_days (not changed for more than that many days, 0 or more), and pass a limit (1 or more; 0 or less is refused with 400) unless you genuinely need the whole board. Tag, backlog and step match without regard to case. A task whose backlog is empty or no longer exists is in the first backlog, at the step its status names (or at no step). Also narrow by assignee (who holds it) or unassigned (true; not both), blocked, waiting and sinbin (true or false), has_todos (true or false), todos_open (true: at least one todo not Done), effort (unknown, very_low, low, medium, high or very_high), created_since and updated_since (RFC 3339, changed at or after), has_files (true or false: the files list is not empty or is), ids (repeat it, at most 100), min_days_in_step (0 or more: it has sat at its step for at least that many whole days, counted from entered_step_at) and sort (rank, priority, updated or created; default rank). Every issue carries entered_step_at (when it last moved into its step; an issue that has not moved since the hub began recording it counts from its last change) and days_in_step. A bad value is refused with 400. A page holds at most 500 tasks in rank order: pass offset (0 or more) to read the next page of the same filter, until a page comes back short.",
       "args": [{"from": "query", "whole": true},
                {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."}],
       "returns": [{"body": true}]
@@ -28,7 +28,7 @@
     "pending_tasks": {
       "method": "GET", "path": "/pending-tasks", "call": "PendingTasks", "action": "taskmanager.task.pending",
       "title": "What is pending",
-      "description": "The quick answer to what is pending, open or left, in one call: every issue that is not completed, failed or cancelled and that the caller can see. It returns total, by_step (the count at each step, in step order) and by_priority (critical, high, medium, low), counted over everything the filters match, and items: the first limit issues in rank order, each compact (id, code, title, state, backlog, step, priority, tags, rank, blocked) and without the description. Narrow by tag (repeat it to require every tag), backlog (id or name), step (id or name), priority, or q (words that must each appear in the title, the code or a tag, without regard to case). Also narrow by assignee (who holds it) or unassigned (true; not both), blocked, waiting and sinbin (true or false), has_todos (true or false), todos_open (true: at least one todo not Done), effort (unknown, very_low, low, medium, high or very_high), created_since and updated_since (RFC 3339, changed at or after), has_files (true or false: the files list is not empty or is), ids (repeat it, at most 100) and sort (rank, priority, updated or created; default rank). A bad value is refused with 400. limit defaults to 25 and is at most 100; pass offset (0 or more) to read the next page. Pass include_closed true and by_step also counts the issues of the same filters that are completed or cancelled, at their Done and Cancelled steps; total, by_priority and items stay the open issues. To read one issue in full use taskmanager_task_read; to page through every issue use taskmanager_task_list.",
+      "description": "The quick answer to what is pending, open or left, in one call: every issue that is not completed, failed or cancelled and that the caller can see. It returns total, by_step (the count at each step, in step order) and by_priority (critical, high, medium, low), counted over everything the filters match, and items: the first limit issues in rank order, each compact (id, code, title, state, backlog, step, priority, tags, rank, blocked) and without the description. Narrow by tag (repeat it to require every tag), backlog (id or name), step (id or name), priority, or q (words that must each appear in the title, the code or a tag, without regard to case). Also narrow by assignee (who holds it) or unassigned (true; not both), blocked, waiting and sinbin (true or false), has_todos (true or false), todos_open (true: at least one todo not Done), effort (unknown, very_low, low, medium, high or very_high), created_since and updated_since (RFC 3339, changed at or after), has_files (true or false: the files list is not empty or is), ids (repeat it, at most 100), min_days_in_step (0 or more: it has sat at its step for at least that many whole days, counted from entered_step_at) and sort (rank, priority, updated or created; default rank). Every issue carries entered_step_at (when it last moved into its step; an issue that has not moved since the hub began recording it counts from its last change) and days_in_step. A bad value is refused with 400. limit defaults to 25 and is at most 100; pass offset (0 or more) to read the next page. Pass include_closed true and by_step also counts the issues of the same filters that are completed or cancelled, at their Done and Cancelled steps; total, by_priority and items stay the open issues. To read one issue in full use taskmanager_task_read; to page through every issue use taskmanager_task_list.",
       "args": [{"from": "query", "whole": true},
                {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."}],
       "returns": [{"body": true}]
@@ -345,14 +345,25 @@
                {"from": "body", "as": "steps", "required": true, "description": "The ids of its steps, in the new order."}],
       "returns": [{"body": true}]
     },
+    "set_backlog_step_wip_limit": {
+      "method": "PUT", "path": "/backlogs/{backlogID}/steps/{stepID}/wip-limit", "call": "SetBacklogStepWipLimitAs", "action": "taskmanager.backlog_step.wip_limit",
+      "title": "Limit how many issues a step holds",
+      "description": "Set the work-in-progress limit of one step of a backlog: the most issues it may hold. wip_limit is a whole number, 0 or more; 0 clears the limit. A move or a take into a step already at its limit is refused with 409 naming the limit (taskmanager_task_move_to_step takes override for a manager). A limit lowered below the number of issues the step holds removes none; it only refuses new ones until the count is under it. The backlog list and every backlog summary carry wip_limit on a step that has one. The caller needs Can edit on the backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "body", "whole": true},
+               {"from": "path", "as": "backlogID", "into": "BacklogID", "description": "The backlog the step belongs to."},
+               {"from": "path", "as": "stepID", "into": "StepID", "description": "The step to limit."}],
+      "returns": [{"body": true}]
+    },
     "move_task_to_step": {
-      "method": "POST", "path": "/tasks/{taskID}/move-to-step", "call": "MoveTaskToStepAs", "action": "taskmanager.task.move_to_step",
+      "method": "POST", "path": "/tasks/{taskID}/move-to-step", "call": "MoveTaskToStepOverrideAs", "action": "taskmanager.task.move_to_step",
       "title": "Move task to step",
-      "description": "Put one issue at a step of a backlog. Name the backlog and the step by id; moving to another backlog is done by naming a step of that backlog. The caller needs Can move on the backlog it goes to.",
+      "description": "Put one issue at a step of a backlog. Name the backlog and the step by id; moving to another backlog is done by naming a step of that backlog. The caller needs Can move on the backlog it goes to. A step with a wip_limit that already holds that many issues refuses the move with 409 naming the limit, unless override is true and the caller has Can edit on the backlog; an issue already at the step is not moved into it again.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is moving it, from the session."},
                {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue to move."},
                {"from": "body", "as": "backlog", "required": true, "description": "The id of the backlog."},
-               {"from": "body", "as": "step", "required": true, "description": "The id of the step in that backlog."}],
+               {"from": "body", "as": "step", "required": true, "description": "The id of the step in that backlog."},
+               {"from": "body", "as": "override", "description": "True to move into a step that is at its limit; needs Can edit on the backlog."}],
       "returns": [{"body": true}]
     },
     "claim_task": {
@@ -1302,6 +1313,7 @@
     "ErrInvalidPlacement": 400,
     "ErrTaskMoveConflict": 409,
     "ErrTaskNotClaimable": 409,
+    "ErrWipLimit": 409,
     "ErrInvalidEffort": 400,
     "ErrInvalidFiles": 400,
     "ErrPriorityLocked": 409,

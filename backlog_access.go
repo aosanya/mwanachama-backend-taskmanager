@@ -174,20 +174,22 @@ func (m *taskManager) ListBacklogsFor(ctx context.Context, requesterID string) (
 }
 
 func (m *taskManager) MoveTaskToStepAs(ctx context.Context, requesterID, taskID, backlogID, stepID string) (Task, error) {
+	return m.MoveTaskToStepOverrideAs(ctx, requesterID, taskID, backlogID, stepID, false)
+}
+
+func (m *taskManager) requireMoveAccess(ctx context.Context, requesterID, taskID, backlogID string) error {
 	visible, err := m.backlogVisibility(ctx, requesterID)
+	if err != nil || visible.all {
+		return err
+	}
+	task, err := m.GetTask(ctx, taskID)
 	if err != nil {
-		return Task{}, err
+		return err
 	}
-	if !visible.all {
-		task, err := m.GetTask(ctx, taskID)
-		if err != nil {
-			return Task{}, err
-		}
-		if !visible.Moves(task.Backlog) || !visible.Moves(backlogID) {
-			return Task{}, fmt.Errorf("%w: moving needs Can move on both backlogs", ErrBacklogForbidden)
-		}
+	if !visible.Moves(task.Backlog) || !visible.Moves(backlogID) {
+		return fmt.Errorf("%w: moving needs Can move on both backlogs", ErrBacklogForbidden)
 	}
-	return m.MoveTaskToStep(ctx, taskID, backlogID, stepID)
+	return nil
 }
 
 func (m *taskManager) accessOf(ctx context.Context, backlogID string) (models.BacklogAccess, error) {

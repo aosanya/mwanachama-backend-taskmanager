@@ -64,8 +64,10 @@ func (m *taskManager) fillPlaces(ctx context.Context, tasks []Task) error {
 	if err != nil {
 		return err
 	}
+	now := time.Now().UTC()
 	for i := range tasks {
 		tasks[i].Backlog, tasks[i].Step = models.PlaceOf(backlogs, tasks[i])
+		tasks[i].EnteredStepAt, tasks[i].DaysInStep = stepClock(tasks[i], now)
 	}
 	return nil
 }
@@ -119,7 +121,7 @@ func summarize(backlogs []models.Backlog, tasks []Task) models.BacklogList {
 	for i, b := range backlogs {
 		item := models.BacklogSummary{ID: b.ID, Name: b.Name, Issues: totals[b.ID], Steps: make([]models.StepSummary, len(b.Steps)), Kind: b.Kind, Rules: b.Rules, Archived: b.Archived}
 		for j, s := range b.Steps {
-			item.Steps[j] = models.StepSummary{ID: s.ID, Name: s.Name, Issues: counts[b.ID][s.ID]}
+			item.Steps[j] = models.StepSummary{ID: s.ID, Name: s.Name, Issues: counts[b.ID][s.ID], WipLimit: s.WipLimit}
 		}
 		out.Items[i] = item
 	}
@@ -490,10 +492,13 @@ func (m *taskManager) refuseWhileBlocked(ctx context.Context, task Task, path []
 }
 
 func (m *taskManager) writeMove(ctx context.Context, task Task, path []TaskStatus, backlogID, stepID string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
 	columns := map[string]any{"backlog": backlogID, "step": stepID}
+	if task.Backlog != backlogID || task.Step != stepID {
+		columns["step_entered_at"] = now
+	}
 	if len(path) > 0 {
 		final := path[len(path)-1]
-		now := time.Now().UTC().Format(time.RFC3339)
 		columns["status"] = string(final)
 		columns["updated_at"] = now
 		if final != TaskStatusBlocked {

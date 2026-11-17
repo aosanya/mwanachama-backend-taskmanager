@@ -39,6 +39,7 @@ func (m *taskManager) narrowOrchestration(ctx context.Context, q *gorm.DB, f mod
 	q = m.narrowByMarks(ctx, q, f)
 	q = m.narrowByTodos(ctx, q, f)
 	q = narrowByContent(q, f)
+	q = narrowByDaysInStep(q, f, time.Now())
 	return narrowBySince(q, f), nil
 }
 
@@ -51,6 +52,9 @@ func checkOrchestration(f models.OrchestrationFilter) error {
 	}
 	if _, ok := sortOrders[f.Sort]; !ok {
 		return fmt.Errorf("%w: sort %q", ErrInvalidFilter, f.Sort)
+	}
+	if f.MinDaysInStep < 0 {
+		return fmt.Errorf("%w: min_days_in_step %d", ErrInvalidFilter, f.MinDaysInStep)
 	}
 	if len(f.IDs) > maxFilterIDs {
 		return fmt.Errorf("%w: %d ids is above %d", ErrInvalidFilter, len(f.IDs), maxFilterIDs)

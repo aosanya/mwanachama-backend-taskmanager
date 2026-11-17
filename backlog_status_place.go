@@ -1,6 +1,9 @@
 package mwanachamataskmanager
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 func (m *taskManager) placeFor(ctx context.Context, backlogID, stepID string, status TaskStatus) (string, string, error) {
 	if backlogID == "" {
@@ -10,13 +13,17 @@ func (m *taskManager) placeFor(ctx context.Context, backlogID, stepID string, st
 }
 
 func (m *taskManager) placeColumnsFor(ctx context.Context, taskID string, status TaskStatus) (map[string]any, error) {
-	backlogID, stepID := m.storedPlace(ctx, taskID)
-	if backlogID == "" {
+	before, stepBefore := m.storedPlace(ctx, taskID)
+	if before == "" {
 		return nil, nil
 	}
-	backlogID, stepID, err := m.placeFor(ctx, backlogID, stepID, status)
+	backlogID, stepID, err := m.placeFor(ctx, before, stepBefore, status)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"backlog": backlogID, "step": stepID}, nil
+	columns := map[string]any{"backlog": backlogID, "step": stepID}
+	if backlogID != before || stepID != stepBefore {
+		columns["step_entered_at"] = time.Now().UTC().Format(time.RFC3339)
+	}
+	return columns, nil
 }

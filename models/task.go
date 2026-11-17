@@ -181,6 +181,12 @@ type Task struct {
 
 	LeaseUntil string `json:"lease_until,omitempty"`
 
+	StepEnteredAt string `json:"step_entered_at,omitempty"`
+
+	EnteredStepAt string `json:"entered_step_at,omitempty" spec:"-"`
+
+	DaysInStep int `json:"days_in_step" spec:"-"`
+
 	Code       string `json:"code"`
 	CodeSeries string `json:"code_series"`
 	CodeNumber int    `json:"code_number"`
@@ -232,6 +238,7 @@ type TaskFilter struct {
 	Backlog       string       `query:"backlog"`
 	Step          string       `query:"step"`
 	UntouchedDays int          `query:"untouched_days"`
+	MinDaysInStep int          `query:"min_days_in_step,min=0"`
 	Assignee      string       `query:"assignee"`
 	Unassigned    bool         `query:"unassigned"`
 	Blocked       *bool        `query:"blocked"`

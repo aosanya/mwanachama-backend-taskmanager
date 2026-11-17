@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -15,7 +16,7 @@ const (
 	pendingMaxLimit     = 100
 	noStepName          = "No step"
 	likeEscape          = " ESCAPE '\\'"
-	pendingColumns      = `id, code, title, status, priority, backlog, step, "rank"`
+	pendingColumns      = `id, code, title, status, priority, backlog, step, "rank", step_entered_at, updated_at, created_at`
 )
 
 var priorityOrder = []TaskPriority{
@@ -31,6 +32,10 @@ type pendingRow struct {
 	Backlog  string
 	Step     string
 	Rank     int
+
+	StepEnteredAt string
+	UpdatedAt     string
+	CreatedAt     string
 }
 
 type pendingTally struct {
@@ -91,12 +96,15 @@ func (m *taskManager) compactItems(ctx context.Context, backlogs []models.Backlo
 	}
 	tags := m.tagNamesOf(ctx, rowIDs(rows))
 	items := []PendingItem{}
+	now := time.Now().UTC()
 	for _, r := range rows {
 		backlogName, stepName := placeNames(backlogs, r)
+		entered, days := stepClock(Task{StepEnteredAt: r.StepEnteredAt, UpdatedAt: r.UpdatedAt, CreatedAt: r.CreatedAt}, now)
 		items = append(items, PendingItem{
 			ID: r.ID, Code: r.Code, Title: r.Title, State: models.StateNameFor(states, TaskStatus(r.Status)),
 			Backlog: backlogName, Step: stepName, Priority: TaskPriority(r.Priority),
 			Tags: tags[r.ID], Rank: r.Rank, Blocked: isBlocked(tags[r.ID]), Waiting: isWaiting(tags[r.ID]), Sinbin: isSinbin(tags[r.ID]),
+			EnteredStepAt: entered, DaysInStep: days,
 		})
 	}
 	return items, nil

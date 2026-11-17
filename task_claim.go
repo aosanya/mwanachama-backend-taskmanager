@@ -54,6 +54,9 @@ func (m *taskManager) claimIssue(ctx context.Context, requesterID, taskID string
 	if err := m.refuseOpenDependency(ctx, requesterID, task); err != nil {
 		return TaskClaim{}, err
 	}
+	if err := m.refuseFullStep(ctx, task, backlog.ID, target); err != nil {
+		return TaskClaim{}, err
+	}
 	claim, err := m.takeIssue(ctx, requesterID, task, target, hold)
 	if err != nil {
 		return TaskClaim{}, err
@@ -165,7 +168,7 @@ func (m *taskManager) takeIssue(ctx context.Context, requesterID string, task Ta
 func (m *taskManager) winIssue(ctx context.Context, task Task, target models.BacklogStep, now string, hold leaseHold) error {
 	changes := map[string]any{
 		"backlog": task.Backlog, "step": target.ID, "status": string(TaskStatusInProgress),
-		"updated_at": now, "held_by": "",
+		"updated_at": now, "held_by": "", "step_entered_at": now,
 	}
 	maps.Copy(changes, hold.fields())
 	res := m.store.Query(ctx, roleTask).

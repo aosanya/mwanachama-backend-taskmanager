@@ -8,17 +8,18 @@ import (
 func writesOnABacklog(backlog, stepName string) map[string]probeCall {
 	b := "/backlogs/" + backlog
 	return map[string]probeCall{
-		"rename_backlog":        {"PUT", b, map[string]string{"name": "Renamed"}},
-		"archive_backlog":       {"PUT", b + "/archive", nil},
-		"unarchive_backlog":     {"PUT", b + "/unarchive", nil},
-		"delete_backlog":        {"DELETE", b, nil},
-		"replace_backlogs":      {"PUT", "/backlogs", map[string]any{"backlogs": []map[string]any{}}},
-		"add_backlog_step":      {"POST", b + "/steps", map[string]string{"name": stepName}},
-		"rename_backlog_step":   {"PUT", b + "/steps/write", map[string]string{"name": "Drafting"}},
-		"remove_backlog_step":   {"DELETE", b + "/steps/done", nil},
-		"reorder_backlog_steps": {"PUT", b + "/step-order", map[string]any{"steps": []string{"done", "write"}}},
-		"give_backlog_access":   {"PUT", b + "/access/contributors", map[string]string{"level": "move"}},
-		"take_backlog_access":   {"DELETE", b + "/access/contributors", nil},
+		"rename_backlog":             {"PUT", b, map[string]string{"name": "Renamed"}},
+		"archive_backlog":            {"PUT", b + "/archive", nil},
+		"unarchive_backlog":          {"PUT", b + "/unarchive", nil},
+		"delete_backlog":             {"DELETE", b, nil},
+		"replace_backlogs":           {"PUT", "/backlogs", map[string]any{"backlogs": []map[string]any{}}},
+		"add_backlog_step":           {"POST", b + "/steps", map[string]string{"name": stepName}},
+		"rename_backlog_step":        {"PUT", b + "/steps/write", map[string]string{"name": "Drafting"}},
+		"remove_backlog_step":        {"DELETE", b + "/steps/done", nil},
+		"set_backlog_step_wip_limit": {"PUT", b + "/steps/write/wip-limit", map[string]any{"wip_limit": 2}},
+		"reorder_backlog_steps":      {"PUT", b + "/step-order", map[string]any{"steps": []string{"done", "write"}}},
+		"give_backlog_access":        {"PUT", b + "/access/contributors", map[string]string{"level": "move"}},
+		"take_backlog_access":        {"DELETE", b + "/access/contributors", nil},
 	}
 }
 

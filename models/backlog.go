@@ -13,6 +13,7 @@ type BacklogStep struct {
 	ID       string       `json:"id"`
 	Name     string       `json:"name"`
 	Statuses []TaskStatus `json:"statuses,omitempty"`
+	WipLimit int          `json:"wip_limit,omitempty"`
 }
 
 const BacklogKindSmart = "smart"
@@ -40,9 +41,10 @@ type BacklogRules struct {
 func (b Backlog) Smart() bool { return b.Kind == BacklogKindSmart }
 
 type StepSummary struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Issues int    `json:"issues"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Issues   int    `json:"issues"`
+	WipLimit int    `json:"wip_limit,omitempty"`
 }
 
 type BacklogSummary struct {
@@ -207,6 +209,9 @@ func checkSteps(b Backlog) error {
 			return fmt.Errorf("backlogs: step %q of %q is declared twice", s.Name, b.Name)
 		}
 		ids[s.ID], names[s.Name] = true, true
+		if s.WipLimit < 0 {
+			return fmt.Errorf("backlogs: step %q of %q has a limit below 0", s.Name, b.Name)
+		}
 		for _, status := range s.Statuses {
 			if !knownTaskStatuses[status] {
 				return fmt.Errorf("backlogs: step %q maps %q, which is not a task status", s.Name, status)

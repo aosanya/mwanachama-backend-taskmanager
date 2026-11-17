@@ -74,6 +74,11 @@
           "description": "When the lease of the agent that took this issue runs out; empty when no lease is held. An issue still In Progress past it goes back to To do."
         },
         {
+          "name": "step_entered_at",
+          "type": "timestamp",
+          "description": "When this issue last moved into the step it sits at, as an RFC 3339 time. Empty on an issue that has not moved since the hub began recording it; the reads then count from the last change."
+        },
+        {
           "name": "tags",
           "type": "json",
           "description": "The labels attached to this task, denormalised from the tagging rows so a listing never joins. The tagging rows remain the authority."

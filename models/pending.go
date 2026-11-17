@@ -22,6 +22,8 @@ type PendingFilter struct {
 	IDs          []string     `query:"ids"`
 	Sort         string       `query:"sort"`
 
+	MinDaysInStep int `query:"min_days_in_step,min=0"`
+
 	IncludeClosed bool `query:"include_closed"`
 
 	RequesterID string `query:"-" json:"-"`
@@ -45,6 +47,9 @@ type PendingItem struct {
 	Blocked  bool         `json:"blocked"`
 	Waiting  bool         `json:"waiting"`
 	Sinbin   bool         `json:"sinbin"`
+
+	EnteredStepAt string `json:"entered_step_at,omitempty"`
+	DaysInStep    int    `json:"days_in_step"`
 }
 
 type PendingTasks struct {
