@@ -42,6 +42,7 @@ type TaskHandedOverPayload struct {
 }
 
 func (m *taskManager) handOver(ctx context.Context, taskID string, kind AssigneeKind, assigneeID string) error {
+	before, _ := m.GetTask(ctx, taskID)
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	if err := m.closeCurrentAssignment(ctx, taskID, now); err != nil {
 		return err
@@ -50,6 +51,7 @@ func (m *taskManager) handOver(ctx context.Context, taskID string, kind Assignee
 		Updates(map[string]any{"assigned_to": assigneeID, "assignee_kind": string(kind)}).Error; err != nil {
 		return fmt.Errorf("handOver: %w", err)
 	}
+	m.logAssignee(ctx, before, assigneeID)
 	stretch := models.Assignment{
 		ID:           newSpecID(),
 		TaskID:       taskID,

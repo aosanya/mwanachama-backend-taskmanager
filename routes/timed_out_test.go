@@ -140,7 +140,7 @@ func TestTimedOutNamesTheMinutesTheCapAndTheLastEntryOfAnIssue(t *testing.T) {
 	}
 }
 
-func TestTimedOutReportsAnIssueWithNoLogWithNullMinutesAndNoLastEntry(t *testing.T) {
+func TestTimedOutReportsAnIssueWithNoWorkerEntryWithNullFirstEntryAndOnlyTheHubsOwnLastEntry(t *testing.T) {
 	f := seedTimedOut(t)
 
 	body := f.h.expect(http.StatusOK, "owner", "GET", "/timed-out?backlog=book", nil)
@@ -149,11 +149,9 @@ func TestTimedOutReportsAnIssueWithNoLogWithNullMinutesAndNoLastEntry(t *testing
 	if v, has := empty["minutes_since_first_entry"]; !has || v != nil {
 		t.Errorf("minutes_since_first_entry %v present %v, want null", v, has)
 	}
-	if v, has := empty["minutes_since_last_entry"]; !has || v != nil {
-		t.Errorf("minutes_since_last_entry %v present %v, want null", v, has)
-	}
-	if empty["last_entry"] != nil || empty["cap_minutes"] != float64(15) {
-		t.Errorf("no-log item %v", empty)
+	last, _ := empty["last_entry"].(map[string]any)
+	if last["kind"] != "automatic" || empty["cap_minutes"] != float64(15) {
+		t.Errorf("no-worker-entry item %v", empty)
 	}
 }
 

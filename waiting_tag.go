@@ -96,11 +96,15 @@ func labelOf(t Task) string {
 }
 
 func (m *taskManager) logAsHub(ctx context.Context, taskID, text string) {
+	m.writeHubNote(ctx, taskID, noteByWorker, text)
+}
+
+func (m *taskManager) writeHubNote(ctx context.Context, taskID, kind, text string) {
 	note := TaskNote{
-		ID: newSpecID(), TaskID: taskID, Kind: noteByWorker, Automatic: true,
+		ID: newSpecID(), TaskID: taskID, Kind: kind, Automatic: true,
 		Text: text, CreatedAt: time.Now().UTC().Format(noteTimeForm),
 	}
 	if err := m.store.Insert(ctx, roleTaskNote, note); err != nil {
-		log.Printf("mwanachamataskmanager: logAsHub: %s: %v", taskID, err)
+		log.Printf("mwanachamataskmanager: writeHubNote: %s: %v", taskID, err)
 	}
 }

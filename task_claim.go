@@ -178,6 +178,7 @@ func (m *taskManager) winIssue(ctx context.Context, task Task, target models.Bac
 		return fmt.Errorf("ClaimTask: %w", res.Error)
 	}
 	if res.RowsAffected > 0 {
+		m.logClaim(ctx, task, target, hold)
 		return nil
 	}
 	current, err := m.GetTask(ctx, task.ID)

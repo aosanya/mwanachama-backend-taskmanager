@@ -473,6 +473,7 @@ func (m *taskManager) MoveTaskToStep(ctx context.Context, taskID, backlogID, ste
 	if err := m.writeMove(ctx, task, path, backlogID, stepID); err != nil {
 		return Task{}, err
 	}
+	m.logMove(ctx, task, path, backlogID, stepID)
 	m.announceMove(ctx, task, path)
 	return m.GetTask(ctx, taskID)
 }

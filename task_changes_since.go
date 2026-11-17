@@ -89,7 +89,11 @@ func (m *taskManager) ChangesSince(ctx context.Context, filter ChangesSinceFilte
 	if err != nil {
 		return out, fmt.Errorf("ChangesSince: %w", err)
 	}
-	merged := append(created, reprioritised...)
+	logged, err := m.loggedChanges(ctx, backlog, filter, cursor, limit+1)
+	if err != nil {
+		return out, fmt.Errorf("ChangesSince: %w", err)
+	}
+	merged := append(append(created, reprioritised...), logged...)
 	slices.SortFunc(merged, compareChanges)
 	if len(merged) > limit {
 		merged = merged[:limit]

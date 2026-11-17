@@ -3,6 +3,7 @@ package routes_test
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -82,8 +83,12 @@ func TestTaskBriefDependenciesCarryTheirLastThreeEntriesAndOpenFlags(t *testing.
 	if strings.Join(entries, ",") != "open 3,open 4,open 5" {
 		t.Errorf("last entries of the open dependency = %v", entries)
 	}
-	if len(done["last_entries"].([]any)) != 1 {
-		t.Errorf("last entries of the finished dependency = %v", done["last_entries"])
+	var finished []string
+	for _, raw := range done["last_entries"].([]any) {
+		finished = append(finished, raw.(map[string]any)["text"].(string))
+	}
+	if !slices.Contains(finished, "finished") {
+		t.Errorf("last entries of the finished dependency = %v", finished)
 	}
 	wantOpenFlags2 := dependencyItems(t, body, "needed_by")
 	if len(wantOpenFlags2) != 2 || wantOpenFlags2["SW4"]["title"] != "Title SW4" {

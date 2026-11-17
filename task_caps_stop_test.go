@@ -36,7 +36,28 @@ func logOf(t *testing.T, mgr mwanachamataskmanager.TaskManager, id string) []mwa
 	if err != nil {
 		t.Fatal(err)
 	}
-	return notes
+	kept := notes[:0:0]
+	for _, note := range notes {
+		if !isChangeEntry(note) {
+			kept = append(kept, note)
+		}
+	}
+	return kept
+}
+
+func isChangeEntry(note mwanachamataskmanager.TaskNote) bool {
+	if note.Kind != "automatic" || !note.Automatic {
+		return false
+	}
+	if note.Text == "Deleted" {
+		return true
+	}
+	for _, label := range []string{"Moved ", "Assignee ", "Status ", "Tags "} {
+		if strings.HasPrefix(note.Text, label) && strings.Contains(note.Text, " to ") {
+			return true
+		}
+	}
+	return false
 }
 
 func sortedTags(task mwanachamataskmanager.Task) []string {

@@ -145,6 +145,8 @@ func (m *taskManager) updateTask(ctx context.Context, task Task, replace bool) (
 	}
 	task.AssignedTo = current.AssignedTo
 	task.Backlog, task.Step = m.storedPlace(ctx, task.ID)
+	logged := current
+	logged.Backlog, logged.Step = task.Backlog, task.Step
 	if replace && current.Status != task.Status {
 		if task.Backlog, task.Step, err = m.placeAfterStatusChange(ctx, task); err != nil {
 			return Task{}, fmt.Errorf("UpdateTask: %w", err)
@@ -180,6 +182,7 @@ func (m *taskManager) updateTask(ctx context.Context, task Task, replace bool) (
 		return Task{}, fmt.Errorf("UpdateTask: %w", err)
 	}
 	out.State = models.StateNameFor(states, out.Status)
+	m.logTaskChanges(ctx, logged, out)
 
 	if out.WorkflowRunID != "" && current.WorkflowRunID == "" {
 		if err := m.LinkTaskToRun(ctx, out.WorkflowRunID, out.ID); err != nil {
@@ -238,6 +241,7 @@ func (m *taskManager) DeleteTask(ctx context.Context, taskID string) error {
 		UpdateColumn("deleted", true).Error; err != nil {
 		return fmt.Errorf("DeleteTask: %w", err)
 	}
+	m.logDeletion(ctx, taskID)
 	if err := m.closeCaseIfSettled(ctx, taskID); err != nil {
 		slog.WarnContext(ctx, "DeleteTask: closeCaseIfSettled", "task_id", taskID, "err", err)
 	}

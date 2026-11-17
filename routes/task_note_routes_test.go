@@ -22,7 +22,31 @@ func (h *accessHub) notesAs(caller, path string) []map[string]any {
 	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
 		h.t.Fatalf("GET %s: %v: %s", path, err, rec.Body.String())
 	}
-	return list
+	return withoutChangeEntries(list)
+}
+
+func withoutChangeEntries(list []map[string]any) []map[string]any {
+	kept := []map[string]any{}
+	for _, note := range list {
+		text, _ := note["text"].(string)
+		if note["kind"] == "automatic" && note["automatic"] == true && isChangeEntryText(text) {
+			continue
+		}
+		kept = append(kept, note)
+	}
+	return kept
+}
+
+func isChangeEntryText(text string) bool {
+	if text == "Deleted" {
+		return true
+	}
+	for _, label := range []string{"Moved ", "Assignee ", "Status ", "Tags "} {
+		if strings.HasPrefix(text, label) && strings.Contains(text, " to ") {
+			return true
+		}
+	}
+	return false
 }
 
 func TestACanSeeReaderAddsANoteToTheLogAndEveryoneWhoSeesTheIssueReadsItInOrder(t *testing.T) {

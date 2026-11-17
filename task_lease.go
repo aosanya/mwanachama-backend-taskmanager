@@ -99,6 +99,7 @@ func (m *taskManager) releaseLease(ctx context.Context, row leaseRow, now time.T
 	if won.RowsAffected == 0 {
 		return false, nil
 	}
+	m.logChange(ctx, row.ID, changeLabelAssignee, row.AssignedTo, "")
 	task, err := m.GetTask(ctx, row.ID)
 	if err != nil {
 		return false, err

@@ -147,6 +147,7 @@ func (m *taskManager) findUnmetDependencies(ctx context.Context, taskID string) 
 // setTaskStatus updates only the status column, leaving every other field
 // untouched.
 func (m *taskManager) setTaskStatus(ctx context.Context, taskID string, status TaskStatus) error {
+	before, _ := m.GetTask(ctx, taskID)
 	cols := map[string]any{
 		"status":     string(status),
 		"updated_at": time.Now().UTC().Format(time.RFC3339),
@@ -168,11 +169,13 @@ func (m *taskManager) setTaskStatus(ctx context.Context, taskID string, status T
 	if res.RowsAffected == 0 {
 		return ErrTaskNotFound
 	}
+	m.logStatusSet(ctx, before, status, place)
 	return nil
 }
 
 func (m *taskManager) UnassignTask(ctx context.Context, taskID string) error {
-	if _, err := m.GetTask(ctx, taskID); err != nil {
+	before, err := m.GetTask(ctx, taskID)
+	if err != nil {
 		return err
 	}
 	if err := m.closeCurrentAssignment(ctx, taskID, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
@@ -182,5 +185,6 @@ func (m *taskManager) UnassignTask(ctx context.Context, taskID string) error {
 		Updates(map[string]any{"assigned_to": "", "assignee_kind": ""}).Error; err != nil {
 		return fmt.Errorf("UnassignTask: %w", err)
 	}
+	m.logAssignee(ctx, before, "")
 	return nil
 }

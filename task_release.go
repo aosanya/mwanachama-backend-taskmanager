@@ -230,6 +230,7 @@ func (m *taskManager) settleAsPending(ctx context.Context, taskID string) error 
 	if res.Error != nil {
 		return res.Error
 	}
+	m.logChange(ctx, taskID, changeLabelStatus, string(moved.Status), string(TaskStatusPending))
 	pending := moved
 	pending.Status = TaskStatusPending
 	m.announceStatusChange(ctx, pending, moved.Status, now)

@@ -139,9 +139,8 @@ func TestPatchTask_APriorityChangeForAnIssueInDoneIsRefusedAndNothingChanges(t *
 	if err != nil || read.Priority != mwanachamataskmanager.TaskPriorityHigh {
 		t.Fatalf("priority %q, err %v, want high", read.Priority, err)
 	}
-	notes, err := mgr.ListTaskNotes(ctx, "", done.ID)
-	if err != nil || len(notes) != 0 {
-		t.Fatalf("got %d notes, err %v, want none", len(notes), err)
+	if notes := logOf(t, mgr, done.ID); len(notes) != 0 {
+		t.Fatalf("got %d notes, want none", len(notes))
 	}
 }
 

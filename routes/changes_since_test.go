@@ -93,7 +93,7 @@ func TestChangesSinceReportsACreatedIssueOnceAndNotAgain(t *testing.T) {
 	cursor := h.since("owner", "", nil)["next_cursor"].(string)
 	h.file("A", "software")
 
-	first := h.since("owner", cursor, nil)
+	first := onlyKinds(h.since("owner", cursor, nil), "created")
 	second := h.since("owner", first["next_cursor"].(string), nil)
 
 	wantChanges(t, first, "A:created:>")
@@ -153,8 +153,8 @@ func TestChangesSincePagesWithoutLossOrRepeat(t *testing.T) {
 	if seen["C:priority:medium>low"] != 1 {
 		t.Errorf("the priority change appeared %d times, want 1 (%v)", seen["C:priority:medium>low"], seen)
 	}
-	if pages != 3 {
-		t.Errorf("%d pages for six changes at limit 2, want 3", pages)
+	if pages != 6 {
+		t.Errorf("%d pages for eleven changes at limit 2, want 6", pages)
 	}
 }
 
@@ -175,19 +175,9 @@ func TestChangesSinceListsChangesInTimeOrder(t *testing.T) {
 		}
 		previous = at
 	}
-	if len(body["changes"].([]any)) != 3 {
-		t.Errorf("want three changes: %v", body)
+	if len(body["changes"].([]any)) != 5 {
+		t.Errorf("want five changes: %v", body)
 	}
-}
-
-func TestChangesSinceDoesNotReportAMove(t *testing.T) {
-	h := newChangesHub(t)
-	id := h.file("A", "software")
-	cursor := h.settledCursor("owner")
-
-	h.expect(http.StatusOK, "owner", "POST", "/tasks/"+id+"/move-to-step", map[string]any{"backlog": "software", "step": "in-progress"})
-
-	wantChanges(t, h.since("owner", cursor, nil))
 }
 
 func TestChangesSinceKeepsTheCursorWhenNothingChanged(t *testing.T) {
@@ -222,10 +212,10 @@ func TestChangesSinceShowsOnlyWhatTheCallerCanSee(t *testing.T) {
 	hiddenID := h.file("SECRET", "hidden")
 	h.expect(http.StatusOK, "owner", "PATCH", "/tasks/"+hiddenID, map[string]any{"priority": "high"})
 
-	wantChanges(t, h.since("dev", cursor, nil), "VISIBLE:created:>")
+	wantChanges(t, h.since("dev", cursor, nil), "VISIBLE:created:>", "VISIBLE:moved:backlog/to-do>software/to-do")
 	wantChanges(t, h.since("nobody", cursor, nil))
-	if got := len(h.since("owner", cursor, nil)["changes"].([]any)); got != 3 {
-		t.Errorf("the owner sees %d changes, want 3", got)
+	if got := len(h.since("owner", cursor, nil)["changes"].([]any)); got != 5 {
+		t.Errorf("the owner sees %d changes, want 5", got)
 	}
 }
 
@@ -235,7 +225,7 @@ func TestChangesSinceNarrowsToABacklog(t *testing.T) {
 	h.file("A", "software")
 	h.file("B", "hidden")
 
-	wantChanges(t, h.since("owner", cursor, url.Values{"backlog": {"hidden"}}), "B:created:>")
+	wantChanges(t, h.since("owner", cursor, url.Values{"backlog": {"hidden"}}), "B:created:>", "B:moved:backlog/to-do>hidden/to-do")
 	h.expect(http.StatusBadRequest, "dev", "GET", "/changes-since?backlog=hidden", nil)
 }
 
@@ -246,7 +236,7 @@ func TestChangesSinceNarrowsToATag(t *testing.T) {
 	h.file("B", "software")
 	h.expect(http.StatusOK, "owner", "PATCH", "/tasks/"+tagged, map[string]any{"tags": []string{"Ready"}})
 
-	wantChanges(t, h.since("owner", cursor, url.Values{"tag": {"Ready"}}), "A:created:>")
+	wantChanges(t, h.since("owner", cursor, url.Values{"tag": {"Ready"}}), "A:created:>", "A:moved:backlog/to-do>software/to-do", "A:tags:>Ready")
 }
 
 func TestChangesSinceMayNameAnIssueFiledJustBeforeTheFirstCursorButNeverLosesOne(t *testing.T) {
