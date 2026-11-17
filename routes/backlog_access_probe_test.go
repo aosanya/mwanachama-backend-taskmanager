@@ -37,6 +37,7 @@ var operationsNotBoundToABacklog = map[string]bool{
 	"remove_task_reference":   true,
 	"set_worker_caps_default": true,
 	"claim_next":              true,
+	"batch":                   true,
 }
 
 var readsSentAsPost = map[string]bool{
@@ -89,6 +90,7 @@ func writesOnAnIssue(f *moreWritesFixture, other string) map[string]probeCall {
 		"create_task":              {"POST", "/tasks", map[string]any{"title": "new", "backlog": f.docs, "step": "write"}},
 		"update_task":              {"PUT", issue, map[string]any{"title": "renamed", "status": "pending", "backlog": f.docs, "step": "write"}},
 		"patch_task":               {"PATCH", issue, map[string]any{"title": "patched"}},
+		"create_with_todos":        {"POST", "/create-with-todos", map[string]any{"title": "new", "backlog": f.docs, "step": "write", "todos": []map[string]any{{"title": "one", "instructions": "do"}}}},
 		"move_task_to_state":       {"POST", issue + "/move", map[string]string{"state": "Done"}},
 		"move_task_to_step":        {"POST", issue + "/move-to-step", map[string]string{"backlog": f.docs, "step": "done"}},
 		"claim_task":               {"POST", issue + "/claim", nil},

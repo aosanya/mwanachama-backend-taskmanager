@@ -709,6 +709,22 @@
                {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."}],
       "returns": [{"body": true}]
     },
+    "batch": {
+      "method": "POST", "path": "/batch", "call": "Batch", "action": "taskmanager.task.batch",
+      "title": "Patch or move many issues in one call",
+      "description": "Apply up to 50 operations in order, each a patch or a move_to_step, and read back what happened to each. operations is a list of {op, task_id, ...}: op patch takes patch, the fields of taskmanager_task_patch (title, description, status, priority, effort, tags, project_name, due_at, estimated_hours, context, files); op move_to_step takes backlog and step, the ids of taskmanager_task_move_to_step. Each is checked and done exactly as the single tool would: the caller needs Can move on the backlog of each issue. The answer has results, one per operation in order {index, op, task_id, ok, applied, error}, and applied and failed, the counts. By default an operation that is refused is reported with its error and the others still run. With all_or_nothing true every operation is checked first, each against the state the earlier ones leave behind: when any is refused nothing is applied, the ones that would have passed read ok true and applied false, and the refused ones carry their error; when all pass they are applied in order, and if one still fails the rest are not applied. A bad operation (an op that is not patch or move_to_step, no task_id, no patch, no backlog or step) is a refusal of that operation, reported in results. A batch of none or of more than 50 operations is refused with 400.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog of each issue."},
+               {"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "create_with_todos": {
+      "method": "POST", "path": "/create-with-todos", "status": 201, "call": "CreateWithTodos", "action": "taskmanager.task.create_with_todos",
+      "title": "Create an issue with its todos and their order in one call",
+      "description": "Create an issue and its todo list together. Send the fields of taskmanager_task_create, and todos: a list in order, each {title, instructions, description, can_run_parallel, waits_on}. The todos get ordinalities 1, 2, 3 in the order sent. waits_on lists the positions (1 is the first todo sent) of the todos this one waits on; a position must be an earlier one, so a reference to itself, to a later todo, to none or to a cycle is refused with 400, and a todo that waits on others lands Blocked and turns To do when they are Done. A todo needs a title and instructions. Nothing is created when any part is refused: the todos are checked before the issue is made, and an issue whose todo could not be made is taken away again. The caller needs Can move on the backlog the issue lands in (403 otherwise). Returns issue, the created issue, and todos, its todos in order with id, code, ordinality, depends_on (the ids), status and state.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on the backlog the issue lands in."},
+               {"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
     "task_dependencies": {
       "method": "GET", "path": "/tasks/{taskID}/dependencies", "call": "TaskDependenciesFor", "action": "taskmanager.task.dependencies",
       "title": "What an issue waits on and what waits on it",
@@ -1263,6 +1279,7 @@
     "ErrUnknownTaskState": 400,
     "ErrUnknownBacklog": 400,
     "ErrInvalidFilter": 400,
+    "ErrInvalidBatch": 400,
     "ErrUnknownBacklogStep": 400,
     "ErrInvalidBacklog": 400,
     "ErrDuplicateRules": 409,

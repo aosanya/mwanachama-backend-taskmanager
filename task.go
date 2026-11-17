@@ -284,6 +284,8 @@ type TaskManager interface {
 	UnblockImpact(ctx context.Context, filter UnblockImpactFilter) (UnblockImpact, error)
 	ChangesSince(ctx context.Context, filter ChangesSinceFilter) (ChangesSince, error)
 	Lint(ctx context.Context, filter LintFilter) (Lint, error)
+	Batch(ctx context.Context, requesterID string, req BatchRequest) (BatchOutcome, error)
+	CreateWithTodos(ctx context.Context, requesterID string, req CreateWithTodosRequest) (IssueWithTodos, error)
 	CountTodosOfIssues(ctx context.Context, filter TodoCountsFilter) (IssueTodoCounts, error)
 	EditTodoFor(ctx context.Context, requesterID, todoID string, change TodoChange) (TodoView, error)
 	ReorderTodosOfIssue(ctx context.Context, requesterID, issueID string, order TodoOrder) (IssueTodoList, error)

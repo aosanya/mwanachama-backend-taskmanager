@@ -461,13 +461,9 @@ func (m *taskManager) MoveTaskToStep(ctx context.Context, taskID, backlogID, ste
 	if err != nil {
 		return Task{}, err
 	}
-	var path []TaskStatus
-	if len(step.Statuses) > 0 && !models.StepNamesStatus(step, task.Status) {
-		reached, ok := StatusPathToState(task.Status, models.TaskState{Name: step.Name, Statuses: step.Statuses})
-		if !ok {
-			return Task{}, fmt.Errorf("%w: a task in %s cannot reach %q", ErrNoPathToState, task.Status, step.Name)
-		}
-		path = reached
+	path, err := movePath(task, step)
+	if err != nil {
+		return Task{}, err
 	}
 	if err := m.refuseWhileBlocked(ctx, task, path); err != nil {
 		return Task{}, err

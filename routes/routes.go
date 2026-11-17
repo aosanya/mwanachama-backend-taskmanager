@@ -30,6 +30,7 @@ var sentinels = map[string]error{
 	"ErrTaskReferenceNotFound":         mwanachamataskmanager.ErrTaskReferenceNotFound,
 	"ErrUnknownBacklog":                mwanachamataskmanager.ErrUnknownBacklog,
 	"ErrInvalidFilter":                 mwanachamataskmanager.ErrInvalidFilter,
+	"ErrInvalidBatch":                  mwanachamataskmanager.ErrInvalidBatch,
 	"ErrInvalidOverdueFilter":          mwanachamataskmanager.ErrInvalidOverdueFilter,
 	"ErrInvalidAssignee":               mwanachamataskmanager.ErrInvalidAssignee,
 	"ErrAgentNotFound":                 mwanachamataskmanager.ErrAgentNotFound,
