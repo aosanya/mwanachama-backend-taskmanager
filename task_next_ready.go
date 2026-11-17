@@ -31,6 +31,7 @@ type NextReadyFilter struct {
 	CreatedSince string              `query:"created_since"`
 	UpdatedSince string              `query:"updated_since"`
 	HasFiles     *bool               `query:"has_files"`
+	Fields       []string            `query:"fields"`
 
 	RequesterID string `query:"-" json:"-"`
 }
@@ -50,6 +51,14 @@ type NextReadyItem struct {
 type NextReady struct {
 	TotalReady int             `json:"total_ready"`
 	Items      []NextReadyItem `json:"items"`
+
+	Fields []string `json:"-"`
+}
+
+type nextReadyJSON NextReady
+
+func (n NextReady) MarshalJSON() ([]byte, error) {
+	return models.MarshalWithItems(nextReadyJSON(n), n.Fields)
 }
 
 type nextReadyRow struct {
@@ -69,6 +78,16 @@ func (r nextReadyRow) place() pendingRow {
 }
 
 func (m *taskManager) NextReady(ctx context.Context, filter NextReadyFilter) (NextReady, error) {
+	fields, err := chooseFields(filter.Fields, NextReadyItem{})
+	if err != nil {
+		return NextReady{Items: []NextReadyItem{}}, fmt.Errorf("NextReady: %w", err)
+	}
+	out, err := m.nextReady(ctx, filter)
+	out.Fields = fields
+	return out, err
+}
+
+func (m *taskManager) nextReady(ctx context.Context, filter NextReadyFilter) (NextReady, error) {
 	out := NextReady{Items: []NextReadyItem{}}
 	if filter.Limit > nextReadyMaxLimit {
 		return out, fmt.Errorf("NextReady: %w: limit %d is above %d", ErrInvalidFilter, filter.Limit, nextReadyMaxLimit)

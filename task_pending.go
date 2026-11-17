@@ -47,6 +47,16 @@ type pendingTally struct {
 }
 
 func (m *taskManager) PendingTasks(ctx context.Context, filter PendingFilter) (PendingTasks, error) {
+	fields, err := chooseFields(filter.Fields, PendingItem{})
+	if err != nil {
+		return PendingTasks{}, fmt.Errorf("PendingTasks: %w", err)
+	}
+	out, err := m.pendingTasks(ctx, filter)
+	out.Fields = fields
+	return out, err
+}
+
+func (m *taskManager) pendingTasks(ctx context.Context, filter PendingFilter) (PendingTasks, error) {
 	if filter.Offset < 0 {
 		return PendingTasks{}, fmt.Errorf("PendingTasks: %w: offset %d", ErrInvalidFilter, filter.Offset)
 	}

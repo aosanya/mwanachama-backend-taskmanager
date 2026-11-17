@@ -26,6 +26,8 @@ type PendingFilter struct {
 
 	IncludeClosed bool `query:"include_closed"`
 
+	Fields []string `query:"fields"`
+
 	RequesterID string `query:"-" json:"-"`
 }
 
@@ -57,4 +59,6 @@ type PendingTasks struct {
 	ByStep     []PendingCount `json:"by_step"`
 	ByPriority []PendingCount `json:"by_priority"`
 	Items      []PendingItem  `json:"items"`
+
+	Fields []string `json:"-"`
 }

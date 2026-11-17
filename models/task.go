@@ -252,6 +252,7 @@ type TaskFilter struct {
 	HasFiles      *bool        `query:"has_files"`
 	IDs           []string     `query:"ids"`
 	Sort          string       `query:"sort"`
+	Fields        []string     `query:"fields"`
 	Offset        int          `query:"offset,min=0"`
 	RequesterID   string       `query:"-" json:"-"`
 

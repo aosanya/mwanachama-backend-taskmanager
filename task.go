@@ -41,6 +41,8 @@ type TaskManager interface {
 	// an empty slice (not an error) when no tasks match.
 	ListTasks(ctx context.Context, filter TaskFilter) ([]Task, error)
 
+	ListTaskPage(ctx context.Context, filter TaskFilter) (TaskPage, error)
+
 	ListOverdueTasks(ctx context.Context, filter OverdueFilter) ([]OverdueTask, error)
 
 	PendingTasks(ctx context.Context, filter PendingFilter) (PendingTasks, error)
