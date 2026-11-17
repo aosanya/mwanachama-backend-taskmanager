@@ -685,6 +685,14 @@
                {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."}],
       "returns": [{"body": true}]
     },
+    "changes_since": {
+      "method": "GET", "path": "/changes-since", "call": "ChangesSince", "action": "taskmanager.task.changes_since",
+      "title": "What changed on the board after a cursor",
+      "description": "Read what changed after a cursor, so an orchestrator need not re-read the board. Send no cursor to get no changes and a cursor that marks now; send the next_cursor of the last answer to read on. A cursor is opaque. changes are in time order, each with id, code, title of the issue, kind, from, to and at. Two kinds are readable from what the hub stores: created (the issue was filed; from and to are empty) and priority (from and to are the old and new priority, read from the Log entry a priority change writes). A move, a hand-over, a status or tag change and a delete are not reported, because nothing stored says when they happened. An issue the caller cannot see is not reported. Narrow by backlog (id or name; a backlog the caller cannot see is refused) and tag (repeat it to require every tag). limit defaults to 100 and is at most 500; a larger one and a cursor this call did not return are refused with 400. has_more is true when the page is full and more follow; when nothing new came back next_cursor is the one sent. Read-only.",
+      "args": [{"from": "query", "whole": true},
+               {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."}],
+      "returns": [{"body": true}]
+    },
     "unblock_impact": {
       "method": "GET", "path": "/unblock-impact", "call": "UnblockImpact", "action": "taskmanager.task.unblock_impact",
       "title": "Which open issues finishing would unblock the most others",
@@ -814,6 +822,14 @@
       "description": "The todos of one issue that can start now, in order: not Done, not Blocked and every todo they wait on Done, so an issue agent can start one sub agent for each without working out the predecessors itself. items carries id, code, title, instructions, ordinality, state (To do or In progress) and can_run_parallel; blocked lists the todos held Blocked by hand with their blocked_reason, and a todo behind one of them is not ready. done and total count the issue's todos. Read-only; an issue the caller cannot see is 404.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."},
                {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue."}],
+      "returns": [{"body": true}]
+    },
+    "todo_ready_board": {
+      "method": "GET", "path": "/todo-ready-board", "call": "ReadyTodosOfBoard", "action": "taskmanager.task_todo.ready_board",
+      "title": "The todos that can start now across the issues in progress",
+      "description": "The todos that can start now, from every issue at the In Progress step of its backlog (the step named In Progress, without regard to case, whatever its id), in one call, so a worker that wants a piece of work does not read each issue first. A todo can start when it is not Done, not Blocked and every todo it waits on is Done, the same rule as taskmanager_task_todo_ready. items are ordered by the issue's rank, then the todo's order in its list; each carries the todo (id, code, title, instructions, ordinality, state, can_run_parallel) and its issue (issue_id, issue_code, issue_files). total counts every match, not only the items returned. Narrow by backlog (id or name; a backlog that does not exist or that the caller cannot see is refused as unknown) and tag (repeat it to require every tag on the issue). limit is 1 to 100 and defaults to 25; anything else is refused with 400. Read-only; a person sees only the issues of the backlogs their groups can see.",
+      "args": [{"from": "query", "whole": true},
+               {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session; a person sees only the backlogs their groups can see."}],
       "returns": [{"body": true}]
     },
     "task_report": {

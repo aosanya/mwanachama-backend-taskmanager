@@ -34,23 +34,29 @@ func (m *taskManager) ReadyTodosFor(ctx context.Context, requesterID, issueID st
 	if err != nil {
 		return ReadyTodos{}, err
 	}
-	out := ReadyTodos{Items: []ReadyTodo{}, Blocked: []HeldTodo{}, Done: list.Done, Total: list.Total}
-	for _, view := range list.Items {
+	items, held := readyAndHeld(list.Items)
+	return ReadyTodos{Items: items, Blocked: held, Done: list.Done, Total: list.Total}, nil
+}
+
+func readyAndHeld(views []TodoView) ([]ReadyTodo, []HeldTodo) {
+	items := []ReadyTodo{}
+	held := []HeldTodo{}
+	for _, view := range views {
 		switch view.Status {
 		case TodoStatusPending, TodoStatusDispatched:
-			out.Items = append(out.Items, ReadyTodo{
+			items = append(items, ReadyTodo{
 				ID: view.ID, Code: view.Code, Title: view.Title, Instructions: view.Instructions,
 				Ordinality: view.Ordinality, State: view.State, CanRunParallel: view.CanRunParallel,
 				ElapsedSeconds: view.ElapsedSeconds,
 			})
 		case TodoStatusBlocked, TodoStatusFailed:
 			if view.BlockedReason != "" {
-				out.Blocked = append(out.Blocked, HeldTodo{
+				held = append(held, HeldTodo{
 					ID: view.ID, Code: view.Code, Title: view.Title,
 					Ordinality: view.Ordinality, BlockedReason: view.BlockedReason,
 				})
 			}
 		}
 	}
-	return out, nil
+	return items, held
 }
