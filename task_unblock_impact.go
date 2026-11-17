@@ -85,7 +85,7 @@ func (m *taskManager) UnblockImpact(ctx context.Context, filter UnblockImpactFil
 		downstream := reachableFrom(id, waiters)
 		codes := make([]string, 0, len(downstream))
 		for _, waiter := range downstream {
-			codes = append(codes, open[waiter].Code)
+			codes = append(codes, taskDisplayName(open[waiter]))
 		}
 		slices.Sort(codes)
 		_, step := placeNames(backlogs, pendingRow{Status: string(task.Status), Backlog: task.Backlog, Step: task.Step})

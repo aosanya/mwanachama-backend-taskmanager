@@ -81,6 +81,10 @@ type snapshotRow struct {
 	UpdatedAt  string
 }
 
+func (r snapshotRow) displayName() string {
+	return displayName(r.Code, r.Title, r.ID)
+}
+
 func (r snapshotRow) place() pendingRow {
 	return pendingRow{ID: r.ID, Code: r.Code, Title: r.Title, Status: r.Status, Backlog: r.Backlog, Step: r.Step}
 }
@@ -172,7 +176,7 @@ func snapshotSteps(backlogs []models.Backlog, backlogName string, issues []snaps
 		step.Count++
 		if issue.aged && issue.age >= oldest[issue.stepName] {
 			oldest[issue.stepName] = issue.age
-			step.OldestDays, step.OldestCode = int(issue.age/oneDay), issue.row.Code
+			step.OldestDays, step.OldestCode = int(issue.age/oneDay), issue.row.displayName()
 		}
 	}
 	out := []SnapshotStep{}
@@ -212,7 +216,7 @@ func snapshotAgents(inProgress []snapshotIssue) []SnapshotAgent {
 			byAgent[issue.row.AssignedTo] = agent
 		}
 		agent.InProgress++
-		agent.Codes = append(agent.Codes, issue.row.Code)
+		agent.Codes = append(agent.Codes, issue.row.displayName())
 	}
 	out := make([]SnapshotAgent, 0, len(byAgent))
 	for _, agent := range byAgent {
@@ -261,7 +265,7 @@ func (m *taskManager) snapshotBlocked(ctx context.Context, issues []snapshotIssu
 	waits := map[string][]SnapshotWait{}
 	for _, edge := range edges {
 		if target, open := byID[edge.ToTaskID]; open {
-			waits[edge.FromTaskID] = append(waits[edge.FromTaskID], SnapshotWait{Code: target.row.Code, Blocked: isBlocked(target.tags)})
+			waits[edge.FromTaskID] = append(waits[edge.FromTaskID], SnapshotWait{Code: target.row.displayName(), Blocked: isBlocked(target.tags)})
 		}
 	}
 	for _, id := range blockedIDs {

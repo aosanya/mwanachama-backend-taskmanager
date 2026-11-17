@@ -117,7 +117,7 @@ func (m *taskManager) readyCandidates(ctx context.Context, backlogs []models.Bac
 func firstClash(task Task, running, chosen []Task) (string, bool) {
 	for _, other := range append(append([]Task{}, running...), chosen...) {
 		if other.ID != task.ID && len(overlappingPairs(task.Files, other.Files)) > 0 {
-			return other.Code, true
+			return taskDisplayName(other), true
 		}
 	}
 	return "", false
