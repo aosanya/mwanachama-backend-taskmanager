@@ -23,6 +23,9 @@ func (m *taskManager) CreateTask(ctx context.Context, task Task) (Task, error) {
 	if err := m.checkPlace(ctx, task.Backlog, task.Step); err != nil {
 		return Task{}, fmt.Errorf("CreateTask: %w", err)
 	}
+	if err := checkTaskTitle(task.Title); err != nil {
+		return Task{}, fmt.Errorf("CreateTask: %w", err)
+	}
 	task.ID = newSpecID()
 	now := time.Now().UTC().Format(time.RFC3339)
 	task.Status = TaskStatusPending
@@ -110,6 +113,11 @@ func (m *taskManager) updateTask(ctx context.Context, task Task, replace bool) (
 	current, err := m.GetTask(ctx, task.ID)
 	if err != nil {
 		return Task{}, err
+	}
+	if task.Title != current.Title {
+		if err := checkTaskTitle(task.Title); err != nil {
+			return Task{}, fmt.Errorf("UpdateTask: %w", err)
+		}
 	}
 	if task.Effort == "" {
 		task.Effort = current.Effort
