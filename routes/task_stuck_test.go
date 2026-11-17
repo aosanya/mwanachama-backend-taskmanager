@@ -227,6 +227,38 @@ func TestStuckAnExpiredLeaseIsFlagged(t *testing.T) {
 	}
 }
 
+func TestStuckDaysInStepCountsFromTheMoveIntoTheStepNotFromTheLastEdit(t *testing.T) {
+	h := newStuckHub(t)
+	id := h.issueAt("in-progress", "Moved long ago", 10, nil)
+	h.exec("UPDATE "+specTable(h.t, "work_item")+" SET step_entered_at = ? WHERE id = ?",
+		time.Now().UTC().AddDate(0, 0, -10).Format(time.RFC3339), id)
+
+	item := stuckItem(t, h.stuck(""), id)
+
+	if item == nil {
+		t.Fatal("the issue with no todos is not listed")
+	}
+	if item["days_in_step"].(float64) != 10 {
+		t.Errorf("days_in_step %v, want 10", item["days_in_step"])
+	}
+	if item["days_since_activity"].(float64) != 0 {
+		t.Errorf("days_since_activity %v, want 0 for an issue touched now", item["days_since_activity"])
+	}
+}
+
+func TestStuckDaysInStepOfAnIssueThatNeverMovedFallsBackToItsLastUpdate(t *testing.T) {
+	h := newStuckHub(t)
+	id := h.issueAt("in-progress", "Never moved", 10, nil)
+	h.exec("UPDATE "+specTable(h.t, "work_item")+" SET step_entered_at = '' WHERE id = ?", id)
+	h.age(id, 4)
+
+	item := stuckItem(t, h.stuck(""), id)
+
+	if item == nil || item["days_in_step"].(float64) != 4 {
+		t.Fatalf("days_in_step of an unmoved issue: %v, want 4", item)
+	}
+}
+
 func TestStuckFlagsTwoInProgressIssuesThatTouchTheSameFiles(t *testing.T) {
 	h := newStuckHub(t)
 	a := h.healthy("First", 10, "code/api/task.go")

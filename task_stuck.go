@@ -234,9 +234,10 @@ func stuckItemOf(subject stuckSubject, onlyReason string) (StuckItem, bool) {
 	if assignee == "" {
 		assignee = issue.HeldBy
 	}
+	_, daysInStep := stepClock(issue, subject.Now)
 	return StuckItem{
 		ID: issue.ID, Code: issue.Code, Title: issue.Title, Assignee: assignee,
-		DaysInStep:        wholeDaysSince(subject.Now, issue.UpdatedAt, issue.CreatedAt),
+		DaysInStep:        daysInStep,
 		DaysSinceActivity: int(subject.Now.Sub(subject.LastActivity) / oneDay),
 		TodosDone:         countTodos(subject.Todos, TodoStatusCompleted),
 		TodosTotal:        len(subject.Todos),
@@ -262,15 +263,6 @@ func countTodos(todos []TaskTodo, status TodoStatus) int {
 		}
 	}
 	return count
-}
-
-func wholeDaysSince(now time.Time, candidates ...string) int {
-	for _, candidate := range candidates {
-		if at, ok := stuckTime(candidate); ok {
-			return max(int(now.Sub(at)/oneDay), 0)
-		}
-	}
-	return 0
 }
 
 func lastActivityOf(subject stuckSubject, noted time.Time) time.Time {
