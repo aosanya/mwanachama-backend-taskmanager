@@ -709,6 +709,14 @@
                {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."}],
       "returns": [{"body": true}]
     },
+    "stuck": {
+      "method": "GET", "path": "/stuck", "call": "StuckIssues", "action": "taskmanager.task.stuck",
+      "title": "Which In progress issues are not moving, and why",
+      "description": "List the issues at an In progress step that are stuck, worst first, each with the reasons it is stuck and one next_action for the first reason. Narrow with backlog (id or name) and tag (repeat it to require every tag). Each item has id, code, title, assignee, days_in_step, days_since_activity (the latest of the issue's own update, its todos' updates and its notes), todos_done, todos_total, reasons and next_action. The reasons are no_todos, no_todo_started (todos exist and none is In progress or Done), all_remaining_todos_blocked, only_documentation_left_open, lease_expired, no_activity (days_since_activity at or past stalled_days, default 2), unassigned_in_progress and files_clash_with_another_in_progress. Send reason to keep only the issues that break that rule. An issue with no reasons is not listed and a closed issue never is. total counts every stuck issue; limit defaults to 25 and is at most 100 (a larger one is refused with 400); pass offset (0 or more) for the next page. An unknown backlog, an unseen one, a negative stalled_days and an unknown reason are refused. Read-only.",
+      "args": [{"from": "query", "whole": true},
+               {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."}],
+      "returns": [{"body": true}]
+    },
     "batch": {
       "method": "POST", "path": "/batch", "call": "Batch", "action": "taskmanager.task.batch",
       "title": "Patch or move many issues in one call",

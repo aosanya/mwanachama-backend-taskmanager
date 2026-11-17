@@ -55,6 +55,11 @@ func (h *claimNextHub) expireLease(id string) {
 
 func claimNextTable(t *testing.T) string {
 	t.Helper()
+	return specTable(t, "work_item")
+}
+
+func specTable(t *testing.T, objectName string) string {
+	t.Helper()
 	raw, err := os.ReadFile("../spec/examples/agency.taskmanager.json")
 	if err != nil {
 		t.Fatal(err)
@@ -72,9 +77,9 @@ func claimNextTable(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	object, ok := s.Object("work_item")
+	object, ok := s.Object(objectName)
 	if !ok {
-		t.Fatal("spec declares no work_item object")
+		t.Fatalf("spec declares no %s object", objectName)
 	}
 	return s.TableFor(object)
 }
