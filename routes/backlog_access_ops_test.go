@@ -20,8 +20,9 @@ import (
 type callerKey struct{}
 
 type accessHub struct {
-	t   *testing.T
-	mux *http.ServeMux
+	t     *testing.T
+	mux   *http.ServeMux
+	tools []routes.Tool
 }
 
 func newAccessHub(t *testing.T, groupsOf map[string][]string) *accessHub {
@@ -74,11 +75,50 @@ func newAccessHubOn(t *testing.T, dsn string, groupsOf map[string][]string) *acc
 	if err != nil {
 		t.Fatal(err)
 	}
+	tools, err := routes.BuildToolsFor(mgr, routes.Mount{Caller: func(ctx context.Context) string {
+		id, _ := ctx.Value(callerKey{}).(string)
+		return id
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	mux := http.NewServeMux()
 	for _, r := range built {
 		mux.HandleFunc(r.Pattern(""), r.Handler)
 	}
-	return &accessHub{t: t, mux: mux}
+	return &accessHub{t: t, mux: mux, tools: tools}
+}
+
+func (h *accessHub) tool(name string) routes.Tool {
+	h.t.Helper()
+	for _, tool := range h.tools {
+		if tool.Name == name {
+			return tool
+		}
+	}
+	h.t.Fatalf("no tool named %s", name)
+	return routes.Tool{}
+}
+
+func (h *accessHub) invoke(caller, name string, args map[string]any) (map[string]any, error) {
+	h.t.Helper()
+	raw, err := json.Marshal(args)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	out, err := h.tool(name).Invoke(context.WithValue(context.Background(), callerKey{}, caller), raw)
+	if err != nil {
+		return nil, err
+	}
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		h.t.Fatal(err)
+	}
+	return decoded, nil
 }
 
 func (h *accessHub) call(caller, method, path string, body any) (int, map[string]any) {

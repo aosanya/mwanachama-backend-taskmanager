@@ -2,6 +2,7 @@ package mwanachamataskmanager
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -19,12 +20,48 @@ type CreateWithTodosRequest struct {
 	Todos []TodoSpec `json:"todos"`
 }
 
+func (r *CreateWithTodosRequest) UnmarshalJSON(b []byte) error {
+	type flat CreateWithTodosRequest
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return err
+	}
+	nestedKey := nestedTaskKey(keys)
+	if nestedKey == "" {
+		return json.Unmarshal(b, (*flat)(r))
+	}
+	for key := range keys {
+		if key != nestedKey && key != "todos" {
+			return fmt.Errorf("%w: send the issue fields at the top level or under %s, not both", ErrInvalidTask, nestedKey)
+		}
+	}
+	if err := json.Unmarshal(keys[nestedKey], &r.Task); err != nil {
+		return err
+	}
+	if raw, ok := keys["todos"]; ok {
+		return json.Unmarshal(raw, &r.Todos)
+	}
+	return nil
+}
+
+func nestedTaskKey(keys map[string]json.RawMessage) string {
+	for _, key := range []string{"Task", "task"} {
+		if _, ok := keys[key]; ok {
+			return key
+		}
+	}
+	return ""
+}
+
 type IssueWithTodos struct {
 	Issue Task       `json:"issue"`
 	Todos []TodoView `json:"todos"`
 }
 
 func (m *taskManager) CreateWithTodos(ctx context.Context, requesterID string, req CreateWithTodosRequest) (IssueWithTodos, error) {
+	if strings.TrimSpace(req.Title) == "" {
+		return IssueWithTodos{}, fmt.Errorf("CreateWithTodos: %w: an issue needs a title", ErrInvalidTask)
+	}
 	if err := checkTodoSpecs(req.Todos); err != nil {
 		return IssueWithTodos{}, fmt.Errorf("CreateWithTodos: %w", err)
 	}

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/aosanya/mwanachama-backend-taskmanager/models"
 )
 
 const (
@@ -60,11 +62,16 @@ func (m *taskManager) Batch(ctx context.Context, requesterID string, req BatchRe
 	return tallyBatch(results, req.AllOrNothing), nil
 }
 
+type batchView struct {
+	before map[string]Task
+	after  map[string]Task
+}
+
 func (m *taskManager) refuseBatch(ctx context.Context, requesterID string, ops []BatchOperation, results []BatchResult) bool {
-	seen := make(map[string]Task, len(ops))
+	view := batchView{before: make(map[string]Task, len(ops)), after: make(map[string]Task, len(ops))}
 	refused := false
 	for i, op := range ops {
-		if err := m.checkBatchOperation(ctx, requesterID, op, seen); err != nil {
+		if err := m.checkBatchOperation(ctx, requesterID, op, view); err != nil {
 			results[i].Error = err.Error()
 			refused = true
 			continue
@@ -77,6 +84,7 @@ func (m *taskManager) refuseBatch(ctx context.Context, requesterID string, ops [
 func (m *taskManager) applyBatch(ctx context.Context, requesterID string, req BatchRequest, results []BatchResult) {
 	stopped := false
 	for i, op := range req.Operations {
+		results[i].OK, results[i].Applied, results[i].Error = false, false, ""
 		if stopped {
 			results[i].Error = batchNotApplied
 			continue
@@ -138,31 +146,32 @@ func checkBatchShape(op BatchOperation) error {
 	return nil
 }
 
-func (m *taskManager) checkBatchOperation(ctx context.Context, requesterID string, op BatchOperation, seen map[string]Task) error {
+func (m *taskManager) checkBatchOperation(ctx context.Context, requesterID string, op BatchOperation, view batchView) error {
 	if err := checkBatchShape(op); err != nil {
 		return err
 	}
 	if err := m.requireMoveOnTask(ctx, requesterID, op.TaskID); err != nil {
 		return err
 	}
-	current, ok := seen[op.TaskID]
+	current, ok := view.after[op.TaskID]
 	if !ok {
 		var err error
 		if current, err = m.GetTask(ctx, op.TaskID); err != nil {
 			return err
 		}
+		view.before[op.TaskID] = current
 	}
-	next, err := m.foreseeBatchOperation(ctx, requesterID, op, current)
+	next, err := m.foreseeBatchOperation(ctx, requesterID, op, current, view)
 	if err != nil {
 		return err
 	}
-	seen[op.TaskID] = next
+	view.after[op.TaskID] = next
 	return nil
 }
 
-func (m *taskManager) foreseeBatchOperation(ctx context.Context, requesterID string, op BatchOperation, current Task) (Task, error) {
+func (m *taskManager) foreseeBatchOperation(ctx context.Context, requesterID string, op BatchOperation, current Task, view batchView) (Task, error) {
 	if op.Op == batchOpMove {
-		return m.foreseeMove(ctx, requesterID, op, current)
+		return m.foreseeMove(ctx, requesterID, op, current, view)
 	}
 	return m.foreseePatch(ctx, *op.Patch, current)
 }
@@ -194,7 +203,7 @@ func (m *taskManager) foreseePatch(ctx context.Context, patch TaskPatch, current
 	return patched, nil
 }
 
-func (m *taskManager) foreseeMove(ctx context.Context, requesterID string, op BatchOperation, current Task) (Task, error) {
+func (m *taskManager) foreseeMove(ctx context.Context, requesterID string, op BatchOperation, current Task, view batchView) (Task, error) {
 	if err := m.requireMoveOn(ctx, requesterID, op.Backlog); err != nil {
 		return Task{}, err
 	}
@@ -204,6 +213,9 @@ func (m *taskManager) foreseeMove(ctx context.Context, requesterID string, op Ba
 	}
 	_, step, err := locateStep(backlogs, op.Backlog, op.Step)
 	if err != nil {
+		return Task{}, err
+	}
+	if err := m.refuseFullStepAfter(ctx, current, op.Backlog, step, view); err != nil {
 		return Task{}, err
 	}
 	path, err := movePath(current, step)
@@ -218,4 +230,26 @@ func (m *taskManager) foreseeMove(ctx context.Context, requesterID string, op Ba
 		current.Status = path[len(path)-1]
 	}
 	return current, nil
+}
+
+func (m *taskManager) refuseFullStepAfter(ctx context.Context, current Task, backlogID string, step models.BacklogStep, view batchView) error {
+	if step.WipLimit <= 0 || (current.Backlog == backlogID && current.Step == step.ID) {
+		return nil
+	}
+	held, err := m.issuesAtStep(ctx, backlogID, step.ID)
+	if err != nil {
+		return err
+	}
+	for id, was := range view.before {
+		now := view.after[id]
+		wasHere := was.Backlog == backlogID && was.Step == step.ID
+		nowHere := now.Backlog == backlogID && now.Step == step.ID
+		switch {
+		case wasHere && !nowHere:
+			held--
+		case !wasHere && nowHere:
+			held++
+		}
+	}
+	return wipRefusal(step, held)
 }

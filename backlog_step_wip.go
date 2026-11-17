@@ -83,6 +83,10 @@ func (m *taskManager) refuseFullStep(ctx context.Context, task Task, backlogID s
 	if err != nil {
 		return err
 	}
+	return wipRefusal(step, held)
+}
+
+func wipRefusal(step models.BacklogStep, held int) error {
 	if held >= step.WipLimit {
 		return fmt.Errorf("%w: %q holds %d of its limit of %d issues; finish or move one out, or ask a manager to override", ErrWipLimit, step.Name, held, step.WipLimit)
 	}

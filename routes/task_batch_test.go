@@ -1,8 +1,10 @@
 package routes_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"testing"
 )
 
@@ -391,5 +393,216 @@ func TestCreateWithTodosKeepsCanRunParallelAndTheIssueFields(t *testing.T) {
 	todos := body["todos"].([]any)
 	if todos[0].(map[string]any)["can_run_parallel"] != true || todos[1].(map[string]any)["can_run_parallel"] != false {
 		t.Errorf("todos = %v, want can_run_parallel kept per todo", todos)
+	}
+}
+
+func (h *batchHub) limitInProgress(limit int) {
+	h.t.Helper()
+	h.expect(http.StatusOK, "owner", "PUT", "/backlogs/software/steps/in-progress/wip-limit", map[string]any{"wip_limit": limit})
+}
+
+func (h *batchHub) inProgress(title string) string {
+	h.t.Helper()
+	id := h.issue(title)
+	h.expect(http.StatusOK, "owner", "POST", "/tasks/"+id+"/move-to-step", map[string]any{"backlog": "software", "step": "in-progress"})
+	return id
+}
+
+func TestBatchAllOrNothingRefusesAMoveIntoAFullStepBeforeApplyingAnything(t *testing.T) {
+	h := newBatchHub(t)
+	h.inProgress("holder")
+	h.limitInProgress(1)
+	a, b := h.issue("A"), h.issue("B")
+
+	body := h.expect(http.StatusOK, "owner", "POST", "/batch", map[string]any{"all_or_nothing": true, "operations": []any{
+		patchOp(a, map[string]any{"title": "renamed"}),
+		moveOp(b, "in-progress"),
+	}})
+
+	if body["applied"] != float64(0) || body["failed"] != float64(1) {
+		t.Errorf("applied %v failed %v, want 0 and 1", body["applied"], body["failed"])
+	}
+	if r := batchResult(body, 0); r["ok"] != true || r["applied"] != false || r["error"] != nil {
+		t.Errorf("the passing patch read %v, want ok true, applied false, no error", r)
+	}
+	if r := batchResult(body, 1); r["ok"] != false || r["applied"] != false || r["error"] == nil {
+		t.Errorf("the refused move read %v, want ok false, applied false and an error", r)
+	}
+	if got := h.read(a)["title"]; got != "A" {
+		t.Errorf("A is titled %v, the batch applied a patch although a move was refused", got)
+	}
+	if got := h.read(b)["step"]; got != "to-do" {
+		t.Errorf("B is at %v, want to-do", got)
+	}
+}
+
+func TestBatchWithoutAllOrNothingReportsAFullStepRefusalAsFailed(t *testing.T) {
+	h := newBatchHub(t)
+	h.inProgress("holder")
+	h.limitInProgress(1)
+	a, b := h.issue("A"), h.issue("B")
+
+	body := h.expect(http.StatusOK, "owner", "POST", "/batch", map[string]any{"operations": []any{
+		patchOp(a, map[string]any{"title": "renamed"}),
+		moveOp(b, "in-progress"),
+	}})
+
+	if body["applied"] != float64(1) || body["failed"] != float64(1) {
+		t.Errorf("applied %v failed %v, want 1 and 1", body["applied"], body["failed"])
+	}
+	if r := batchResult(body, 1); r["ok"] != false || r["applied"] != false || r["error"] == nil {
+		t.Errorf("the refused move read %v, want ok false, applied false and an error", r)
+	}
+	if got := h.read(a)["title"]; got != "renamed" {
+		t.Errorf("A is titled %v, want renamed", got)
+	}
+}
+
+func TestBatchAllOrNothingCountsWhatEarlierMovesLeaveInAStep(t *testing.T) {
+	h := newBatchHub(t)
+	holder := h.inProgress("holder")
+	h.limitInProgress(1)
+	a, b := h.issue("A"), h.issue("B")
+
+	freed := h.expect(http.StatusOK, "owner", "POST", "/batch", map[string]any{"all_or_nothing": true, "operations": []any{
+		moveOp(holder, "to-do"),
+		moveOp(a, "in-progress"),
+	}})
+	if freed["applied"] != float64(2) || freed["failed"] != float64(0) {
+		t.Errorf("moving out then in: applied %v failed %v, want 2 and 0", freed["applied"], freed["failed"])
+	}
+
+	crowded := h.expect(http.StatusOK, "owner", "POST", "/batch", map[string]any{"all_or_nothing": true, "operations": []any{
+		moveOp(b, "in-progress"),
+	}})
+	if crowded["applied"] != float64(0) || crowded["failed"] != float64(1) {
+		t.Errorf("moving into the step A now fills: applied %v failed %v, want 0 and 1", crowded["applied"], crowded["failed"])
+	}
+
+	h2 := newBatchHub(t)
+	x, y := h2.issue("X"), h2.issue("Y")
+	h2.limitInProgress(1)
+	two := h2.expect(http.StatusOK, "owner", "POST", "/batch", map[string]any{"all_or_nothing": true, "operations": []any{
+		moveOp(x, "in-progress"),
+		moveOp(y, "in-progress"),
+	}})
+	if two["applied"] != float64(0) || batchResult(two, 1)["ok"] != false {
+		t.Errorf("two moves into a step with room for one: %v, want nothing applied and the second refused", two)
+	}
+	if h2.read(x)["step"] != "to-do" {
+		t.Errorf("X moved although the batch was refused")
+	}
+}
+
+func createWithTodosFields(title string) map[string]any {
+	return map[string]any{
+		"title": title, "description": "Done looks like: it ran.", "backlog": "software", "step": "to-do",
+		"tags": []string{"Ready", "zz"}, "files": []string{"zz/a/"}, "effort": "low", "priority": "high",
+	}
+}
+
+func assertIssueFieldsApplied(t *testing.T, h *batchHub, got map[string]any, title string) {
+	t.Helper()
+	issue := got["issue"].(map[string]any)
+	read := h.read(issue["id"].(string))
+	if read["title"] != title || read["backlog"] != "software" || read["step"] != "to-do" || read["effort"] != "low" || read["priority"] != "high" {
+		t.Errorf("the issue read %v, want title %q in software at to-do with effort low and priority high", read, title)
+	}
+	gotTags := []string{}
+	for _, tag := range read["tags"].([]any) {
+		gotTags = append(gotTags, tag.(string))
+	}
+	sort.Strings(gotTags)
+	if tags, files := fmt.Sprint(gotTags), fmt.Sprint(read["files"]); tags != "[Ready zz]" || files != "[zz/a/]" {
+		t.Errorf("tags %v files %v, want [Ready zz] and [zz/a/]", tags, files)
+	}
+	if todos := got["todos"].([]any); len(todos) != 2 {
+		t.Errorf("%d todos, want 2", len(todos))
+	}
+}
+
+func TestCreateWithTodosToolSchemaIsFlatAndTheIssueFieldsApplyThroughTheToolPath(t *testing.T) {
+	h := newBatchHub(t)
+	var schema struct {
+		Properties map[string]any `json:"properties"`
+	}
+	if err := json.Unmarshal(h.tool("taskmanager_task_create_with_todos").InputSchema, &schema); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"title", "backlog", "step", "tags", "files", "effort", "todos"} {
+		if _, ok := schema.Properties[key]; !ok {
+			t.Errorf("the input schema lacks the top-level property %q", key)
+		}
+	}
+	for _, key := range []string{"Task", "task"} {
+		if _, ok := schema.Properties[key]; ok {
+			t.Errorf("the input schema nests the issue fields under %q", key)
+		}
+	}
+	args := createWithTodosFields("through the tool")
+	args["todos"] = []map[string]any{
+		{"title": "one", "description": "d", "instructions": "i"},
+		{"title": "two", "description": "d", "instructions": "i", "waits_on": []int{1}},
+	}
+	got, err := h.invoke("owner", "taskmanager_task_create_with_todos", args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertIssueFieldsApplied(t, h, got, "through the tool")
+}
+
+func TestCreateWithTodosStillAcceptsTheIssueFieldsNestedUnderTask(t *testing.T) {
+	h := newBatchHub(t)
+	todos := []map[string]any{
+		{"title": "one", "description": "d", "instructions": "i"},
+		{"title": "two", "description": "d", "instructions": "i", "waits_on": []int{1}},
+	}
+	for _, key := range []string{"Task", "task"} {
+		body := h.expect(http.StatusCreated, "owner", "POST", "/create-with-todos", map[string]any{key: createWithTodosFields("nested " + key), "todos": todos})
+		assertIssueFieldsApplied(t, h, body, "nested "+key)
+	}
+	got, err := h.invoke("owner", "taskmanager_task_create_with_todos", map[string]any{"task": createWithTodosFields("nested tool"), "todos": todos})
+	if err == nil {
+		assertIssueFieldsApplied(t, h, got, "nested tool")
+	}
+	both := createWithTodosFields("both")
+	both["task"] = createWithTodosFields("both")
+	both["todos"] = todos
+	if code, _ := h.call("owner", "POST", "/create-with-todos", both); code != http.StatusBadRequest {
+		t.Errorf("fields at the top level and under task answered %d, want 400", code)
+	}
+}
+
+func TestCreateWithTodosRefusesAnIssueWithoutATitleAndCreatesNothing(t *testing.T) {
+	h := newBatchHub(t)
+	before := h.expect(http.StatusOK, "owner", "GET", "/tasks?limit=100", nil)["total"]
+	code, _ := h.call("owner", "POST", "/create-with-todos", map[string]any{
+		"backlog": "software", "step": "to-do",
+		"todos": []map[string]any{{"title": "one", "description": "d", "instructions": "i"}},
+	})
+	if code != http.StatusBadRequest {
+		t.Errorf("an issue without a title answered %d, want 400", code)
+	}
+	if after := h.expect(http.StatusOK, "owner", "GET", "/tasks?limit=100", nil)["total"]; after != before {
+		t.Errorf("%v issues after, %v before: a titleless issue was created", after, before)
+	}
+}
+
+func TestBatchToolPathAppliesANestedPatchAndAMove(t *testing.T) {
+	h := newBatchHub(t)
+	id := h.issue("A")
+	got, err := h.invoke("owner", "taskmanager_task_batch", map[string]any{"operations": []any{
+		patchOp(id, map[string]any{"title": "via tool", "tags": []string{"x"}, "files": []string{"a/"}}),
+		moveOp(id, "in-progress"),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["applied"] != float64(2) || got["failed"] != float64(0) {
+		t.Errorf("applied %v failed %v, want 2 and 0", got["applied"], got["failed"])
+	}
+	read := h.read(id)
+	if read["title"] != "via tool" || read["step"] != "in-progress" || fmt.Sprint(read["files"]) != "[a/]" {
+		t.Errorf("the issue read %v, want the patch and the move applied", read)
 	}
 }
