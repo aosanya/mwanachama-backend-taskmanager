@@ -75,7 +75,7 @@ insert and checks no task is left; it fails against the three-write version.
 
 ## Declared operations (third slice)
 
-Three addresses in `taskmanager.operations.json`, each gated on its own
+Five addresses in `taskmanager.operations.json`, each gated on its own
 action:
 
 | Address | Call | Action |
@@ -83,11 +83,23 @@ action:
 | `POST /repeating-tasks` | `StartRepeatingTask` (body `NewRepeatingTask`, 201) | `taskmanager.repeating_task.create` |
 | `GET /repeating-tasks/{repeatingTaskID}` | `GetRepeatingTask` | `taskmanager.repeating_task.read` |
 | `GET /repeating-tasks` | `ListRepeatingTasks` (query `assignee_kind`, `assignee_id`) | `taskmanager.repeating_task.list` |
+| `PUT /repeating-tasks/{repeatingTaskID}` | `UpdateRepeatingTask` (body `NewRepeatingTask`) | `taskmanager.repeating_task.update` |
 | `POST /repeating-tasks/{repeatingTaskID}/stop` | `StopRepeatingTask` | `taskmanager.repeating_task.stop` |
 
-`ErrRepeatingTaskNotFound` answers 404 and `ErrInvalidRepeatingTask` 400.
-They are pinned over a real mux by
-`routes/repeating_task_test.go`.
+`ErrRepeatingTaskNotFound` answers 404, `ErrInvalidRepeatingTask` 400 and
+`ErrRepeatingTaskStopped` 409. They are pinned over a real mux by
+`routes/repeating_task_test.go` and `routes/repeating_task_update_test.go`.
+
+### Updating in place
+
+`UpdateRepeatingTask` takes the create body and rewrites the template of a
+running repeating task: the id, the created time and every period it already
+made stay, so a period made before the update is not made again. A stopped
+repeating task is refused (`ErrRepeatingTaskStopped`) rather than revived by an
+edit: stopping says no further tasks, and a change of mind is a new repeating
+task. A refused update changes nothing. There is no version argument, as
+`update_task` and `update_project` have none; the write itself requires the row
+to be running. Pinned by `repeating_update_test.go`.
 
 ## Create over the wire (fourth slice)
 

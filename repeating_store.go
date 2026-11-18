@@ -21,6 +21,8 @@ type (
 
 var ErrRepeatingTaskNotFound = errors.New("repeating task not found")
 
+var ErrRepeatingTaskStopped = errors.New("a stopped repeating task cannot be changed; start a new one")
+
 func RecordOf(r RepeatingTask) RepeatingTaskRecord {
 	rec := RepeatingTaskRecord{
 		ID:            r.ID,
@@ -198,6 +200,42 @@ func (m *taskManager) StopRepeatingTask(ctx context.Context, id string) (Repeati
 		Updates(map[string]any{"stopped_at": now, "updated_at": now})
 	if res.Error != nil {
 		return RepeatingTaskRecord{}, fmt.Errorf("StopRepeatingTask: %w", res.Error)
+	}
+	return m.GetRepeatingTask(ctx, id)
+}
+
+func (m *taskManager) UpdateRepeatingTask(ctx context.Context, id string, n NewRepeatingTask) (RepeatingTaskRecord, error) {
+	current, err := m.GetRepeatingTask(ctx, id)
+	if err != nil {
+		return RepeatingTaskRecord{}, err
+	}
+	if current.StoppedAt != "" {
+		return RepeatingTaskRecord{}, ErrRepeatingTaskStopped
+	}
+	r, err := RepeatingTaskFromNew(n)
+	if err != nil {
+		return RepeatingTaskRecord{}, err
+	}
+	r.ID = id
+	if err := r.Validate(); err != nil {
+		return RepeatingTaskRecord{}, err
+	}
+	rec := RecordOf(r)
+	rec.CreatedAt = current.CreatedAt
+	rec.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	row, err := encode(m.store.Object(roleRepeatingTask), rec)
+	if err != nil {
+		return RepeatingTaskRecord{}, fmt.Errorf("UpdateRepeatingTask: %w", err)
+	}
+	res := m.store.Query(ctx, roleRepeatingTask).
+		Where("id = ?", id).
+		Where(m.store.Unset(roleRepeatingTask, "StoppedAt")).
+		Updates(row)
+	if res.Error != nil {
+		return RepeatingTaskRecord{}, fmt.Errorf("UpdateRepeatingTask: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return RepeatingTaskRecord{}, ErrRepeatingTaskStopped
 	}
 	return m.GetRepeatingTask(ctx, id)
 }

@@ -1217,6 +1217,14 @@
       "args": [{"from": "query", "whole": true}],
       "returns": [{"body": true}]
     },
+    "update_repeating_task": {
+      "method": "PUT", "path": "/repeating-tasks/{repeatingTaskID}", "call": "UpdateRepeatingTask", "action": "taskmanager.repeating_task.update",
+      "title": "Update repeating task",
+      "description": "Change one repeating task in place: send the same fields as when it was created (a title, an optional description, a schedule and an actor or role assignee). It keeps its id, its created time and every task it already made. A stopped repeating task cannot be changed and is refused with 409; start a new one instead.",
+      "args": [{"from": "path", "as": "repeatingTaskID", "refers": "taskmanager.repeating_task", "description": "The repeating task to change."},
+               {"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
     "stop_repeating_task": {
       "method": "POST", "path": "/repeating-tasks/{repeatingTaskID}/stop", "call": "StopRepeatingTask", "action": "taskmanager.repeating_task.stop",
       "title": "Stop repeating task",
@@ -1320,6 +1328,7 @@
     "ErrCaseNotFound": 404,
     "ErrRepeatingTaskNotFound": 404,
     "ErrInvalidRepeatingTask": 400,
+    "ErrRepeatingTaskStopped": 409,
     "ErrInvalidSourcedTasks": 400,
     "ErrInvalidGeneratedTasks": 400,
     "ErrTooManySubjects": 413,
