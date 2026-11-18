@@ -133,6 +133,9 @@ func narrowByContent(q *gorm.DB, f models.OrchestrationFilter) *gorm.DB {
 	if f.HasFiles != nil {
 		q = q.Where(chosen(*f.HasFiles, "COALESCE(CAST(files AS TEXT), '') NOT IN ('', '[]', 'null')", "COALESCE(CAST(files AS TEXT), '') IN ('', '[]', 'null')"))
 	}
+	if f.LinkedRef != "" {
+		q = q.Where("linked_ref = ?", f.LinkedRef)
+	}
 	if len(f.IDs) > 0 {
 		q = q.Where("id IN ?", f.IDs)
 	}

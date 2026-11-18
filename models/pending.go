@@ -19,6 +19,7 @@ type PendingFilter struct {
 	CreatedSince string       `query:"created_since"`
 	UpdatedSince string       `query:"updated_since"`
 	HasFiles     *bool        `query:"has_files"`
+	LinkedRef    string       `query:"linked_ref"`
 	IDs          []string     `query:"ids"`
 	Sort         string       `query:"sort"`
 

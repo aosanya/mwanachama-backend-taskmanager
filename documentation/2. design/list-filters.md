@@ -11,6 +11,7 @@ that is given must hold; none given lists every task up to the limit.
 | `backlog` | The task is in this backlog, given by id or name without regard to case. A task with no stored place, or whose stored backlog id names no backlog, counts as in the first backlog, whose id is `backlog`. An unknown backlog is `ErrUnknownBacklog`, status 400. |
 | `step` | The task is at this step, given by id or name without regard to case, of the `backlog` given or of the first backlog when none is given. A task with no stored place, or a stale one, counts as at the step of the first backlog that covers its status, and at no step when none does. An unknown step is `ErrUnknownBacklogStep`, status 400. |
 | `untouched_days` | The task has not changed for more than this many days. A negative number is `ErrInvalidFilter`, status 400; 0 or absent does not narrow. |
+| `linked_ref` | The task's `linked_ref` is exactly this reference, such as an asset id. An empty value does not narrow, and an unknown value lists nothing. It composes with `status` and `limit`, and `task_pending` takes it too (hub-steward ISS-89, ISS-98). |
 | `offset` | Skip this many tasks of the filtered list, in rank order, so a list longer than the 500-task page can be read in pages: ask with `offset` 0, 500, 1000 until a page comes back short. A negative number is `ErrInvalidFilter`, status 400; 0 or absent does not skip. |
 
 ## Why it is shaped like this
@@ -48,7 +49,7 @@ This repo has no permission catalog, so the hub's note that `task.read` covers `
 ## Tests
 
 `task_pending_test.go` and `routes/pending_tasks_test.go` cover the pending call; `task_list_filter_test.go` covers each filter, their combination, several tags,
-case, the 400s and the days boundary; `task_list_tag_rank_test.go` covers
+case, the 400s and the days boundary; `task_linked_ref_filter_test.go` covers the `linked_ref` match on the list and on pending, its unknown value and its use with status and limit; `task_list_tag_rank_test.go` covers
 a single-string tag, an empty tag, a caller's rank kept and the list order. `depends_on_traverse_test.go` checks
 that `traverse_relationships` returns a task's `depends_on` links outbound and
 inbound, and `[]` for a task with none.
