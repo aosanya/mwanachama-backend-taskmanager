@@ -21,6 +21,7 @@ const (
 	roleBlocker            = "blocker"
 	roleDependency         = "dependency"
 	roleMembership         = "membership"
+	roleProjectParty       = "project_party"
 	roleTagging            = "tagging"
 	roleCodeSequence       = "code_sequence"
 	roleAssignment         = "assignment"
@@ -41,7 +42,7 @@ func roles() []string {
 	return []string{
 		roleTask, roleTaskTodo, roleAgent, roleProject, roleTag,
 		roleDeliverable, roleAcceptanceCriteria, roleWorkflowRun, roleImportJob,
-		roleBlocker, roleDependency, roleMembership, roleTagging, roleCodeSequence,
+		roleBlocker, roleDependency, roleMembership, roleProjectParty, roleTagging, roleCodeSequence,
 		roleAssignment,
 		roleCase, roleCaseTask, roleCaseVote, roleTaskNote, roleTaskCaps, roleTaskUsage, roleTaskReference,
 		roleRepeatingTask, roleRepeatingPeriod,
@@ -63,6 +64,7 @@ func carriers() map[string]any {
 		roleBlocker:            models.Blocker{},
 		roleDependency:         models.Dependency{},
 		roleMembership:         models.Membership{},
+		roleProjectParty:       models.ProjectParty{},
 		roleTagging:            models.Tagging{},
 		roleCodeSequence:       models.CodeSequence{},
 		roleAssignment:         models.Assignment{},

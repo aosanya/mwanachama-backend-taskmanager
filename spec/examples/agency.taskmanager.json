@@ -91,6 +91,12 @@
       "description": "Records that one work item serves one objective."
     },
     {
+      "role": "project_party",
+      "name": "objective_party",
+      "table": "objective_parties",
+      "description": "Records that one party, named by a record row id, takes part in one objective in one role."
+    },
+    {
       "role": "tagging",
       "name": "labelling",
       "table": "labellings",

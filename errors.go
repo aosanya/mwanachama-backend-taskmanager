@@ -43,6 +43,12 @@ var ErrAgentAlreadyExists = errors.New("agent already exists")
 // for the given entity ID.
 var ErrProjectNotFound = errors.New("project not found")
 
+var ErrInvalidProjectParty = errors.New("invalid project party")
+
+var ErrProjectPartyExists = errors.New("the project already holds that party in that role")
+
+var ErrProjectPartyNotFound = errors.New("the project holds no such party in that role")
+
 // ErrTagNotFound is returned when a Tag vertex does not exist for the
 // given entity ID.
 var ErrTagNotFound = errors.New("tag not found")

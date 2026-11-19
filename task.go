@@ -250,6 +250,14 @@ type TaskManager interface {
 	// ListProjects returns all non-deleted Projects.
 	ListProjects(ctx context.Context) ([]Project, error)
 
+	FindProjects(ctx context.Context, filter ProjectFilter) ([]Project, error)
+
+	AddProjectParty(ctx context.Context, party ProjectParty) (ProjectParty, error)
+
+	RemoveProjectParty(ctx context.Context, projectID, role, recordRowID string) error
+
+	ListProjectParties(ctx context.Context, projectID string) ([]ProjectParty, error)
+
 	// AddTaskToProject writes the `member_of` edge from taskID to projectID.
 	// Idempotent — returns nil whether or not the edge already existed.
 	AddTaskToProject(ctx context.Context, taskID, projectID string) error

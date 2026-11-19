@@ -82,6 +82,12 @@
       "description": "Records that one task is part of one project."
     },
     {
+      "role": "project_party",
+      "name": "project_party",
+      "table": "project_parties",
+      "description": "Records that one party, named by a record row id, takes part in one project in one role."
+    },
+    {
       "role": "tagging",
       "name": "task_tag",
       "table": "task_tags",

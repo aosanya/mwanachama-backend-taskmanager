@@ -18,6 +18,11 @@ func (m *taskManager) CreateProject(ctx context.Context, p Project) (Project, er
 	if p.Name == "" {
 		return Project{}, fmt.Errorf("%w: Project.Name is required", ErrInvalidTask)
 	}
+	reference, err := checkContractReference(p.ContractReference)
+	if err != nil {
+		return Project{}, err
+	}
+	p.ContractReference = reference
 	now := time.Now().UTC().Format(time.RFC3339)
 	p.ID = newSpecID()
 	p.ProjectName = toSlug(p.Name)
@@ -85,6 +90,11 @@ func (m *taskManager) UpdateProject(ctx context.Context, p Project) (Project, er
 	if err := m.checkProjectNameFree(ctx, toSlug(p.Name), p.ID); err != nil {
 		return Project{}, err
 	}
+	reference, err := checkContractReference(p.ContractReference)
+	if err != nil {
+		return Project{}, err
+	}
+	p.ContractReference = reference
 	p.CreatedAt = current.CreatedAt
 	p.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	p.Deleted = false
@@ -110,6 +120,10 @@ func (m *taskManager) DeleteProject(ctx context.Context, projectID string) error
 	if err := m.store.Query(ctx, roleMembership).
 		Where("project_id = ?", projectID).Delete(nil).Error; err != nil {
 		return fmt.Errorf("DeleteProject: clear memberships: %w", err)
+	}
+	if err := m.store.Query(ctx, roleProjectParty).
+		Where("project_id = ?", projectID).Delete(nil).Error; err != nil {
+		return fmt.Errorf("DeleteProject: clear parties: %w", err)
 	}
 	if err := m.store.Query(ctx, roleProject).Where("id = ?", projectID).
 		UpdateColumn("deleted", true).Error; err != nil {

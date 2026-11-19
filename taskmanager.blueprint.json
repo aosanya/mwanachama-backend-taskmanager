@@ -561,6 +561,11 @@
           "description": "What a task name minted in this project is prefixed with. Empty falls back to the project key and a hyphen."
         },
         {
+          "name": "contract_reference",
+          "type": "string",
+          "description": "The contract the project is carried out under, in the wording of whoever issued it; at most 200 characters. Empty when the project has none."
+        },
+        {
           "name": "created_at",
           "type": "timestamp",
           "description": "When the row was created."
@@ -1269,6 +1274,56 @@
           "description": "Reads one project's tasks.",
           "fields": [
             "project_id"
+          ]
+        }
+      ]
+    },
+    {
+      "role": "project_party",
+      "description": "Records that one party, named by the id of a record row another module holds, takes part in one project in one role, such as client or donor. A project holds any number of parties and several in one role; a party holds a role in a project once.",
+      "fields": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "description": "The project the party takes part in.",
+          "primary": true
+        },
+        {
+          "name": "role",
+          "type": "string",
+          "description": "The part the party plays: a lower-case word of letters, digits and underscores starting with a letter, at most 63 characters.",
+          "primary": true
+        },
+        {
+          "name": "record_row_id",
+          "type": "string",
+          "description": "The id of the party's record row, a uuid. The module checks the shape and never looks the row up.",
+          "primary": true
+        },
+        {
+          "name": "party_name",
+          "type": "string",
+          "description": "The party's name as written when it was added, for a list that cannot read the row."
+        },
+        {
+          "name": "added_at",
+          "type": "timestamp",
+          "description": "When the party was added."
+        }
+      ],
+      "indexes": [
+        {
+          "name": "record_row",
+          "description": "Lists the projects one party row takes part in.",
+          "fields": [
+            "record_row_id"
+          ]
+        },
+        {
+          "name": "role",
+          "description": "Lists the projects that have a party in one role.",
+          "fields": [
+            "role"
           ]
         }
       ]

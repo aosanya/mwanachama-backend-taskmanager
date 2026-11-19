@@ -42,6 +42,7 @@ type (
 	Blocker            = models.Blocker
 	Dependency         = models.Dependency
 	Membership         = models.Membership
+	ProjectParty       = models.ProjectParty
 	Tagging            = models.Tagging
 	Case               = models.Case
 	CaseStatus         = models.CaseStatus

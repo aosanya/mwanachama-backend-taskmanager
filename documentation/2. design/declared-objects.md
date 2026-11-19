@@ -36,6 +36,7 @@ A rule reaches its table through a role, never through a domain's own noun.
 | `blocker` | A hard gate between two tasks. |
 | `dependency` | A soft ordering between two tasks. |
 | `membership` | One task's membership of one project. |
+| `project_party` | One party, named by a record row id another module holds, in one role (client, donor) of one project. The project also carries a `contract_reference`. |
 | `tagging` | One label attached to one task. |
 | `code_sequence` | The next number to mint for one kind of thing's stable code. |
 
@@ -66,6 +67,7 @@ Two are shipped:
 | `blocker` | `task_block` | `gate` |
 | `dependency` | `task_dependency` | `precedence` |
 | `membership` | `task_project_membership` | `objective_membership` |
+| `project_party` | `project_party` | `objective_party` |
 | `tagging` | `task_tag` | `labelling` |
 
 `TestShippedExamplesCoexist` migrates both into one database.
