@@ -10,8 +10,6 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/google/uuid"
-
 	"github.com/aosanya/mwanachama-backend-shared/specstore"
 )
 
@@ -48,11 +46,12 @@ func checkPartyRole(role string) error {
 	return nil
 }
 
-func checkPartyRecordRowID(recordRowID string) error {
-	if _, err := uuid.Parse(recordRowID); err != nil || len(recordRowID) != recordRowIDLength {
-		return fmt.Errorf("%w: record_row_id %q is not a record row id", ErrInvalidProjectParty, recordRowID)
+func checkPartyRecordRowID(recordRowID string) (string, error) {
+	canonical, ok := canonicalRecordRowID(recordRowID)
+	if !ok {
+		return "", fmt.Errorf("%w: record_row_id %q is not a record row id", ErrInvalidProjectParty, recordRowID)
 	}
-	return nil
+	return canonical, nil
 }
 
 func checkPartyName(name string) (string, error) {
@@ -65,13 +64,14 @@ func checkPartyName(name string) (string, error) {
 
 func (m *taskManager) AddProjectParty(ctx context.Context, party ProjectParty) (ProjectParty, error) {
 	party.Role = strings.TrimSpace(party.Role)
-	party.RecordRowID = strings.TrimSpace(party.RecordRowID)
 	if err := checkPartyRole(party.Role); err != nil {
 		return ProjectParty{}, err
 	}
-	if err := checkPartyRecordRowID(party.RecordRowID); err != nil {
+	recordRowID, err := checkPartyRecordRowID(party.RecordRowID)
+	if err != nil {
 		return ProjectParty{}, err
 	}
+	party.RecordRowID = recordRowID
 	name, err := checkPartyName(party.PartyName)
 	if err != nil {
 		return ProjectParty{}, err
@@ -79,6 +79,9 @@ func (m *taskManager) AddProjectParty(ctx context.Context, party ProjectParty) (
 	party.PartyName = name
 	if _, err := m.GetProject(ctx, party.ProjectID); err != nil {
 		return ProjectParty{}, err
+	}
+	if err := m.requirePartyRow(ctx, party.RecordRowID); err != nil {
+		return ProjectParty{}, fmt.Errorf("AddProjectParty: %w", err)
 	}
 	held, err := m.countProjectParties(ctx, party.ProjectID, party.Role, party.RecordRowID)
 	if err != nil {
@@ -103,6 +106,10 @@ func (m *taskManager) countProjectParties(ctx context.Context, projectID, role, 
 }
 
 func (m *taskManager) RemoveProjectParty(ctx context.Context, projectID, role, recordRowID string) error {
+	recordRowID, err := checkPartyRecordRowID(recordRowID)
+	if err != nil {
+		return err
+	}
 	if _, err := m.GetProject(ctx, projectID); err != nil {
 		return err
 	}
@@ -131,19 +138,6 @@ func (m *taskManager) ListProjectParties(ctx context.Context, projectID string) 
 	return out, nil
 }
 
-func (f ProjectFilter) partyRowIDs() []string {
-	var ids []string
-	if id := strings.TrimSpace(f.PartyRowID); id != "" {
-		ids = append(ids, id)
-	}
-	for _, id := range f.PartyRowIDs {
-		if id = strings.TrimSpace(id); id != "" {
-			ids = append(ids, id)
-		}
-	}
-	return ids
-}
-
 func (m *taskManager) FindProjects(ctx context.Context, filter ProjectFilter) ([]Project, error) {
 	q := m.store.Query(ctx, roleProject).Where("deleted = ?", false)
 	reference, err := checkContractReference(filter.ContractReference)
@@ -157,7 +151,10 @@ func (m *taskManager) FindProjects(ctx context.Context, filter ProjectFilter) ([
 	if role != "" && !partyRolePattern.MatchString(role) {
 		return nil, fmt.Errorf("FindProjects: %w: party_role %q is not a role word", ErrInvalidFilter, role)
 	}
-	ids := filter.partyRowIDs()
+	ids, err := m.filterRowIDs(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("FindProjects: %w", err)
+	}
 	if role != "" || len(ids) > 0 {
 		parties := m.store.Query(ctx, roleProjectParty).Select("project_id")
 		if role != "" {

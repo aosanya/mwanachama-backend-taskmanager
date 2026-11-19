@@ -112,3 +112,18 @@ func TestProjectPartyToolsAreNamedByTheirActions(t *testing.T) {
 		}
 	}
 }
+
+func TestProjectPartyRoutes_AnUpperCaseRowIsTheSamePartyAndANilOrJunkRowIsRefused(t *testing.T) {
+	h := newHub(t)
+	id := h.expect(http.StatusCreated, "POST", "/projects", map[string]any{"name": "pool"})["id"].(string)
+	h.expect(http.StatusCreated, "POST", "/projects/"+id+"/parties", map[string]any{"role": "donor", "record_row_id": routeFundOne, "party_name": "Northern Lakes Development Fund"})
+	h.expect(http.StatusConflict, "POST", "/projects/"+id+"/parties", map[string]any{"role": "donor", "record_row_id": strings.ToUpper(routeFundOne), "party_name": "Northern Lakes Development Fund"})
+	h.expect(http.StatusBadRequest, "POST", "/projects/"+id+"/parties", map[string]any{"role": "donor", "record_row_id": "00000000-0000-0000-0000-000000000000"})
+	h.expect(http.StatusBadRequest, "GET", "/projects?party_row_id=00000000-0000-0000-0000-000000000000", nil)
+	h.expect(http.StatusBadRequest, "GET", "/projects?party_row_id=junk", nil)
+	if got := strings.Join(projectKeysOf(h.projectsAt("/projects?party_row_id="+strings.ToUpper(routeFundOne))), ","); got != "pool" {
+		t.Errorf("a list by the upper-case row id: %s", got)
+	}
+	h.expect(http.StatusBadRequest, "DELETE", "/projects/"+id+"/parties/donor/junk", nil)
+	h.expect(http.StatusNoContent, "DELETE", "/projects/"+id+"/parties/donor/"+strings.ToUpper(routeFundOne), nil)
+}

@@ -10,6 +10,7 @@
 | [run-versions.md](run-versions.md) | A run keeps the workflow version it began on, the one partial index on runs still going, and Stop with a start again on the good version (HS300). |
 | [backlogs.md](backlogs.md) | Backlogs with their own ordered steps, a task in one backlog at one step, the ten backlog operations and their actions, and why a step or backlog holding issues is refused, and access by group: Can see and Can move, the owner group, reads and writes narrowed by the caller (hub-steward SW15, SW20, SW26, SW32, SW33, SW39). |
 | [list-filters.md](list-filters.md) | The five filters and the offset page `list_tasks` gained for the hub-steward backlog (tag, repo, backlog, step, untouched_days, offset), their rules and why a tag is a subquery (hub-steward SW19). |
+| [project-parties.md](project-parties.md) | A project's contract reference and parties by role, the row id rules (lower case, no nil uuid), and the two-method lookup a mounting host wires to check that a row exists and to follow a corrected row. |
 
 Both pages describe the shape this repo took on 2026-09-28, when it moved off
 hand-written row structs and hand-written handlers onto

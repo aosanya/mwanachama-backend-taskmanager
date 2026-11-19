@@ -49,6 +49,8 @@ var ErrProjectPartyExists = errors.New("the project already holds that party in 
 
 var ErrProjectPartyNotFound = errors.New("the project holds no such party in that role")
 
+var ErrProjectPartyRowUnknown = errors.New("the record row does not exist")
+
 // ErrTagNotFound is returned when a Tag vertex does not exist for the
 // given entity ID.
 var ErrTagNotFound = errors.New("tag not found")

@@ -39,6 +39,7 @@ var sentinels = map[string]error{
 	"ErrInvalidProjectParty":           mwanachamataskmanager.ErrInvalidProjectParty,
 	"ErrProjectPartyExists":            mwanachamataskmanager.ErrProjectPartyExists,
 	"ErrProjectPartyNotFound":          mwanachamataskmanager.ErrProjectPartyNotFound,
+	"ErrProjectPartyRowUnknown":        mwanachamataskmanager.ErrProjectPartyRowUnknown,
 	"ErrTaskTodoNotFound":              mwanachamataskmanager.ErrTaskTodoNotFound,
 	"ErrTaskTodoCycle":                 mwanachamataskmanager.ErrTaskTodoCycle,
 	"ErrTaskTodoCrossIssue":            mwanachamataskmanager.ErrTaskTodoCrossIssue,

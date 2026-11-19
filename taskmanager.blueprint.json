@@ -1297,7 +1297,7 @@
         {
           "name": "record_row_id",
           "type": "string",
-          "description": "The id of the party's record row, a uuid. The module checks the shape and never looks the row up.",
+          "description": "The id of the party's record row, a uuid. The module stores it in lower case, refuses the nil uuid and a malformed id, and asks the mounting host whether the row exists when the host has wired a lookup.",
           "primary": true
         },
         {

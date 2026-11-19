@@ -571,7 +571,7 @@
     "list_projects": {
       "method": "GET", "path": "/projects", "call": "FindProjects", "action": "taskmanager.project.list",
       "title": "List projects",
-      "description": "List the projects that have not been deleted, by key. Narrow by party_row_id (the record row id of a party added with taskmanager_project_party_add; projects of an older row it replaced are listed too, where the mount follows corrections), party_role (a lower-case role word such as client or donor; with party_row_id the same party must hold that role) and contract_reference (exact match). The filters are joined by AND, and a bad role is refused with 400.",
+      "description": "List the projects that have not been deleted, by key. Narrow by party_row_id (the record row id of a party added with taskmanager_project_party_add; projects of an older row it replaced are listed too when the mounting host follows corrections; otherwise only parties added under that exact id are found), party_role (a lower-case role word such as client or donor; with party_row_id the same party must hold that role) and contract_reference (exact match). The filters are joined by AND, and a bad role or a row id that is not a uuid, or is the nil uuid, is refused with 400.",
       "args": [{"from": "query", "whole": true}],
       "returns": [{"body": true}]
     },
@@ -579,7 +579,7 @@
       "method": "POST", "path": "/projects/{projectID}/parties", "call": "AddProjectParty", "action": "taskmanager.project_party.add",
       "status": 201,
       "title": "Add project party",
-      "description": "Record that one party takes part in one project in one role. Send role (a lower-case word of letters, digits and underscores starting with a letter, at most 63 characters, such as client or donor), record_row_id (the party's record row id, a uuid; the module checks its shape and never looks the row up) and party_name (the name as written, at most 200 characters). A project holds any number of parties and several in one role; a party holds a role in a project once, and a second add is refused with 409.",
+      "description": "Record that one party takes part in one project in one role. Send role (a lower-case word of letters, digits and underscores starting with a letter, at most 63 characters, such as client or donor), record_row_id (the party's record row id, a uuid other than the nil uuid, stored in lower case so the same row in either case is one party; when the mounting host wires a row lookup, a row that does not exist is refused with 400) and party_name (the name as written, at most 200 characters). A project holds any number of parties and several in one role; a party holds a role in a project once, and a second add is refused with 409.",
       "args": [{"from": "body", "whole": true},
                {"from": "path", "as": "projectID", "refers": "taskmanager.project", "into": "ProjectID", "description": "The project the party takes part in."}],
       "returns": [{"body": true}]
@@ -1388,6 +1388,7 @@
     "ErrInvalidProjectParty": 400,
     "ErrProjectPartyExists": 409,
     "ErrProjectPartyNotFound": 404,
+    "ErrProjectPartyRowUnknown": 400,
     "ErrTaskTodoNotFound": 404,
     "ErrTaskTodoCycle": 409,
     "ErrTaskTodoCrossIssue": 400,

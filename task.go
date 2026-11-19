@@ -111,6 +111,7 @@ type TaskManager interface {
 	UseGroupExists(g GroupExists)
 	UseInstanceOwner(o InstanceOwner)
 	UseRoleSync(r RoleSync)
+	UsePartyRows(rows PartyRows)
 	CreateTaskAs(ctx context.Context, requesterID string, task Task) (Task, error)
 	UpdateTaskAs(ctx context.Context, requesterID string, task Task) (Task, error)
 	PatchTaskAs(ctx context.Context, requesterID string, patch TaskPatch) (Task, error)
@@ -587,6 +588,7 @@ type taskManager struct {
 	groupExists   GroupExists
 	instanceOwner InstanceOwner
 	roleSync      RoleSync
+	partyRows     PartyRows
 }
 
 func NewTaskManager(db *gorm.DB, s *spec.Spec, pub events.Publisher) (TaskManager, error) {

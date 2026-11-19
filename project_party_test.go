@@ -339,3 +339,111 @@ func TestFindProjects_ABadRoleIsRefusedAndADeletedProjectIsGone(t *testing.T) {
 		t.Errorf("party rows of the other projects: %d, %v", left, err)
 	}
 }
+
+func TestProjectParties_AnUpperCaseRowIdIsTheSamePartyAsItsLowerCase(t *testing.T) {
+	mgr, _, _ := newPartyManager(t)
+	ctx := context.Background()
+	project, err := mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Scorecard"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	if _, err := mgr.AddProjectParty(ctx, mwanachamataskmanager.ProjectParty{ProjectID: project.ID, Role: "client", RecordRowID: lakeshoreBank, PartyName: "Lakeshore Central Bank"}); err != nil {
+		t.Fatalf("AddProjectParty lower case: %v", err)
+	}
+	upper := strings.ToUpper(lakeshoreBank)
+	if _, err := mgr.AddProjectParty(ctx, mwanachamataskmanager.ProjectParty{ProjectID: project.ID, Role: "client", RecordRowID: upper, PartyName: "Lakeshore Central Bank"}); !errors.Is(err, mwanachamataskmanager.ErrProjectPartyExists) {
+		t.Fatalf("the same row in upper case: got %v, want ErrProjectPartyExists", err)
+	}
+	listed, err := mgr.ListProjectParties(ctx, project.ID)
+	if err != nil || len(listed) != 1 || listed[0].RecordRowID != lakeshoreBank {
+		t.Fatalf("parties after the upper-case add: %+v, %v", listed, err)
+	}
+
+	other, err := mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Training"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	stored, err := mgr.AddProjectParty(ctx, mwanachamataskmanager.ProjectParty{ProjectID: other.ID, Role: "donor", RecordRowID: strings.ToUpper(northernLakesFund), PartyName: "Northern Lakes Development Fund"})
+	if err != nil || stored.RecordRowID != northernLakesFund {
+		t.Fatalf("a party added in upper case is stored as %q, %v; want %q", stored.RecordRowID, err, northernLakesFund)
+	}
+	byLower, err := mgr.FindProjects(ctx, mwanachamataskmanager.ProjectFilter{PartyRole: "donor", PartyRowID: northernLakesFund})
+	if err != nil || !reflect.DeepEqual(projectKeys(byLower), []string{"training"}) {
+		t.Fatalf("a list by the lower-case id: %v, %v", projectKeys(byLower), err)
+	}
+	byUpper, err := mgr.FindProjects(ctx, mwanachamataskmanager.ProjectFilter{PartyRole: "donor", PartyRowID: strings.ToUpper(northernLakesFund)})
+	if err != nil || !reflect.DeepEqual(projectKeys(byUpper), []string{"training"}) {
+		t.Fatalf("a list by the upper-case id: %v, %v", projectKeys(byUpper), err)
+	}
+
+	if err := mgr.RemoveProjectParty(ctx, project.ID, "client", upper); err != nil {
+		t.Fatalf("RemoveProjectParty by the upper-case id: %v", err)
+	}
+	if left, err := mgr.ListProjectParties(ctx, project.ID); err != nil || len(left) != 0 {
+		t.Fatalf("parties after the remove: %+v, %v", left, err)
+	}
+}
+
+func TestProjectParties_ANilOrMalformedRowIdIsRefused(t *testing.T) {
+	mgr, _, _ := newPartyManager(t)
+	ctx := context.Background()
+	project, err := mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Scorecard"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	bad := map[string]string{
+		"nil uuid":          "00000000-0000-0000-0000-000000000000",
+		"empty":             "",
+		"blank":             "   ",
+		"junk":              "not-a-row",
+		"no hyphens":        strings.ReplaceAll(lakeshoreBank, "-", ""),
+		"braced":            "{" + lakeshoreBank + "}",
+		"urn":               "urn:uuid:" + lakeshoreBank,
+		"one character off": lakeshoreBank[:35] + "g",
+	}
+	for name, id := range bad {
+		_, err := mgr.AddProjectParty(ctx, mwanachamataskmanager.ProjectParty{ProjectID: project.ID, Role: "client", RecordRowID: id, PartyName: "x"})
+		if !errors.Is(err, mwanachamataskmanager.ErrInvalidProjectParty) {
+			t.Errorf("add with %s: got %v, want ErrInvalidProjectParty", name, err)
+		}
+		if err := mgr.RemoveProjectParty(ctx, project.ID, "client", id); !errors.Is(err, mwanachamataskmanager.ErrInvalidProjectParty) {
+			t.Errorf("remove with %s: got %v, want ErrInvalidProjectParty", name, err)
+		}
+		if name == "empty" || name == "blank" {
+			continue
+		}
+		if _, err := mgr.FindProjects(ctx, mwanachamataskmanager.ProjectFilter{PartyRowID: id}); !errors.Is(err, mwanachamataskmanager.ErrInvalidFilter) {
+			t.Errorf("list by %s: got %v, want ErrInvalidFilter", name, err)
+		}
+		if _, err := mgr.FindProjects(ctx, mwanachamataskmanager.ProjectFilter{PartyRowIDs: []string{lakeshoreBank, id}}); !errors.Is(err, mwanachamataskmanager.ErrInvalidFilter) {
+			t.Errorf("list by a chain holding %s: got %v, want ErrInvalidFilter", name, err)
+		}
+	}
+	if listed, err := mgr.ListProjectParties(ctx, project.ID); err != nil || len(listed) != 0 {
+		t.Fatalf("parties stored after the refusals: %+v, %v", listed, err)
+	}
+}
+
+func TestFindProjects_ADeletedProjectIsNotListedByReferenceOrByNoFilter(t *testing.T) {
+	mgr, _, _ := newPartyManager(t)
+	ctx := context.Background()
+	kept, err := mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Kept study", ContractReference: "NLDF/TA/2026/050"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	gone, err := mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Gone study", ContractReference: "NLDF/TA/2026/050"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	if err := mgr.DeleteProject(ctx, gone.ID); err != nil {
+		t.Fatalf("DeleteProject: %v", err)
+	}
+	byReference, err := mgr.FindProjects(ctx, mwanachamataskmanager.ProjectFilter{ContractReference: "NLDF/TA/2026/050"})
+	if err != nil || !reflect.DeepEqual(projectKeys(byReference), []string{kept.ProjectName}) {
+		t.Errorf("a list by the reference: %v, %v; want only %s", projectKeys(byReference), err, kept.ProjectName)
+	}
+	everything, err := mgr.FindProjects(ctx, mwanachamataskmanager.ProjectFilter{})
+	if err != nil || !reflect.DeepEqual(projectKeys(everything), []string{kept.ProjectName}) {
+		t.Errorf("a list with no filter: %v, %v; want only %s", projectKeys(everything), err, kept.ProjectName)
+	}
+}
