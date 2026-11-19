@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"strings"
-
 	"github.com/aosanya/mwanachama-backend-shared/plaintext"
+	"strings"
 )
 
 type BacklogStep struct {
@@ -23,7 +22,6 @@ type BacklogRule struct {
 	Operator string `json:"operator"`
 	Value    string `json:"value,omitempty"`
 }
-
 type Backlog struct {
 	ID       string        `json:"id"`
 	Name     string        `json:"name"`
@@ -32,13 +30,14 @@ type Backlog struct {
 	Rules    *BacklogRules `json:"rules,omitempty"`
 	Archived bool          `json:"archived,omitempty"`
 }
-
 type BacklogRules struct {
 	Match string        `json:"match"`
 	Rules []BacklogRule `json:"rules"`
 }
 
-func (b Backlog) Smart() bool { return b.Kind == BacklogKindSmart }
+func (b Backlog) Smart() bool {
+	return b.Kind == BacklogKindSmart
+}
 
 type StepSummary struct {
 	ID       string `json:"id"`
@@ -46,7 +45,6 @@ type StepSummary struct {
 	Issues   int    `json:"issues"`
 	WipLimit int    `json:"wip_limit,omitempty"`
 }
-
 type BacklogSummary struct {
 	ID       string        `json:"id"`
 	Name     string        `json:"name"`
@@ -57,7 +55,6 @@ type BacklogSummary struct {
 	Rules    *BacklogRules `json:"rules,omitempty"`
 	Archived bool          `json:"archived,omitempty"`
 }
-
 type BacklogList struct {
 	Items []BacklogSummary `json:"items"`
 }
@@ -70,7 +67,6 @@ func DefaultBacklogs() []Backlog {
 	}
 	return []Backlog{{ID: "backlog", Name: "Backlog", Steps: steps}}
 }
-
 func Slug(name string) string {
 	var b strings.Builder
 	dash := false
@@ -85,7 +81,6 @@ func Slug(name string) string {
 	}
 	return strings.TrimRight(b.String(), "-")
 }
-
 func ParseBacklogs(value any) ([]Backlog, error) {
 	raw, err := json.Marshal(value)
 	if err != nil {
@@ -99,7 +94,6 @@ func ParseBacklogs(value any) ([]Backlog, error) {
 	}
 	return backlogs, CheckBacklogs(backlogs)
 }
-
 func CheckBacklogs(backlogs []Backlog) error {
 	if len(backlogs) == 0 {
 		return fmt.Errorf("backlogs: a hub keeps at least one backlog")
@@ -132,7 +126,6 @@ func CheckBacklogs(backlogs []Backlog) error {
 	}
 	return nil
 }
-
 func CheckChangedNames(current, next []Backlog) error {
 	for _, b := range next {
 		before, existed := backlogNamed(current, b.ID)
@@ -158,7 +151,6 @@ func CheckChangedNames(current, next []Backlog) error {
 	}
 	return nil
 }
-
 func checkBacklogNameFree(backlogs []Backlog, changed Backlog) error {
 	for _, other := range backlogs {
 		if other.ID != changed.ID && plaintext.SameName(other.Name, changed.Name) {
@@ -167,7 +159,6 @@ func checkBacklogNameFree(backlogs []Backlog, changed Backlog) error {
 	}
 	return nil
 }
-
 func checkStepNameFree(b Backlog, changed BacklogStep) error {
 	for _, other := range b.Steps {
 		if other.ID != changed.ID && plaintext.SameName(other.Name, changed.Name) {
@@ -176,14 +167,12 @@ func checkStepNameFree(b Backlog, changed BacklogStep) error {
 	}
 	return nil
 }
-
 func backlogNamed(backlogs []Backlog, id string) (Backlog, bool) {
 	if i, ok := FindBacklog(backlogs, id); ok {
 		return backlogs[i], true
 	}
 	return Backlog{}, false
 }
-
 func checkSmart(b Backlog) error {
 	if len(b.Steps) > 0 {
 		return fmt.Errorf("backlogs: smart backlog %q has no steps", b.Name)
@@ -193,7 +182,6 @@ func checkSmart(b Backlog) error {
 	}
 	return nil
 }
-
 func checkSteps(b Backlog) error {
 	if len(b.Steps) == 0 {
 		return fmt.Errorf("backlogs: %q needs at least one step", b.Name)
@@ -224,7 +212,6 @@ func checkSteps(b Backlog) error {
 	}
 	return nil
 }
-
 func FindBacklog(backlogs []Backlog, id string) (int, bool) {
 	for i, b := range backlogs {
 		if b.ID == id {
@@ -233,7 +220,6 @@ func FindBacklog(backlogs []Backlog, id string) (int, bool) {
 	}
 	return -1, false
 }
-
 func FindStep(b Backlog, id string) (int, bool) {
 	for i, s := range b.Steps {
 		if s.ID == id {
@@ -242,7 +228,6 @@ func FindStep(b Backlog, id string) (int, bool) {
 	}
 	return -1, false
 }
-
 func PlaceOf(backlogs []Backlog, t Task) (string, string) {
 	if bi, ok := FindBacklog(backlogs, t.Backlog); ok {
 		if _, known := FindStep(backlogs[bi], t.Step); known {
@@ -260,7 +245,6 @@ func PlaceOf(backlogs []Backlog, t Task) (string, string) {
 	}
 	return first.ID, ""
 }
-
 func StepAfterStatusChange(backlogs []Backlog, t Task) (string, string) {
 	bi, ok := FindBacklog(backlogs, t.Backlog)
 	if !ok {
@@ -277,7 +261,6 @@ func StepAfterStatusChange(backlogs []Backlog, t Task) (string, string) {
 	}
 	return b.ID, ""
 }
-
 func StepNamesStatus(step BacklogStep, status TaskStatus) bool {
 	for _, s := range step.Statuses {
 		if s == status {
@@ -285,4 +268,22 @@ func StepNamesStatus(step BacklogStep, status TaskStatus) bool {
 		}
 	}
 	return false
+}
+func ImpliedStatuses(step BacklogStep, current TaskStatus) []TaskStatus {
+	switch step.ID {
+	case "done", "archive":
+		return []TaskStatus{TaskStatusCompleted}
+	case "cancelled":
+		return []TaskStatus{TaskStatusCancelled}
+	}
+	if current != TaskStatusCompleted && current != TaskStatusCancelled {
+		return nil
+	}
+	switch step.ID {
+	case "to-do", "in-coming":
+		return []TaskStatus{TaskStatusPending}
+	case "doing", "in-progress":
+		return []TaskStatus{TaskStatusInProgress}
+	}
+	return nil
 }

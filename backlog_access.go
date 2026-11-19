@@ -4,14 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/aosanya/mwanachama-backend-shared/spec"
+	"github.com/aosanya/mwanachama-backend-taskmanager/models"
+	"gorm.io/gorm"
 	"strings"
 	"time"
-
-	"gorm.io/gorm"
-
-	"github.com/aosanya/mwanachama-backend-shared/spec"
-
-	"github.com/aosanya/mwanachama-backend-taskmanager/models"
 )
 
 const (
@@ -25,18 +22,21 @@ var (
 )
 
 type Groups func(ctx context.Context, callerID string) ([]string, error)
-
 type GroupExists func(ctx context.Context, groupID string) (bool, error)
-
 type InstanceOwner func(ctx context.Context, callerID string) (bool, error)
 
-func (m *taskManager) UseGroups(g Groups) { m.groups = g }
-
-func (m *taskManager) UseGroupExists(g GroupExists) { m.groupExists = g }
-
-func (m *taskManager) UseInstanceOwner(o InstanceOwner) { m.instanceOwner = o }
-
-func (m *taskManager) UseRoleSync(r RoleSync) { m.roleSync = r }
+func (m *taskManager) UseGroups(g Groups) {
+	m.groups = g
+}
+func (m *taskManager) UseGroupExists(g GroupExists) {
+	m.groupExists = g
+}
+func (m *taskManager) UseInstanceOwner(o InstanceOwner) {
+	m.instanceOwner = o
+}
+func (m *taskManager) UseRoleSync(r RoleSync) {
+	m.roleSync = r
+}
 
 type backlogVisibility struct {
 	all    bool
@@ -46,28 +46,23 @@ type backlogVisibility struct {
 func (v backlogVisibility) Sees(backlogID string) bool {
 	return v.all || v.levels[backlogID] != ""
 }
-
 func (v backlogVisibility) LevelOf(backlogID string) models.AccessLevel {
 	if v.all {
 		return models.AccessEdit
 	}
 	return v.levels[backlogID]
 }
-
 func (v backlogVisibility) Moves(backlogID string) bool {
 	level := v.levels[backlogID]
 	return v.all || level == models.AccessMove || level == models.AccessEdit
 }
-
 func (v backlogVisibility) Edits(backlogID string) bool {
 	level := v.levels[backlogID]
 	return v.all || level == models.AccessEdit
 }
-
 func (m *taskManager) storedGrants(ctx context.Context) ([]models.BacklogGrant, error) {
 	return m.grantsIn(m.db.WithContext(ctx))
 }
-
 func (m *taskManager) grantsIn(db *gorm.DB) ([]models.BacklogGrant, error) {
 	if _, declared := m.spec.Setting(accessSetting); !declared {
 		return nil, nil
@@ -78,11 +73,9 @@ func (m *taskManager) grantsIn(db *gorm.DB) ([]models.BacklogGrant, error) {
 	}
 	return models.ParseGrants(effective.Value)
 }
-
 func (m *taskManager) storedOwnerGroup(ctx context.Context) (string, error) {
 	return m.ownerGroupIn(m.db.WithContext(ctx))
 }
-
 func (m *taskManager) ownerGroupIn(db *gorm.DB) (string, error) {
 	if _, declared := m.spec.Setting(ownerGroupSetting); !declared {
 		return "", nil
@@ -94,7 +87,6 @@ func (m *taskManager) ownerGroupIn(db *gorm.DB) (string, error) {
 	group, _ := effective.Value.(string)
 	return group, nil
 }
-
 func (m *taskManager) storeSetting(ctx context.Context, name string, value any) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	if _, err := spec.StoreOverride(m.db.WithContext(ctx), m.spec, name, value, "taskmanager", now); err != nil {
@@ -102,7 +94,6 @@ func (m *taskManager) storeSetting(ctx context.Context, name string, value any) 
 	}
 	return nil
 }
-
 func (m *taskManager) backlogVisibility(ctx context.Context, requesterID string) (backlogVisibility, error) {
 	if requesterID == "" {
 		return backlogVisibility{all: true}, nil
@@ -146,7 +137,6 @@ func (m *taskManager) backlogVisibility(ctx context.Context, requesterID string)
 	}
 	return backlogVisibility{levels: levels}, nil
 }
-
 func (m *taskManager) ListBacklogsFor(ctx context.Context, requesterID string) (models.BacklogList, error) {
 	list, err := m.ListBacklogs(ctx)
 	if err != nil {
@@ -172,11 +162,27 @@ func (m *taskManager) ListBacklogsFor(ctx context.Context, requesterID string) (
 	}
 	return models.BacklogList{Items: kept}, nil
 }
-
+func (m *taskManager) ListBacklogsMatching(ctx context.Context, requesterID, backlog string) (models.BacklogList, error) {
+	list, err := m.ListBacklogsFor(ctx, requesterID)
+	if err != nil || strings.TrimSpace(backlog) == "" {
+		return list, err
+	}
+	backlogs, err := m.backlogs(ctx)
+	if err != nil {
+		return models.BacklogList{}, err
+	}
+	named, found := backlogNamed(backlogs, strings.TrimSpace(backlog))
+	kept := []models.BacklogSummary{}
+	for _, item := range list.Items {
+		if found && item.ID == named.ID {
+			kept = append(kept, item)
+		}
+	}
+	return models.BacklogList{Items: kept}, nil
+}
 func (m *taskManager) MoveTaskToStepAs(ctx context.Context, requesterID, taskID, backlogID, stepID string) (Task, error) {
 	return m.MoveTaskToStepOverrideAs(ctx, requesterID, taskID, backlogID, stepID, false)
 }
-
 func (m *taskManager) requireMoveAccess(ctx context.Context, requesterID, taskID, backlogID string) error {
 	visible, err := m.backlogVisibility(ctx, requesterID)
 	if err != nil || visible.all {
@@ -191,7 +197,6 @@ func (m *taskManager) requireMoveAccess(ctx context.Context, requesterID, taskID
 	}
 	return nil
 }
-
 func (m *taskManager) accessOf(ctx context.Context, backlogID string) (models.BacklogAccess, error) {
 	backlogs, err := m.backlogs(ctx)
 	if err != nil {
@@ -223,11 +228,9 @@ func (m *taskManager) accessOf(ctx context.Context, backlogID string) (models.Ba
 	}
 	return models.BacklogAccess{BacklogID: backlogID, OwnerGroup: owner, Groups: groups}, nil
 }
-
 func (m *taskManager) ListBacklogAccess(ctx context.Context, backlogID string) (models.BacklogAccess, error) {
 	return m.accessOf(ctx, backlogID)
 }
-
 func (m *taskManager) changeGrants(ctx context.Context, change func(grants []models.BacklogGrant, owner string) ([]models.BacklogGrant, error)) error {
 	backlogSaves.Lock()
 	defer backlogSaves.Unlock()
@@ -254,7 +257,6 @@ func (m *taskManager) changeGrants(ctx context.Context, change func(grants []mod
 		return nil
 	})
 }
-
 func (m *taskManager) GiveBacklogAccess(ctx context.Context, backlogID, groupID, level string) (models.BacklogAccess, error) {
 	groupID = strings.TrimSpace(groupID)
 	grant := models.BacklogGrant{BacklogID: backlogID, GroupID: groupID, Level: models.AccessLevel(level)}
@@ -284,7 +286,6 @@ func (m *taskManager) GiveBacklogAccess(ctx context.Context, backlogID, groupID,
 	}
 	return m.accessOf(ctx, backlogID)
 }
-
 func (m *taskManager) TakeBacklogAccess(ctx context.Context, backlogID, groupID string) (models.BacklogAccess, error) {
 	if _, err := m.accessOf(ctx, backlogID); err != nil {
 		return models.BacklogAccess{}, err
@@ -300,7 +301,6 @@ func (m *taskManager) TakeBacklogAccess(ctx context.Context, backlogID, groupID 
 	}
 	return m.accessOf(ctx, backlogID)
 }
-
 func (m *taskManager) requireGroup(ctx context.Context, groupID string) error {
 	if groupID == "" {
 		return fmt.Errorf("%w: a group is needed", ErrInvalidBacklog)
@@ -317,7 +317,6 @@ func (m *taskManager) requireGroup(ctx context.Context, groupID string) error {
 	}
 	return nil
 }
-
 func (m *taskManager) SetBacklogOwnerGroup(ctx context.Context, groupID string) error {
 	groupID = strings.TrimSpace(groupID)
 	if m.groupExists == nil {
@@ -328,7 +327,6 @@ func (m *taskManager) SetBacklogOwnerGroup(ctx context.Context, groupID string) 
 	}
 	return m.storeSetting(ctx, ownerGroupSetting, groupID)
 }
-
 func (m *taskManager) pruneGrants(ctx context.Context, kept []models.Backlog) error {
 	var pruned []models.BacklogGrant
 	var grants []models.BacklogGrant

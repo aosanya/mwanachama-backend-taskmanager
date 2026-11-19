@@ -3,26 +3,26 @@ package mwanachamataskmanager
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	"github.com/aosanya/mwanachama-backend-shared/specstore"
 	"github.com/aosanya/mwanachama-backend-taskmanager/models"
+	"strings"
 )
 
 const (
-	nextReadyBatchDefaultCount = 3
-	nextReadyBatchMaxCount     = 10
+	nextReadyBatchDefaultCount        = 3
+	nextReadyBatchMaxCount            = 10
+	nextReadyBatchDefaultSkippedLimit = 3
+	nextReadyBatchMaxSkippedLimit     = 50
 )
 
 type NextReadyBatchFilter struct {
 	Count          int            `query:"count,min=1"`
+	SkippedLimit   int            `query:"skipped_limit,min=1"`
 	Tag            models.TagList `query:"tag"`
 	Backlog        string         `query:"backlog"`
 	IncludeUnfiled bool           `query:"include_unfiled"`
-
-	RequesterID string `query:"-" json:"-"`
+	RequesterID    string         `query:"-" json:"-"`
 }
-
 type NextReadyBatchItem struct {
 	ID       string       `json:"id"`
 	Code     string       `json:"code"`
@@ -31,17 +31,16 @@ type NextReadyBatchItem struct {
 	Effort   TaskEffort   `json:"effort"`
 	Files    []string     `json:"files"`
 }
-
 type NextReadyBatchSkip struct {
 	ID          string `json:"id"`
 	Code        string `json:"code"`
 	Title       string `json:"title"`
 	ClashesWith string `json:"clashes_with"`
 }
-
 type NextReadyBatch struct {
 	Items          []NextReadyBatchItem `json:"items"`
 	Skipped        []NextReadyBatchSkip `json:"skipped"`
+	SkippedTotal   int                  `json:"skipped_total"`
 	UnfiledLeftOut int                  `json:"unfiled_left_out"`
 }
 
@@ -53,6 +52,10 @@ func (m *taskManager) NextReadyBatch(ctx context.Context, filter NextReadyBatchF
 	}
 	if count == 0 {
 		count = nextReadyBatchDefaultCount
+	}
+	skippedLimit, err := resolveSkippedLimit(filter.SkippedLimit)
+	if err != nil {
+		return out, fmt.Errorf("NextReadyBatch: %w", err)
 	}
 	backlogs, err := m.backlogs(ctx)
 	if err != nil {
@@ -79,17 +82,26 @@ func (m *taskManager) NextReadyBatch(ctx context.Context, filter NextReadyBatchF
 			continue
 		}
 		if clash, found := firstClash(task, running, chosen); found {
-			out.Skipped = append(out.Skipped, NextReadyBatchSkip{ID: task.ID, Code: task.Code, Title: task.Title, ClashesWith: clash})
+			out.SkippedTotal++
+			if len(out.Skipped) < skippedLimit {
+				out.Skipped = append(out.Skipped, NextReadyBatchSkip{ID: task.ID, Code: task.Code, Title: task.Title, ClashesWith: clash})
+			}
 			continue
 		}
 		chosen = append(chosen, task)
-		out.Items = append(out.Items, NextReadyBatchItem{
-			ID: task.ID, Code: task.Code, Title: task.Title, Priority: task.Priority, Effort: task.Effort, Files: append([]string{}, task.Files...),
-		})
+		out.Items = append(out.Items, NextReadyBatchItem{ID: task.ID, Code: task.Code, Title: task.Title, Priority: task.Priority, Effort: task.Effort, Files: append([]string{}, task.Files...)})
 	}
 	return out, nil
 }
-
+func resolveSkippedLimit(requested int) (int, error) {
+	if requested < 0 || requested > nextReadyBatchMaxSkippedLimit {
+		return 0, fmt.Errorf("%w: skipped_limit %d is not between 1 and %d", ErrInvalidFilter, requested, nextReadyBatchMaxSkippedLimit)
+	}
+	if requested == 0 {
+		return nextReadyBatchDefaultSkippedLimit, nil
+	}
+	return requested, nil
+}
 func (m *taskManager) readyCandidates(ctx context.Context, backlogs []models.Backlog, filter NextReadyBatchFilter) ([]Task, error) {
 	query, err := m.scopedTasks(ctx, strings.TrimSpace(filter.Backlog), "", append([]string{tagReady}, filter.Tag...), filter.RequesterID)
 	if err != nil {
@@ -113,7 +125,6 @@ func (m *taskManager) readyCandidates(ctx context.Context, backlogs []models.Bac
 	}
 	return ready, nil
 }
-
 func firstClash(task Task, running, chosen []Task) (string, bool) {
 	for _, other := range append(append([]Task{}, running...), chosen...) {
 		if other.ID != task.ID && len(overlappingPairs(task.Files, other.Files)) > 0 {

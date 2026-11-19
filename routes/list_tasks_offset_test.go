@@ -14,9 +14,11 @@ func (h *hub) list(path string) (int, []map[string]any) {
 	req := httptest.NewRequest(http.MethodGet, path, strings.NewReader(""))
 	rec := httptest.NewRecorder()
 	h.mux.ServeHTTP(rec, req)
-	var tasks []map[string]any
-	_ = json.Unmarshal(rec.Body.Bytes(), &tasks)
-	return rec.Code, tasks
+	var page struct {
+		Items []map[string]any `json:"items"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &page)
+	return rec.Code, page.Items
 }
 
 func TestListTasksRoute_OffsetPagesAndANegativeOffsetIs400(t *testing.T) {

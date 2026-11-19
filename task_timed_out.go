@@ -3,26 +3,22 @@ package mwanachamataskmanager
 import (
 	"context"
 	"fmt"
+	"github.com/aosanya/mwanachama-backend-shared/specstore"
 	"strings"
 	"time"
-
-	"github.com/aosanya/mwanachama-backend-shared/specstore"
 )
 
 const timedOutEntryRunes = 200
 
 type TimedOutFilter struct {
-	Backlog string `query:"backlog"`
-
+	Backlog     string `query:"backlog"`
 	RequesterID string `query:"-" json:"-"`
 }
-
 type TimedOutEntry struct {
 	Kind      string `json:"kind"`
 	Text      string `json:"text"`
 	CreatedAt string `json:"created_at"`
 }
-
 type TimedOutItem struct {
 	ID                    string         `json:"id"`
 	Code                  string         `json:"code"`
@@ -33,7 +29,6 @@ type TimedOutItem struct {
 	ClockStopped          bool           `json:"clock_stopped"`
 	LastEntry             *TimedOutEntry `json:"last_entry"`
 }
-
 type TimedOut struct {
 	Items []TimedOutItem `json:"items"`
 }
@@ -71,7 +66,7 @@ func (m *taskManager) TimedOut(ctx context.Context, filter TimedOutFilter) (Time
 	if err != nil {
 		return out, fmt.Errorf("TimedOut: %w", err)
 	}
-	startedOf, err := m.firstWorkerNoteTimes(ctx, ids)
+	startedOf, err := m.clockStartTimes(ctx, ids)
 	if err != nil {
 		return out, fmt.Errorf("TimedOut: %w", err)
 	}
@@ -111,7 +106,6 @@ func (m *taskManager) TimedOut(ctx context.Context, filter TimedOutFilter) (Time
 	}
 	return out, nil
 }
-
 func (m *taskManager) lastNotes(ctx context.Context, ids []string) (map[string]TaskNote, error) {
 	q := m.store.Query(ctx, roleTaskNote).Where("task_id IN ?", ids).Order("created_at").Order("id").Limit(maxWorkerNotesRead)
 	notes, err := specstore.List[TaskNote](m.store, q, roleTaskNote)
@@ -124,7 +118,6 @@ func (m *taskManager) lastNotes(ctx context.Context, ids []string) (map[string]T
 	}
 	return last, nil
 }
-
 func parsedNoteTime(stamp string) (time.Time, bool) {
 	if stamp == "" {
 		return time.Time{}, false
@@ -132,12 +125,10 @@ func parsedNoteTime(stamp string) (time.Time, bool) {
 	at, err := time.Parse(time.RFC3339Nano, stamp)
 	return at, err == nil
 }
-
 func minutesBetween(from, to time.Time) *int64 {
 	minutes := int64(to.Sub(from) / time.Minute)
 	return &minutes
 }
-
 func firstRunes(text string, limit int) string {
 	runes := []rune(text)
 	if len(runes) <= limit {

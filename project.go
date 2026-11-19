@@ -5,10 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aosanya/mwanachama-backend-shared/specstore"
 )
+
+var projectCreateLock sync.Mutex
 
 func toSlug(name string) string {
 	return strings.ToLower(strings.ReplaceAll(name, " ", "_"))
@@ -29,6 +32,8 @@ func (m *taskManager) CreateProject(ctx context.Context, p Project) (Project, er
 	p.CreatedAt = now
 	p.UpdatedAt = now
 
+	projectCreateLock.Lock()
+	defer projectCreateLock.Unlock()
 	if err := m.checkProjectNameFree(ctx, p.ProjectName, ""); err != nil {
 		return Project{}, err
 	}

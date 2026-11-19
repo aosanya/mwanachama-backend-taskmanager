@@ -4,6 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/aosanya/mwanachama-backend-shared/spec"
+	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
+	"github.com/aosanya/mwanachama-backend-taskmanager/routes"
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -11,13 +16,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/glebarez/sqlite"
-	"gorm.io/gorm"
-
-	"github.com/aosanya/mwanachama-backend-shared/spec"
-	mwanachamataskmanager "github.com/aosanya/mwanachama-backend-taskmanager"
-	"github.com/aosanya/mwanachama-backend-taskmanager/routes"
 )
 
 type probeCall struct {
@@ -26,23 +24,8 @@ type probeCall struct {
 	body   any
 }
 
-var operationsNotBoundToABacklog = map[string]bool{
-	"open_case":               true,
-	"vote_case":               true,
-	"take_back_vote":          true,
-	"add_task_note":           true,
-	"add_task_reference":      true,
-	"propose_task_reference":  true,
-	"confirm_task_reference":  true,
-	"remove_task_reference":   true,
-	"set_worker_caps_default": true,
-	"claim_next":              true,
-	"batch":                   true,
-}
-
-var readsSentAsPost = map[string]bool{
-	"count_backlog_rules": true,
-}
+var operationsNotBoundToABacklog = map[string]bool{"open_case": true, "vote_case": true, "take_back_vote": true, "add_task_note": true, "add_task_reference": true, "propose_task_reference": true, "confirm_task_reference": true, "remove_task_reference": true, "set_worker_caps_default": true, "claim_next": true, "batch": true}
+var readsSentAsPost = map[string]bool{"count_backlog_rules": true}
 
 func operationsTakingTheCallerThatWrite(t *testing.T) []string {
 	t.Helper()
@@ -77,50 +60,12 @@ func operationsTakingTheCallerThatWrite(t *testing.T) []string {
 	sort.Strings(names)
 	return names
 }
-
 func writesOnAnIssue(f *moreWritesFixture, other string) map[string]probeCall {
 	deadline := time.Now().Add(time.Hour).UTC().Format(time.RFC3339)
 	issue := "/tasks/" + f.issue
 	todo := f.todo(f.h.t, f.issue, "probed piece")
-	return map[string]probeCall{
-		"edit_task_todo":           {"PATCH", "/todos/" + todo, map[string]any{"title": "edited"}},
-		"update_task_todo_status":  {"PUT", "/todos/" + todo + "/status", map[string]any{"status": "Done"}},
-		"delete_task_todo":         {"DELETE", "/todos/" + todo, nil},
-		"reorder_issue_todos":      {"PUT", issue + "/todos/order", map[string]any{"ids": []string{todo}}},
-		"create_task":              {"POST", "/tasks", map[string]any{"title": "new", "backlog": f.docs, "step": "write"}},
-		"update_task":              {"PUT", issue, map[string]any{"title": "renamed", "status": "pending", "backlog": f.docs, "step": "write"}},
-		"patch_task":               {"PATCH", issue, map[string]any{"title": "patched"}},
-		"create_with_todos":        {"POST", "/create-with-todos", map[string]any{"title": "new", "backlog": f.docs, "step": "write", "todos": []map[string]any{{"title": "one", "instructions": "do"}}}},
-		"move_task_to_state":       {"POST", issue + "/move", map[string]string{"state": "Done"}},
-		"move_task_to_step":        {"POST", issue + "/move-to-step", map[string]string{"backlog": f.docs, "step": "done"}},
-		"claim_task":               {"POST", issue + "/claim", nil},
-		"place_task":               {"POST", issue + "/place", map[string]string{"after": other}},
-		"delete_task":              {"DELETE", issue, nil},
-		"unblock_task":             {"POST", issue + "/unblock", map[string]any{"note": "go"}},
-		"unblock_dependents":       {"POST", issue + "/unblock-dependents", nil},
-		"assign_task":              {"POST", issue + "/assign", map[string]any{"agent_id": "worker"}},
-		"unassign_task":            {"POST", issue + "/unassign", nil},
-		"assign_task_to_holder":    {"POST", issue + "/assign-holder", map[string]any{"assignee_kind": "actor", "assignee_id": "someone"}},
-		"create_task_in_project":   {"POST", "/projects/guide/tasks", map[string]any{"title": "new", "backlog": f.docs, "step": "write"}},
-		"add_task_to_project":      {"POST", "/projects/" + f.project + "/tasks/" + f.issue, nil},
-		"remove_task_from_project": {"DELETE", "/projects/" + f.project + "/tasks/" + f.issue, nil},
-		"create_relationship":      {"POST", "/relationships", map[string]string{"label": "blocks", "from_id": f.issue, "to_id": other}},
-		"delete_relationship":      {"DELETE", "/relationships?label=blocks&from_id=" + f.issue + "&to_id=" + other, nil},
-		"link_task_to_run":         {"POST", "/workflow-runs/" + f.run + "/tasks/" + f.issue + "/link", nil},
-		"cancel_workflow_run":      {"POST", "/workflow-runs/" + f.run + "/cancel", map[string]any{"reason": "no", "quiesce_deadline": deadline}},
-		"rollback_workflow_run":    {"POST", "/workflow-runs/" + f.run + "/rollback", map[string]any{"reason": "no"}},
-		"link_case_task":           {"PUT", "/cases/" + f.kase + "/tasks/" + f.issue, nil},
-		"end_case":                 {"POST", "/cases/" + f.kase + "/end", map[string]any{"status": "cancelled"}},
-		"open_sourced_tasks":       {"POST", "/sourced-tasks", map[string]any{"source": "feed", "items": []map[string]any{{"key": "k1", "title": "from a feed", "due_at": "2030-01-01T00:00:00Z"}}}},
-		"set_task_caps":            {"PUT", issue + "/caps", map[string]any{"input_tokens": 5}},
-		"clear_task_caps":          {"DELETE", issue + "/caps", nil},
-		"write_task_usage":         {"PUT", issue + "/usage", map[string]any{"input_tokens": 5}},
-		"release_task":             {"POST", issue + "/release", map[string]any{"mode": "sinbin", "reason": "stopped"}},
-		"heartbeat":                {"POST", issue + "/heartbeat", map[string]any{"agent": "worker"}},
-		"generate_tasks":           {"POST", "/generated-tasks", map[string]any{"run": "r1", "template": map[string]any{"title": "per subject"}, "subjects": []string{"s1"}}},
-	}
+	return map[string]probeCall{"edit_task_todo": {"PATCH", "/todos/" + todo, map[string]any{"title": "edited"}}, "update_task_todo_status": {"PUT", "/todos/" + todo + "/status", map[string]any{"status": "Done"}}, "finish_task_todo": {"POST", "/todos/" + todo + "/finish", map[string]any{"text": "finished"}}, "delete_task_todo": {"DELETE", "/todos/" + todo, nil}, "reorder_issue_todos": {"PUT", issue + "/todos/order", map[string]any{"ids": []string{todo}}}, "create_task": {"POST", "/tasks", map[string]any{"title": "new", "backlog": f.docs, "step": "write"}}, "update_task": {"PUT", issue, map[string]any{"title": "renamed", "status": "pending", "backlog": f.docs, "step": "write"}}, "patch_task": {"PATCH", issue, map[string]any{"title": "patched"}}, "create_with_todos": {"POST", "/create-with-todos", map[string]any{"title": "new", "backlog": f.docs, "step": "write", "todos": []map[string]any{{"title": "one", "instructions": "do"}}}}, "add_todos": {"POST", issue + "/add-todos", map[string]any{"todos": []map[string]any{{"title": "one", "instructions": "do"}}}}, "move_task_to_state": {"POST", issue + "/move", map[string]string{"state": "Done"}}, "move_task_to_step": {"POST", issue + "/move-to-step", map[string]string{"backlog": f.docs, "step": "done"}}, "claim_task": {"POST", issue + "/claim", nil}, "place_task": {"POST", issue + "/place", map[string]string{"after": other}}, "delete_task": {"DELETE", issue, nil}, "unblock_task": {"POST", issue + "/unblock", map[string]any{"note": "go"}}, "unblock_dependents": {"POST", issue + "/unblock-dependents", nil}, "assign_task": {"POST", issue + "/assign", map[string]any{"agent_id": "worker"}}, "unassign_task": {"POST", issue + "/unassign", nil}, "assign_task_to_holder": {"POST", issue + "/assign-holder", map[string]any{"assignee_kind": "actor", "assignee_id": "someone"}}, "create_task_in_project": {"POST", "/projects/guide/tasks", map[string]any{"title": "new", "backlog": f.docs, "step": "write"}}, "add_task_to_project": {"POST", "/projects/" + f.project + "/tasks/" + f.issue, nil}, "remove_task_from_project": {"DELETE", "/projects/" + f.project + "/tasks/" + f.issue, nil}, "create_relationship": {"POST", "/relationships", map[string]string{"label": "blocks", "from_id": f.issue, "to_id": other}}, "delete_relationship": {"DELETE", "/relationships?label=blocks&from_id=" + f.issue + "&to_id=" + other, nil}, "link_task_to_run": {"POST", "/workflow-runs/" + f.run + "/tasks/" + f.issue + "/link", nil}, "cancel_workflow_run": {"POST", "/workflow-runs/" + f.run + "/cancel", map[string]any{"reason": "no", "quiesce_deadline": deadline}}, "rollback_workflow_run": {"POST", "/workflow-runs/" + f.run + "/rollback", map[string]any{"reason": "no"}}, "link_case_task": {"PUT", "/cases/" + f.kase + "/tasks/" + f.issue, nil}, "end_case": {"POST", "/cases/" + f.kase + "/end", map[string]any{"status": "cancelled"}}, "open_sourced_tasks": {"POST", "/sourced-tasks", map[string]any{"source": "feed", "items": []map[string]any{{"key": "k1", "title": "from a feed", "due_at": "2030-01-01T00:00:00Z"}}}}, "set_task_caps": {"PUT", issue + "/caps", map[string]any{"input_tokens": 5}}, "clear_task_caps": {"DELETE", issue + "/caps", nil}, "write_task_usage": {"PUT", issue + "/usage", map[string]any{"input_tokens": 5}}, "release_task": {"POST", issue + "/release", map[string]any{"mode": "sinbin", "reason": "stopped"}}, "heartbeat": {"POST", issue + "/heartbeat", map[string]any{"agent": "worker"}}, "generate_tasks": {"POST", "/generated-tasks", map[string]any{"run": "r1", "template": map[string]any{"title": "per subject"}, "subjects": []string{"s1"}}}}
 }
-
 func TestEveryWriteThatTakesTheCallerIsProbedForCanSee(t *testing.T) {
 	f := newMoreWritesFixture(t)
 	other := f.h.expect(http.StatusCreated, "boss", "POST", "/tasks", map[string]any{"title": "second", "backlog": f.docs, "step": "write"})["id"].(string)
@@ -138,7 +83,6 @@ func TestEveryWriteThatTakesTheCallerIsProbedForCanSee(t *testing.T) {
 		t.Fatalf("operations that write and take the caller:\n declared %v\n probed   %v", declared, have)
 	}
 }
-
 func TestACanSeeGroupAndAPersonInNoGroupAreRefusedEveryWriteOnAnIssue(t *testing.T) {
 	f := newMoreWritesFixture(t)
 	other := f.h.expect(http.StatusCreated, "boss", "POST", "/tasks", map[string]any{"title": "second", "backlog": f.docs, "step": "write"})["id"].(string)
@@ -158,12 +102,8 @@ func TestACanSeeGroupAndAPersonInNoGroupAreRefusedEveryWriteOnAnIssue(t *testing
 		t.Fatalf("a refused write changed the second issue: %v", got)
 	}
 }
-
 func TestAPersonInTwoGroupsGetsTheHigherLevelInEitherOrder(t *testing.T) {
-	for name, groups := range map[string][]string{
-		"see first":  {"contributors", "g-dev"},
-		"move first": {"g-dev", "contributors"},
-	} {
+	for name, groups := range map[string][]string{"see first": {"contributors", "g-dev"}, "move first": {"g-dev", "contributors"}} {
 		t.Run(name, func(t *testing.T) {
 			h := newAccessHub(t, map[string][]string{"boss": {"owners"}, "two": groups})
 			h.expect(http.StatusNoContent, "", "PUT", "/backlog-owner-group", map[string]string{"group_id": "owners"})
@@ -178,7 +118,6 @@ func TestAPersonInTwoGroupsGetsTheHigherLevelInEitherOrder(t *testing.T) {
 		})
 	}
 }
-
 func TestMovingAnIssueNeedsCanMoveOnBothBacklogsAndNothingMovesWhenRefused(t *testing.T) {
 	h := newAccessHub(t, map[string][]string{"boss": {"owners"}, "two": {"contributors", "g-dev"}})
 	h.expect(http.StatusNoContent, "", "PUT", "/backlog-owner-group", map[string]string{"group_id": "owners"})
@@ -196,7 +135,6 @@ func TestMovingAnIssueNeedsCanMoveOnBothBacklogsAndNothingMovesWhenRefused(t *te
 	h.expect(http.StatusOK, "", "PUT", "/backlogs/"+to+"/access/g-dev", map[string]string{"level": "move"})
 	h.expect(http.StatusOK, "two", "POST", "/tasks/"+issue+"/move-to-step", map[string]string{"backlog": to, "step": "a"})
 }
-
 func TestAHubWithNoOwnerGroupAndNoGrantsIsOpenAndClosesWhenTheOwnerGroupIsSet(t *testing.T) {
 	h := newAccessHub(t, map[string][]string{"boss": {"owners"}})
 	issue := h.expect(http.StatusCreated, "nog", "POST", "/tasks", map[string]any{"title": "open hub"})["id"].(string)
@@ -212,7 +150,6 @@ func TestAHubWithNoOwnerGroupAndNoGrantsIsOpenAndClosesWhenTheOwnerGroupIsSet(t 
 	}
 	h.expect(http.StatusOK, "boss", "GET", "/tasks/"+issue, nil)
 }
-
 func TestChangingTheOwnerGroupMovesCanMoveToTheNewGroupAndKeepsTheOtherGrants(t *testing.T) {
 	h := newAccessHub(t, map[string][]string{"boss": {"owners"}, "ann": {"contributors"}, "dev": {"g-dev"}})
 	h.expect(http.StatusNoContent, "", "PUT", "/backlog-owner-group", map[string]string{"group_id": "owners"})
@@ -221,10 +158,8 @@ func TestChangingTheOwnerGroupMovesCanMoveToTheNewGroupAndKeepsTheOtherGrants(t 
 	h.expect(http.StatusOK, "", "PUT", "/backlogs/"+docs+"/access/contributors", map[string]string{"level": "see"})
 	h.expect(http.StatusOK, "", "PUT", "/backlogs/"+docs+"/access/g-dev", map[string]string{"level": "move"})
 	update := map[string]any{"title": "b", "status": "pending", "backlog": docs, "step": "write"}
-
 	h.expect(http.StatusForbidden, "ann", "PUT", "/tasks/"+issue, update)
 	h.expect(http.StatusNoContent, "", "PUT", "/backlog-owner-group", map[string]string{"group_id": "contributors"})
-
 	h.expect(http.StatusOK, "ann", "PUT", "/tasks/"+issue, update)
 	h.expect(http.StatusNotFound, "boss", "GET", "/tasks/"+issue, nil)
 	h.expect(http.StatusForbidden, "boss", "PUT", "/tasks/"+issue, update)
@@ -237,7 +172,6 @@ func TestChangingTheOwnerGroupMovesCanMoveToTheNewGroupAndKeepsTheOtherGrants(t 
 		t.Fatalf("the old owner group still lists %v", ids)
 	}
 }
-
 func TestAPersonWhoLeavesTheirGroupLosesTheBacklogAndTheCallWithNoPersonCanSetANewOwnerGroup(t *testing.T) {
 	groups := map[string][]string{"boss": {"owners"}, "two": {"g-dev"}}
 	h := newAccessHub(t, groups)
@@ -246,18 +180,15 @@ func TestAPersonWhoLeavesTheirGroupLosesTheBacklogAndTheCallWithNoPersonCanSetAN
 	issue := h.expect(http.StatusCreated, "boss", "POST", "/tasks", map[string]any{"title": "a", "backlog": docs, "step": "write"})["id"].(string)
 	h.expect(http.StatusOK, "", "PUT", "/backlogs/"+docs+"/access/g-dev", map[string]string{"level": "move"})
 	h.expect(http.StatusOK, "two", "GET", "/tasks/"+issue, nil)
-
 	groups["two"] = nil
 	h.expect(http.StatusNotFound, "two", "GET", "/tasks/"+issue, nil)
 	h.expect(http.StatusForbidden, "two", "DELETE", "/tasks/"+issue, nil)
-
 	groups["boss"] = nil
 	h.expect(http.StatusNotFound, "boss", "GET", "/tasks/"+issue, nil)
 	groups["boss"] = []string{"owners"}
 	h.expect(http.StatusOK, "boss", "GET", "/tasks/"+issue, nil)
 	h.expect(http.StatusOK, "", "GET", "/backlogs/"+docs+"/access", nil)
 }
-
 func newFileBackedAccessHub(t *testing.T, groupsOf map[string][]string) *accessHub {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "hub.db")+"?_pragma=busy_timeout(5000)"), &gorm.Config{})
@@ -288,8 +219,12 @@ func newFileBackedAccessHub(t *testing.T, groupsOf map[string][]string) *accessH
 	if err != nil {
 		t.Fatal(err)
 	}
-	mgr.UseGroups(func(_ context.Context, id string) ([]string, error) { return groupsOf[id], nil })
-	mgr.UseGroupExists(func(context.Context, string) (bool, error) { return true, nil })
+	mgr.UseGroups(func(_ context.Context, id string) ([]string, error) {
+		return groupsOf[id], nil
+	})
+	mgr.UseGroupExists(func(context.Context, string) (bool, error) {
+		return true, nil
+	})
 	built, err := routes.BuildFor(mgr, routes.Mount{Caller: func(ctx context.Context) string {
 		id, _ := ctx.Value(callerKey{}).(string)
 		return id
@@ -303,7 +238,6 @@ func newFileBackedAccessHub(t *testing.T, groupsOf map[string][]string) *accessH
 	}
 	return &accessHub{t: t, mux: mux}
 }
-
 func TestEveryGrantTheHubAcknowledgesDuringSimultaneousGrantsSurvives(t *testing.T) {
 	for round := 0; round < 10; round++ {
 		h := newFileBackedAccessHub(t, map[string][]string{"boss": {"owners"}})
@@ -340,14 +274,10 @@ func TestEveryGrantTheHubAcknowledgesDuringSimultaneousGrantsSurvives(t *testing
 		}
 	}
 }
-
 func TestSourcedTasksAreRefusedToAPersonWithoutCanMoveOnTheFirstBacklog(t *testing.T) {
 	h := newAccessHub(t, map[string][]string{"boss": {"owners"}})
 	h.expect(http.StatusNoContent, "", "PUT", "/backlog-owner-group", map[string]string{"group_id": "owners"})
-	body := map[string]any{
-		"source": "feed",
-		"items":  []map[string]any{{"key": "k1", "title": "from a feed", "due_at": "2030-01-01T00:00:00Z"}},
-	}
+	body := map[string]any{"source": "feed", "items": []map[string]any{{"key": "k1", "title": "from a feed", "due_at": "2030-01-01T00:00:00Z"}}}
 	h.expect(http.StatusForbidden, "nog", "POST", "/sourced-tasks", body)
 	opened := h.expect(http.StatusOK, "boss", "POST", "/sourced-tasks", body)
 	if items := opened["items"].([]any); len(items) != 1 {

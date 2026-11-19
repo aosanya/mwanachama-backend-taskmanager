@@ -14,10 +14,13 @@ type RepeatingTaskRecord struct {
 	AssigneeKind  AssigneeKind `json:"assignee_kind"`
 	AssigneeID    string       `json:"assignee_id"`
 	StoppedAt     string       `json:"stopped_at,omitempty"`
+	NextDueAt     string       `json:"next_due_at,omitempty" spec:"-"`
+	LastTaskID    string       `json:"last_task_id,omitempty" spec:"-"`
+	LastDueAt     string       `json:"last_due_at,omitempty" spec:"-"`
+	LastDoneAt    string       `json:"last_done_at,omitempty" spec:"-"`
 	CreatedAt     string       `json:"created_at"`
 	UpdatedAt     string       `json:"updated_at"`
 }
-
 type RepeatingTaskPeriod struct {
 	PeriodKey       string `json:"period_key"`
 	RepeatingTaskID string `json:"repeating_task_id"`
@@ -26,12 +29,10 @@ type RepeatingTaskPeriod struct {
 	DueAt           string `json:"due_at"`
 	MadeAt          string `json:"made_at"`
 }
-
 type RepeatingTaskFilter struct {
 	AssigneeKind AssigneeKind `json:"assignee_kind,omitempty"`
 	AssigneeID   string       `json:"assignee_id,omitempty"`
 }
-
 type NewRepeatingTask struct {
 	Title        string       `json:"title"`
 	Description  string       `json:"description,omitempty"`

@@ -4,12 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
-
 	"github.com/aosanya/mwanachama-backend-shared/recur"
 	"github.com/aosanya/mwanachama-backend-shared/specstore"
 	"github.com/aosanya/mwanachama-backend-taskmanager/models"
 	"gorm.io/gorm"
+	"time"
 )
 
 type (
@@ -20,19 +19,10 @@ type (
 )
 
 var ErrRepeatingTaskNotFound = errors.New("repeating task not found")
-
 var ErrRepeatingTaskStopped = errors.New("a stopped repeating task cannot be changed; start a new one")
 
 func RecordOf(r RepeatingTask) RepeatingTaskRecord {
-	rec := RepeatingTaskRecord{
-		ID:            r.ID,
-		Title:         r.Title,
-		Description:   r.Description,
-		ScheduleStart: formatInstant(r.Schedule.Start),
-		ScheduleEnd:   formatInstant(r.Schedule.End),
-		AssigneeKind:  r.AssigneeKind,
-		AssigneeID:    r.AssigneeID,
-	}
+	rec := RepeatingTaskRecord{ID: r.ID, Title: r.Title, Description: r.Description, ScheduleStart: formatInstant(r.Schedule.Start), ScheduleEnd: formatInstant(r.Schedule.End), AssigneeKind: r.AssigneeKind, AssigneeID: r.AssigneeID}
 	if r.Schedule.Zone != nil {
 		rec.ScheduleZone = r.Schedule.Zone.String()
 	}
@@ -44,16 +34,8 @@ func RecordOf(r RepeatingTask) RepeatingTaskRecord {
 	}
 	return rec
 }
-
 func RepeatingTaskFromRecord(rec RepeatingTaskRecord) (RepeatingTask, error) {
-	r := RepeatingTask{
-		ID:           rec.ID,
-		Title:        rec.Title,
-		Description:  rec.Description,
-		AssigneeKind: rec.AssigneeKind,
-		AssigneeID:   rec.AssigneeID,
-		Stopped:      rec.StoppedAt != "",
-	}
+	r := RepeatingTask{ID: rec.ID, Title: rec.Title, Description: rec.Description, AssigneeKind: rec.AssigneeKind, AssigneeID: rec.AssigneeID, Stopped: rec.StoppedAt != ""}
 	zone, err := time.LoadLocation(rec.ScheduleZone)
 	if err != nil {
 		return RepeatingTask{}, fmt.Errorf("%w: zone %q: %v", ErrInvalidRepeatingTask, rec.ScheduleZone, err)
@@ -81,14 +63,12 @@ func RepeatingTaskFromRecord(rec RepeatingTaskRecord) (RepeatingTask, error) {
 	}
 	return r, nil
 }
-
 func formatInstant(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
 	return t.UTC().Format(time.RFC3339)
 }
-
 func parseInstant(s string) (time.Time, error) {
 	if s == "" {
 		return time.Time{}, nil
@@ -99,7 +79,6 @@ func parseInstant(s string) (time.Time, error) {
 	}
 	return t, nil
 }
-
 func RepeatingTaskFromNew(n NewRepeatingTask) (RepeatingTask, error) {
 	if _, err := n.Schedule.Schedule(); err != nil {
 		return RepeatingTask{}, fmt.Errorf("%w: %v", ErrInvalidRepeatingTask, err)
@@ -107,19 +86,8 @@ func RepeatingTaskFromNew(n NewRepeatingTask) (RepeatingTask, error) {
 	if n.Schedule.OpenDays != 0 {
 		return RepeatingTask{}, fmt.Errorf("%w: open_days is not kept for a repeating task; its task is due at the period's end", ErrInvalidRepeatingTask)
 	}
-	return RepeatingTaskFromRecord(RepeatingTaskRecord{
-		Title:         n.Title,
-		Description:   n.Description,
-		ScheduleRule:  n.Schedule.Rule,
-		ScheduleDates: n.Schedule.Dates,
-		ScheduleStart: n.Schedule.Start,
-		ScheduleEnd:   n.Schedule.End,
-		ScheduleZone:  n.Schedule.Zone,
-		AssigneeKind:  n.AssigneeKind,
-		AssigneeID:    n.AssigneeID,
-	})
+	return RepeatingTaskFromRecord(RepeatingTaskRecord{Title: n.Title, Description: n.Description, ScheduleRule: n.Schedule.Rule, ScheduleDates: n.Schedule.Dates, ScheduleStart: n.Schedule.Start, ScheduleEnd: n.Schedule.End, ScheduleZone: n.Schedule.Zone, AssigneeKind: n.AssigneeKind, AssigneeID: n.AssigneeID})
 }
-
 func (m *taskManager) StartRepeatingTask(ctx context.Context, n NewRepeatingTask) (RepeatingTaskRecord, error) {
 	r, err := RepeatingTaskFromNew(n)
 	if err != nil {
@@ -127,7 +95,6 @@ func (m *taskManager) StartRepeatingTask(ctx context.Context, n NewRepeatingTask
 	}
 	return m.CreateRepeatingTask(ctx, r)
 }
-
 func (m *taskManager) CreateRepeatingTask(ctx context.Context, r RepeatingTask) (RepeatingTaskRecord, error) {
 	r.ID = newSpecID()
 	r.Stopped = false
@@ -146,7 +113,6 @@ func (m *taskManager) CreateRepeatingTask(ctx context.Context, r RepeatingTask) 
 	}
 	return rec, nil
 }
-
 func (m *taskManager) GetRepeatingTask(ctx context.Context, id string) (RepeatingTaskRecord, error) {
 	var rec RepeatingTaskRecord
 	q := m.store.Query(ctx, roleRepeatingTask).Where("id = ?", id)
@@ -156,9 +122,17 @@ func (m *taskManager) GetRepeatingTask(ctx context.Context, id string) (Repeatin
 		}
 		return RepeatingTaskRecord{}, fmt.Errorf("GetRepeatingTask: %w", err)
 	}
-	return rec, nil
+	rec = m.withUpkeepDays(ctx, rec, time.Now())
+	one := []RepeatingTaskRecord{rec}
+	if err := m.withLastUpkeep(ctx, one); err != nil {
+		return RepeatingTaskRecord{}, fmt.Errorf("GetRepeatingTask: %w", err)
+	}
+	return one[0], nil
 }
-
+func (m *taskManager) withUpkeepDays(_ context.Context, rec RepeatingTaskRecord, now time.Time) RepeatingTaskRecord {
+	rec.NextDueAt = NextDueAt(rec, now)
+	return rec
+}
 func (m *taskManager) ListRepeatingTasks(ctx context.Context, filter RepeatingTaskFilter) ([]RepeatingTaskRecord, error) {
 	q := m.store.Query(ctx, roleRepeatingTask)
 	if filter.AssigneeKind != "" {
@@ -172,20 +146,23 @@ func (m *taskManager) ListRepeatingTasks(ctx context.Context, filter RepeatingTa
 	if err != nil {
 		return nil, fmt.Errorf("ListRepeatingTasks: %w", err)
 	}
+	now := time.Now()
+	for i := range out {
+		out[i] = m.withUpkeepDays(ctx, out[i], now)
+	}
+	if err := m.withLastUpkeep(ctx, out); err != nil {
+		return nil, fmt.Errorf("ListRepeatingTasks: %w", err)
+	}
 	return out, nil
 }
-
 func (m *taskManager) ListRunningRepeatingTasks(ctx context.Context) ([]RepeatingTaskRecord, error) {
-	q := m.store.Query(ctx, roleRepeatingTask).
-		Where(m.store.Unset(roleRepeatingTask, "StoppedAt")).
-		Order("created_at").Order("id")
+	q := m.store.Query(ctx, roleRepeatingTask).Where(m.store.Unset(roleRepeatingTask, "StoppedAt")).Order("created_at").Order("id")
 	out, err := specstore.List[RepeatingTaskRecord](m.store, q, roleRepeatingTask)
 	if err != nil {
 		return nil, fmt.Errorf("ListRunningRepeatingTasks: %w", err)
 	}
 	return out, nil
 }
-
 func (m *taskManager) StopRepeatingTask(ctx context.Context, id string) (RepeatingTaskRecord, error) {
 	rec, err := m.GetRepeatingTask(ctx, id)
 	if err != nil {
@@ -195,15 +172,12 @@ func (m *taskManager) StopRepeatingTask(ctx context.Context, id string) (Repeati
 		return rec, nil
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	res := m.store.Query(ctx, roleRepeatingTask).
-		Where("id = ?", id).
-		Updates(map[string]any{"stopped_at": now, "updated_at": now})
+	res := m.store.Query(ctx, roleRepeatingTask).Where("id = ?", id).Updates(map[string]any{"stopped_at": now, "updated_at": now})
 	if res.Error != nil {
 		return RepeatingTaskRecord{}, fmt.Errorf("StopRepeatingTask: %w", res.Error)
 	}
 	return m.GetRepeatingTask(ctx, id)
 }
-
 func (m *taskManager) UpdateRepeatingTask(ctx context.Context, id string, n NewRepeatingTask) (RepeatingTaskRecord, error) {
 	current, err := m.GetRepeatingTask(ctx, id)
 	if err != nil {
@@ -227,10 +201,7 @@ func (m *taskManager) UpdateRepeatingTask(ctx context.Context, id string, n NewR
 	if err != nil {
 		return RepeatingTaskRecord{}, fmt.Errorf("UpdateRepeatingTask: %w", err)
 	}
-	res := m.store.Query(ctx, roleRepeatingTask).
-		Where("id = ?", id).
-		Where(m.store.Unset(roleRepeatingTask, "StoppedAt")).
-		Updates(row)
+	res := m.store.Query(ctx, roleRepeatingTask).Where("id = ?", id).Where(m.store.Unset(roleRepeatingTask, "StoppedAt")).Updates(row)
 	if res.Error != nil {
 		return RepeatingTaskRecord{}, fmt.Errorf("UpdateRepeatingTask: %w", res.Error)
 	}
@@ -239,7 +210,6 @@ func (m *taskManager) UpdateRepeatingTask(ctx context.Context, id string, n NewR
 	}
 	return m.GetRepeatingTask(ctx, id)
 }
-
 func (m *taskManager) MakeRepeatingTaskDue(ctx context.Context, id string, at time.Time) (RepeatingTaskPeriod, bool, error) {
 	rec, err := m.GetRepeatingTask(ctx, id)
 	if err != nil {
@@ -270,14 +240,7 @@ func (m *taskManager) MakeRepeatingTaskDue(ctx context.Context, id string, at ti
 		if err := txm.AssignTaskToHolder(ctx, task.ID, r.AssigneeKind, r.AssigneeID); err != nil {
 			return err
 		}
-		made = RepeatingTaskPeriod{
-			PeriodKey:       occ.PeriodKey,
-			RepeatingTaskID: r.ID,
-			TaskID:          task.ID,
-			PeriodStart:     formatInstant(occ.Start),
-			DueAt:           formatInstant(occ.Due),
-			MadeAt:          time.Now().UTC().Format(time.RFC3339),
-		}
+		made = RepeatingTaskPeriod{PeriodKey: occ.PeriodKey, RepeatingTaskID: r.ID, TaskID: task.ID, PeriodStart: formatInstant(occ.Start), DueAt: formatInstant(occ.Due), MadeAt: time.Now().UTC().Format(time.RFC3339)}
 		if err := txm.store.Insert(ctx, roleRepeatingPeriod, made); err != nil {
 			return fmt.Errorf("MakeRepeatingTaskDue: %w", err)
 		}
@@ -294,7 +257,6 @@ func (m *taskManager) MakeRepeatingTaskDue(ctx context.Context, id string, at ti
 	}
 	return made, true, nil
 }
-
 func (m *taskManager) periodMade(ctx context.Context, periodKey string) (RepeatingTaskPeriod, bool, error) {
 	var made RepeatingTaskPeriod
 	q := m.store.Query(ctx, roleRepeatingPeriod).Where("period_key = ?", periodKey)
@@ -312,7 +274,6 @@ type heldEvent struct {
 	topic   string
 	payload any
 }
-
 type heldEvents []heldEvent
 
 func (h *heldEvents) Publish(_ context.Context, topic string, payload any) error {

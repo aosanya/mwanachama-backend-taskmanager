@@ -1,6 +1,7 @@
 package routes_test
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -22,23 +23,17 @@ func seedNextReadyBatchHub(t *testing.T, issues ...batchIssue) *accessHub {
 	}
 	h.expect(http.StatusOK, "owner", "PUT", "/backlogs/software/access/g-dev", map[string]string{"level": "see"})
 	for _, issue := range issues {
-		made := h.expect(http.StatusCreated, "owner", "POST", "/tasks", map[string]any{
-			"title": "Title " + issue.code, "code": issue.code, "rank": issue.rank, "tags": issue.tags,
-			"files": issue.files, "effort": "low", "description": "a description of " + issue.code,
-		})
+		made := h.expect(http.StatusCreated, "owner", "POST", "/tasks", map[string]any{"title": "Title " + issue.code, "code": issue.code, "rank": issue.rank, "tags": issue.tags, "files": issue.files, "effort": "low", "description": "a description of " + issue.code})
 		h.expect(http.StatusOK, "owner", "POST", "/tasks/"+made["id"].(string)+"/move-to-step", map[string]any{"backlog": issue.backlog, "step": issue.step})
 	}
 	return h
 }
-
 func ready(code string, rank int, files ...string) batchIssue {
 	return batchIssue{code: code, backlog: "software", step: "to-do", rank: rank, tags: []string{"Ready"}, files: files}
 }
-
 func doing(code string, rank int, files ...string) batchIssue {
 	return batchIssue{code: code, backlog: "software", step: "in-progress", rank: rank, files: files}
 }
-
 func batchCodes(t *testing.T, body map[string]any) string {
 	t.Helper()
 	codes := []string{}
@@ -51,7 +46,6 @@ func batchCodes(t *testing.T, body map[string]any) string {
 	}
 	return strings.Join(codes, ",")
 }
-
 func skippedPairs(body map[string]any) string {
 	pairs := []string{}
 	for _, raw := range body["skipped"].([]any) {
@@ -60,7 +54,6 @@ func skippedPairs(body map[string]any) string {
 	}
 	return strings.Join(pairs, ",")
 }
-
 func wantBatch(t *testing.T, body map[string]any, items, skipped string) {
 	t.Helper()
 	if got := batchCodes(t, body); got != items {
@@ -80,36 +73,17 @@ const (
 )
 
 func TestNextReadyBatchReturnsDisjointIssuesLowestRankFirstUpToTheCount(t *testing.T) {
-	h := seedNextReadyBatchHub(t,
-		ready("SW3", 300, batchOther),
-		ready("SW1", 100, batchMenu),
-		ready("SW2", 200, batchDocs),
-		ready("SW4", 400, "hub-steward:code/app/src/fourth.go"),
-	)
-
+	h := seedNextReadyBatchHub(t, ready("SW3", 300, batchOther), ready("SW1", 100, batchMenu), ready("SW2", 200, batchDocs), ready("SW4", 400, "hub-steward:code/app/src/fourth.go"))
 	wantBatch(t, h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch", nil), "SW1,SW2,SW3", "")
 	wantBatch(t, h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch?count=2", nil), "SW1,SW2", "")
 	wantBatch(t, h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch?count=10", nil), "SW1,SW2,SW3,SW4", "")
 }
-
 func TestNextReadyBatchSkipsTheLaterOfTwoClashingCandidatesAndNamesTheOtherOne(t *testing.T) {
-	h := seedNextReadyBatchHub(t,
-		ready("SW1", 100, batchMenu),
-		ready("SW2", 200, batchMenu, batchDocs),
-		ready("SW3", 300, batchOther),
-		ready("SW4", 400, batchDocs),
-	)
-
+	h := seedNextReadyBatchHub(t, ready("SW1", 100, batchMenu), ready("SW2", 200, batchMenu, batchDocs), ready("SW3", 300, batchOther), ready("SW4", 400, batchDocs))
 	wantBatch(t, h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch?count=5", nil), "SW1,SW3,SW4", "SW2>SW1")
 }
-
 func TestNextReadyBatchSkipsAnIssueThatClashesWithOneInProgress(t *testing.T) {
-	h := seedNextReadyBatchHub(t,
-		doing("RUN1", 10, batchMenu),
-		ready("SW1", 100, batchMenu),
-		ready("SW2", 200, batchDocs),
-	)
-
+	h := seedNextReadyBatchHub(t, doing("RUN1", 10, batchMenu), ready("SW1", 100, batchMenu), ready("SW2", 200, batchDocs))
 	body := h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch", nil)
 	wantBatch(t, body, "SW2", "SW1>RUN1")
 	skipped := body["skipped"].([]any)[0].(map[string]any)
@@ -117,26 +91,12 @@ func TestNextReadyBatchSkipsAnIssueThatClashesWithOneInProgress(t *testing.T) {
 		t.Errorf("the skipped entry is not compact: %v", skipped)
 	}
 }
-
 func TestNextReadyBatchTreatsAFolderAsContainingItsFiles(t *testing.T) {
-	h := seedNextReadyBatchHub(t,
-		doing("RUN1", 10, batchDir),
-		ready("SW1", 100, batchBrief),
-		ready("SW2", 200, batchDir),
-		ready("SW3", 300, batchDocs),
-	)
-
+	h := seedNextReadyBatchHub(t, doing("RUN1", 10, batchDir), ready("SW1", 100, batchBrief), ready("SW2", 200, batchDir), ready("SW3", 300, batchDocs))
 	wantBatch(t, h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch?count=5", nil), "SW3", "SW1>RUN1,SW2>RUN1")
 }
-
 func TestNextReadyBatchLeavesOutUnfiledIssuesUnlessAskedForAndCountsThemAsClashingWithNothing(t *testing.T) {
-	h := seedNextReadyBatchHub(t,
-		doing("RUN1", 10, batchMenu),
-		ready("SW1", 100),
-		ready("SW2", 200, batchDocs),
-		ready("SW3", 300),
-	)
-
+	h := seedNextReadyBatchHub(t, doing("RUN1", 10, batchMenu), ready("SW1", 100), ready("SW2", 200, batchDocs), ready("SW3", 300))
 	without := h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch?count=5", nil)
 	wantBatch(t, without, "SW2", "")
 	if without["unfiled_left_out"] != float64(2) {
@@ -148,36 +108,23 @@ func TestNextReadyBatchLeavesOutUnfiledIssuesUnlessAskedForAndCountsThemAsClashi
 		t.Errorf("unfiled_left_out is %v, want 0", with["unfiled_left_out"])
 	}
 }
-
 func TestNextReadyBatchSkipsSinbinBlockedWaitingAndIssuesOutsideToDo(t *testing.T) {
-	h := seedNextReadyBatchHub(t,
-		batchIssue{"SW1", "software", "to-do", 100, []string{"Ready", "Sinbin"}, []string{batchMenu}},
-		batchIssue{"SW2", "software", "to-do", 200, []string{"Ready", "Blocked"}, []string{batchDocs}},
-		batchIssue{"SW3", "software", "to-do", 300, []string{"Ready", "Waiting"}, []string{batchOther}},
-		batchIssue{"SW4", "software", "in-coming", 400, []string{"Ready"}, []string{"hub-steward:a.go"}},
-		batchIssue{"SW5", "software", "to-do", 500, []string{"app"}, []string{"hub-steward:b.go"}},
-		ready("SW6", 600, "hub-steward:c.go"),
-	)
-
+	h := seedNextReadyBatchHub(t, batchIssue{"SW1", "software", "to-do", 100, []string{"Ready", "Sinbin"}, []string{batchMenu}}, batchIssue{"SW2", "software", "to-do", 200, []string{"Ready", "Blocked"}, []string{batchDocs}}, batchIssue{"SW3", "software", "to-do", 300, []string{"Ready", "Waiting"}, []string{batchOther}}, batchIssue{"SW4", "software", "in-coming", 400, []string{"Ready"}, []string{"hub-steward:a.go"}}, batchIssue{"SW5", "software", "to-do", 500, []string{"app"}, []string{"hub-steward:b.go"}}, ready("SW6", 600, "hub-steward:c.go"))
 	wantBatch(t, h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch?count=5", nil), "SW6", "")
 }
-
 func TestNextReadyBatchNarrowsByBacklogAndTag(t *testing.T) {
 	tagged := ready("SW1", 100, batchMenu)
 	tagged.tags = []string{"Ready", "backend"}
 	hidden := ready("HD1", 50, batchDocs)
 	hidden.backlog = "hidden"
 	h := seedNextReadyBatchHub(t, tagged, ready("SW2", 200, batchOther), hidden)
-
 	wantBatch(t, h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch?count=5", nil), "HD1,SW1,SW2", "")
 	wantBatch(t, h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch?count=5&backlog=Hidden", nil), "HD1", "")
 	wantBatch(t, h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch?count=5&tag=backend", nil), "SW1", "")
 	wantBatch(t, h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch?count=5&tag=nothing", nil), "", "")
 }
-
 func TestNextReadyBatchCountStaysBetweenOneAndTen(t *testing.T) {
 	h := seedNextReadyBatchHub(t, ready("SW1", 100, batchMenu))
-
 	for _, count := range []string{"0", "11", "-1", "many"} {
 		if status, _ := h.call("owner", "GET", "/next-ready-batch?count="+count, nil); status != http.StatusBadRequest {
 			t.Errorf("count %s answered %d, want 400", count, status)
@@ -187,30 +134,24 @@ func TestNextReadyBatchCountStaysBetweenOneAndTen(t *testing.T) {
 		t.Errorf("count 10 answered %d, want 200", status)
 	}
 }
-
 func TestNextReadyBatchRefusesAnUnknownBacklog(t *testing.T) {
 	h := seedNextReadyBatchHub(t, ready("SW1", 100, batchMenu))
-
 	if status, _ := h.call("owner", "GET", "/next-ready-batch?backlog=nowhere", nil); status != http.StatusNotFound && status != http.StatusBadRequest {
 		t.Errorf("an unknown backlog answered %d, want a refusal", status)
 	}
 }
-
 func TestNextReadyBatchShowsAPersonOnlyTheBacklogsTheirGroupsCanSee(t *testing.T) {
 	hidden := ready("HD1", 50, batchDocs)
 	hidden.backlog = "hidden"
 	h := seedNextReadyBatchHub(t, hidden, ready("SW1", 100, batchMenu))
-
 	wantBatch(t, h.expect(http.StatusOK, "dev", "GET", "/next-ready-batch?count=5", nil), "SW1", "")
 	wantBatch(t, h.expect(http.StatusOK, "nobody", "GET", "/next-ready-batch?count=5", nil), "", "")
 	if status, _ := h.call("dev", "GET", "/next-ready-batch?backlog=Hidden", nil); status == http.StatusOK {
 		t.Errorf("a person who cannot see a backlog read it")
 	}
 }
-
 func TestNextReadyBatchItemsAreCompactAndCarryTheirFiles(t *testing.T) {
 	h := seedNextReadyBatchHub(t, ready("SW1", 100, batchMenu, batchDocs))
-
 	item := h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch", nil)["items"].([]any)[0].(map[string]any)
 	for _, key := range []string{"id", "code", "title", "priority", "effort", "files"} {
 		if _, has := item[key]; !has {
@@ -219,5 +160,58 @@ func TestNextReadyBatchItemsAreCompactAndCarryTheirFiles(t *testing.T) {
 	}
 	if files := item["files"].([]any); len(files) != 2 || files[0] != batchMenu {
 		t.Errorf("files are %v", files)
+	}
+}
+func TestNextReadyBatchReturnsIssuesThatShareOnlyAnEvidenceFolder(t *testing.T) {
+	h := seedNextReadyBatchHub(t, ready("SW1", 1, evidenceFolder, batchMenu), ready("SW2", 2, evidenceFolder, batchOther), ready("SW3", 3, evidenceFolder, batchMenu))
+	wantBatch(t, h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch?count=5", nil), "SW1,SW2", "SW3>SW1")
+}
+func seedTwelveClashingWithOneInProgress(t *testing.T) *accessHub {
+	t.Helper()
+	issues := []batchIssue{doing("RUN1", 10, batchMenu)}
+	for rank := 1; rank <= 12; rank++ {
+		issues = append(issues, ready(fmt.Sprintf("SW%d", rank), rank*100, batchMenu))
+	}
+	return seedNextReadyBatchHub(t, issues...)
+}
+func TestNextReadyBatchListsThreeSkippedByDefaultAndCountsAllTwelve(t *testing.T) {
+	h := seedTwelveClashingWithOneInProgress(t)
+	body := h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch?count=1", nil)
+	wantBatch(t, body, "", "SW1>RUN1,SW2>RUN1,SW3>RUN1")
+	if body["skipped_total"] != float64(12) {
+		t.Errorf("skipped_total is %v, want 12", body["skipped_total"])
+	}
+}
+func TestNextReadyBatchSkippedLimitCapsTheListedSkippedButNotTheTotal(t *testing.T) {
+	h := seedTwelveClashingWithOneInProgress(t)
+	body := h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch?count=1&skipped_limit=5", nil)
+	wantBatch(t, body, "", "SW1>RUN1,SW2>RUN1,SW3>RUN1,SW4>RUN1,SW5>RUN1")
+	if body["skipped_total"] != float64(12) {
+		t.Errorf("skipped_total is %v, want 12", body["skipped_total"])
+	}
+	all := h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch?skipped_limit=50", nil)
+	if got := len(all["skipped"].([]any)); got != 12 {
+		t.Errorf("%d skipped listed, want 12", got)
+	}
+}
+func TestNextReadyBatchWithNothingSkippedAnswersAnEmptyListAndAZeroTotal(t *testing.T) {
+	h := seedNextReadyBatchHub(t, ready("SW1", 100, batchMenu))
+	body := h.expect(http.StatusOK, "owner", "GET", "/next-ready-batch", nil)
+	if skipped, ok := body["skipped"].([]any); !ok || len(skipped) != 0 {
+		t.Errorf("skipped is %v, want an empty list", body["skipped"])
+	}
+	if body["skipped_total"] != float64(0) {
+		t.Errorf("skipped_total is %v, want 0", body["skipped_total"])
+	}
+}
+func TestNextReadyBatchSkippedLimitStaysBetweenOneAndFifty(t *testing.T) {
+	h := seedNextReadyBatchHub(t, ready("SW1", 100, batchMenu))
+	for _, limit := range []string{"0", "51", "-1", "many"} {
+		if status, _ := h.call("owner", "GET", "/next-ready-batch?skipped_limit="+limit, nil); status != http.StatusBadRequest {
+			t.Errorf("skipped_limit %s answered %d, want 400", limit, status)
+		}
+	}
+	if status, _ := h.call("owner", "GET", "/next-ready-batch?skipped_limit=50", nil); status != http.StatusOK {
+		t.Errorf("skipped_limit 50 answered %d, want 200", status)
 	}
 }

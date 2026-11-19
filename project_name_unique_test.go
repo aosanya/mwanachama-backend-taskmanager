@@ -71,3 +71,31 @@ func TestUpdateProjectRefusesTheNameOfAnotherProject(t *testing.T) {
 		t.Fatalf("UpdateProject onto a taken name = %v, want ErrProjectAlreadyExists", err)
 	}
 }
+
+func TestConcurrentCreateProjectsWithTheSameNameMakeExactlyOne(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx := context.Background()
+	const racers = 8
+	results := make(chan error, racers)
+	for i := 0; i < racers; i++ {
+		go func() {
+			_, err := mgr.CreateProject(ctx, mwanachamataskmanager.Project{Name: "Raced project"})
+			results <- err
+		}()
+	}
+	created, refused := 0, 0
+	for i := 0; i < racers; i++ {
+		err := <-results
+		switch {
+		case err == nil:
+			created++
+		case errors.Is(err, mwanachamataskmanager.ErrProjectAlreadyExists):
+			refused++
+		default:
+			t.Fatalf("CreateProject: %v", err)
+		}
+	}
+	if created != 1 || refused != racers-1 {
+		t.Fatalf("created %d and refused %d of %d racers, want one created", created, refused, racers)
+	}
+}

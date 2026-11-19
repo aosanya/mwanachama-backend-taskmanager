@@ -3,14 +3,13 @@ package routes_test
 import (
 	"context"
 	"encoding/json"
+	"github.com/aosanya/mwanachama-backend-taskmanager/routes"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
-
-	"github.com/aosanya/mwanachama-backend-taskmanager/routes"
 )
 
 func (h *accessHub) rawGet(caller, path string) (int, []byte) {
@@ -21,7 +20,6 @@ func (h *accessHub) rawGet(caller, path string) (int, []byte) {
 	h.mux.ServeHTTP(rec, req)
 	return rec.Code, rec.Body.Bytes()
 }
-
 func (h *accessHub) rawItems(caller, path, envelope string) []map[string]any {
 	h.t.Helper()
 	code, body := h.rawGet(caller, path)
@@ -45,7 +43,6 @@ func (h *accessHub) rawItems(caller, path, envelope string) []map[string]any {
 	}
 	return items
 }
-
 func keysOf(item map[string]any) []string {
 	keys := make([]string, 0, len(item))
 	for key := range item {
@@ -54,7 +51,6 @@ func keysOf(item map[string]any) []string {
 	sort.Strings(keys)
 	return keys
 }
-
 func fieldsHub(t *testing.T) *accessHub {
 	h := newAccessHub(t, map[string][]string{"owner": {"g-owner"}})
 	h.expect(http.StatusNoContent, "", "PUT", "/backlog-owner-group", map[string]string{"group_id": "g-owner"})
@@ -63,14 +59,9 @@ func fieldsHub(t *testing.T) *accessHub {
 	h.expect(http.StatusCreated, "owner", "POST", "/tasks", map[string]any{"title": "three", "tags": []string{"Ready"}})
 	return h
 }
-
 func TestFieldsKeepsOnlyTheNamedKeysOnEachOfTheThreeTools(t *testing.T) {
 	h := fieldsHub(t)
-	for _, c := range []struct{ path, envelope string }{
-		{"/tasks?fields=id,code,title", ""},
-		{"/pending-tasks?fields=id,code,title", "items"},
-		{"/next-ready?limit=5&fields=id,code,title", "items"},
-	} {
+	for _, c := range []struct{ path, envelope string }{{"/tasks?fields=id,code,title", "items"}, {"/pending-tasks?fields=id,code,title", "items"}, {"/next-ready?limit=5&fields=id,code,title", "items"}} {
 		items := h.rawItems("owner", c.path, c.envelope)
 		if len(items) != 3 {
 			t.Fatalf("%s: %d items, want 3", c.path, len(items))
@@ -82,7 +73,6 @@ func TestFieldsKeepsOnlyTheNamedKeysOnEachOfTheThreeTools(t *testing.T) {
 		}
 	}
 }
-
 func TestFieldsAcceptsARepeatedParameterAndACommaList(t *testing.T) {
 	h := fieldsHub(t)
 	repeated := h.rawItems("owner", "/pending-tasks?fields=id&fields=title", "items")
@@ -98,7 +88,6 @@ func TestFieldsAcceptsARepeatedParameterAndACommaList(t *testing.T) {
 		}
 	}
 }
-
 func TestAnUnknownFieldIsRefusedWithAFilterErrorNamingIt(t *testing.T) {
 	h := fieldsHub(t)
 	for _, path := range []string{"/tasks", "/pending-tasks", "/next-ready"} {
@@ -111,7 +100,6 @@ func TestAnUnknownFieldIsRefusedWithAFilterErrorNamingIt(t *testing.T) {
 		}
 	}
 }
-
 func TestWithoutFieldsEachToolAnswersAsBefore(t *testing.T) {
 	h := fieldsHub(t)
 	withAll := h.rawItems("owner", "/pending-tasks", "items")
@@ -120,7 +108,7 @@ func TestWithoutFieldsEachToolAnswersAsBefore(t *testing.T) {
 			t.Errorf("pending without fields lacks %s: %v", key, withAll[0])
 		}
 	}
-	listed := h.rawItems("owner", "/tasks", "")
+	listed := h.rawItems("owner", "/tasks", "items")
 	for _, key := range []string{"id", "title", "status", "priority", "effort", "tags", "files"} {
 		if _, ok := listed[0][key]; !ok {
 			t.Errorf("list without fields lacks %s: %v", key, listed[0])
@@ -130,7 +118,6 @@ func TestWithoutFieldsEachToolAnswersAsBefore(t *testing.T) {
 		t.Errorf("next_ready without fields lost keys")
 	}
 }
-
 func TestFieldsLeavesTotalsPagingAndByStepUnchanged(t *testing.T) {
 	h := fieldsHub(t)
 	plain := h.expect(http.StatusOK, "owner", "GET", "/pending-tasks?limit=2&offset=1", nil)
@@ -149,7 +136,6 @@ func TestFieldsLeavesTotalsPagingAndByStepUnchanged(t *testing.T) {
 		t.Errorf("total_ready changed with fields: %v vs %v", ready["total_ready"], readyNarrow["total_ready"])
 	}
 }
-
 func TestFieldsIsInTheInputSchemaOfTheThreeTools(t *testing.T) {
 	wanted := map[string]bool{"taskmanager.task.list": false, "taskmanager.task.pending": false, "taskmanager.task.next_ready": false}
 	for _, tool := range routes.ToolShape() {

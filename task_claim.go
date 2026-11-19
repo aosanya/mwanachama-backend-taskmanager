@@ -3,17 +3,23 @@ package mwanachamataskmanager
 import (
 	"context"
 	"fmt"
+	"github.com/aosanya/mwanachama-backend-taskmanager/models"
+	"gorm.io/gorm"
 	"maps"
 	"strings"
 	"time"
-
-	"gorm.io/gorm"
-
-	"github.com/aosanya/mwanachama-backend-taskmanager/models"
 )
 
-const claimNoteFormat = "Taken by %s. Caps in force: %d input, %d output, %s"
+const (
+	claimNoteFormat = "Taken by %s. Caps in force: %d input, %d output, %s"
+	holderMaxLength = 64
+)
 
+type ClaimRequest struct {
+	TaskID       string `json:"task_id"`
+	Holder       string `json:"holder"`
+	LeaseMinutes int    `json:"lease_minutes"`
+}
 type ClaimedIssue struct {
 	ID       string       `json:"id"`
 	Code     string       `json:"code"`
@@ -25,17 +31,36 @@ type ClaimedIssue struct {
 	Backlog  string       `json:"backlog"`
 	Step     string       `json:"step"`
 }
-
 type TaskClaim struct {
 	Issue  ClaimedIssue `json:"issue"`
 	NoteID string       `json:"note_id"`
 	Caps   WorkerCaps   `json:"caps"`
 }
 
-func (m *taskManager) ClaimTaskAs(ctx context.Context, requesterID, taskID string) (TaskClaim, error) {
-	return m.claimIssue(ctx, requesterID, taskID, leaseHold{})
+func (m *taskManager) ClaimTaskAs(ctx context.Context, requesterID string, req ClaimRequest) (NextClaim, error) {
+	length, err := leaseLength(req.LeaseMinutes)
+	if err != nil {
+		return NextClaim{}, err
+	}
+	holder := holderLabel(req.Holder)
+	if holder == "" {
+		claim, err := m.claimIssue(ctx, requesterID, req.TaskID, leaseHold{})
+		return NextClaim{TaskClaim: claim}, err
+	}
+	hold := leaseHold{Agent: holder, Until: leaseEnd(time.Now(), length)}
+	claim, err := m.claimIssue(ctx, requesterID, req.TaskID, hold)
+	if err != nil {
+		return NextClaim{}, err
+	}
+	return NextClaim{TaskClaim: claim, Agent: holder, LeaseUntil: hold.Until}, nil
 }
-
+func holderLabel(holder string) string {
+	holder = strings.TrimSpace(holder)
+	if len(holder) > holderMaxLength {
+		return ""
+	}
+	return holder
+}
 func (m *taskManager) claimIssue(ctx context.Context, requesterID, taskID string, hold leaseHold) (TaskClaim, error) {
 	task, err := m.GetTaskFor(ctx, requesterID, taskID)
 	if err != nil {
@@ -68,7 +93,6 @@ func (m *taskManager) claimIssue(ctx context.Context, requesterID, taskID string
 	claim.Issue = claimedIssue(claimed, backlog, target)
 	return claim, nil
 }
-
 func (m *taskManager) claimTarget(ctx context.Context, task Task) (models.Backlog, models.BacklogStep, error) {
 	backlogs, err := m.backlogs(ctx)
 	if err != nil {
@@ -84,7 +108,6 @@ func (m *taskManager) claimTarget(ctx context.Context, task Task) (models.Backlo
 	}
 	return backlogs[at], step, nil
 }
-
 func inProgressStepOf(backlog models.Backlog) (models.BacklogStep, bool) {
 	for _, step := range backlog.Steps {
 		if models.StepNamesStatus(step, TaskStatusInProgress) {
@@ -99,7 +122,6 @@ func inProgressStepOf(backlog models.Backlog) (models.BacklogStep, bool) {
 	}
 	return models.BacklogStep{}, false
 }
-
 func claimRefusal(task Task, target models.BacklogStep) string {
 	switch {
 	case task.Status == TaskStatusInProgress || task.Step == target.ID:
@@ -115,7 +137,6 @@ func claimRefusal(task Task, target models.BacklogStep) string {
 	}
 	return ""
 }
-
 func (m *taskManager) refuseOpenDependency(ctx context.Context, requesterID string, task Task) error {
 	deps, err := m.TaskDependenciesFor(ctx, requesterID, task.ID)
 	if err != nil {
@@ -126,7 +147,6 @@ func (m *taskManager) refuseOpenDependency(ctx context.Context, requesterID stri
 	}
 	return nil
 }
-
 func (m *taskManager) takeIssue(ctx context.Context, requesterID string, task Task, target models.BacklogStep, hold leaseHold) (TaskClaim, error) {
 	var held heldEvents
 	var claim TaskClaim
@@ -143,10 +163,7 @@ func (m *taskManager) takeIssue(ctx context.Context, requesterID string, task Ta
 		if err != nil {
 			return err
 		}
-		note := TaskNote{
-			ID: newSpecID(), TaskID: task.ID, AuthorID: requesterID, Kind: noteByWorker,
-			Text: claimNoteText(requesterID, reading.InForce), CreatedAt: now.Format(noteTimeForm),
-		}
+		note := TaskNote{ID: newSpecID(), TaskID: task.ID, AuthorID: requesterID, Kind: noteByWorker, Text: claimNoteText(requesterID, reading.InForce), CreatedAt: now.Format(noteTimeForm)}
 		if err := txm.store.Insert(ctx, roleTaskNote, note); err != nil {
 			return fmt.Errorf("ClaimTask: %w", err)
 		}
@@ -164,16 +181,10 @@ func (m *taskManager) takeIssue(ctx context.Context, requesterID string, task Ta
 	}
 	return claim, nil
 }
-
 func (m *taskManager) winIssue(ctx context.Context, task Task, target models.BacklogStep, now string, hold leaseHold) error {
-	changes := map[string]any{
-		"backlog": task.Backlog, "step": target.ID, "status": string(TaskStatusInProgress),
-		"updated_at": now, "held_by": "", "step_entered_at": now,
-	}
+	changes := map[string]any{"backlog": task.Backlog, "step": target.ID, "status": string(TaskStatusInProgress), "updated_at": now, "held_by": "", "step_entered_at": now}
 	maps.Copy(changes, hold.fields())
-	res := m.store.Query(ctx, roleTask).
-		Where("id = ? AND deleted = ? AND status = ? AND COALESCE(step, '') <> ?", task.ID, false, string(task.Status), target.ID).
-		Updates(changes)
+	res := m.store.Query(ctx, roleTask).Where("id = ? AND deleted = ? AND status = ? AND COALESCE(step, '') <> ?", task.ID, false, string(task.Status), target.ID).Updates(changes)
 	if res.Error != nil {
 		return fmt.Errorf("ClaimTask: %w", res.Error)
 	}
@@ -190,21 +201,15 @@ func (m *taskManager) winIssue(ctx context.Context, task Task, target models.Bac
 	}
 	return ErrTaskMoveConflict
 }
-
 func claimNoteText(requesterID string, caps WorkerCaps) string {
 	return fmt.Sprintf(claimNoteFormat, requesterID, caps.InputTokens, caps.OutputTokens, runtimeText(caps.RuntimeSeconds))
 }
-
 func runtimeText(seconds int64) string {
 	if seconds%60 == 0 {
 		return fmt.Sprintf("%d minutes", seconds/60)
 	}
 	return fmt.Sprintf("%d seconds", seconds)
 }
-
 func claimedIssue(task Task, backlog models.Backlog, step models.BacklogStep) ClaimedIssue {
-	return ClaimedIssue{
-		ID: task.ID, Code: task.Code, Title: strings.TrimSpace(task.Title), Status: task.Status,
-		Priority: task.Priority, Effort: task.Effort, Tags: task.Tags, Backlog: backlog.Name, Step: step.Name,
-	}
+	return ClaimedIssue{ID: task.ID, Code: task.Code, Title: strings.TrimSpace(task.Title), Status: task.Status, Priority: task.Priority, Effort: task.Effort, Tags: task.Tags, Backlog: backlog.Name, Step: step.Name}
 }

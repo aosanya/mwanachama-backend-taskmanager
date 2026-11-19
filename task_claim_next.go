@@ -4,10 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/aosanya/mwanachama-backend-taskmanager/models"
 	"strings"
 	"time"
-
-	"github.com/aosanya/mwanachama-backend-taskmanager/models"
 )
 
 type ClaimNextRequest struct {
@@ -16,11 +15,10 @@ type ClaimNextRequest struct {
 	Tag          models.TagList `json:"tag"`
 	LeaseMinutes int            `json:"lease_minutes"`
 }
-
 type NextClaim struct {
 	TaskClaim
-	Agent      string `json:"agent"`
-	LeaseUntil string `json:"lease_until"`
+	Agent      string `json:"agent,omitempty"`
+	LeaseUntil string `json:"lease_until,omitempty"`
 }
 
 func (m *taskManager) ClaimNext(ctx context.Context, requesterID string, req ClaimNextRequest) (NextClaim, error) {
@@ -69,7 +67,6 @@ func (m *taskManager) ClaimNext(ctx context.Context, requesterID string, req Cla
 	}
 	return NextClaim{}, ErrNoReadyIssue
 }
-
 func (m *taskManager) claimCandidates(ctx context.Context, requesterID string, req ClaimNextRequest) ([]nextReadyRow, error) {
 	backlogs, err := m.backlogs(ctx)
 	if err != nil {
@@ -96,7 +93,6 @@ func (m *taskManager) claimCandidates(ctx context.Context, requesterID string, r
 	}
 	return free, nil
 }
-
 func (m *taskManager) clashesWithRunning(ctx context.Context, taskID string, running []Task) (bool, error) {
 	if len(running) == 0 {
 		return false, nil

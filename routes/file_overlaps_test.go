@@ -31,17 +31,13 @@ func newOverlapFixture(t *testing.T) *overlapFixture {
 	h.expect(http.StatusOK, "owner", "PUT", "/backlogs/elsewhere/access/g-dev", map[string]string{"level": "see"})
 	return f
 }
-
 func (f *overlapFixture) issue(code, backlog, step string, files ...string) string {
 	f.h.t.Helper()
-	made := f.h.expect(http.StatusCreated, "owner", "POST", "/tasks", map[string]any{
-		"title": "issue " + code, "code": code, "backlog": backlog, "step": step, "files": files,
-	})
+	made := f.h.expect(http.StatusCreated, "owner", "POST", "/tasks", map[string]any{"title": "issue " + code, "code": code, "backlog": backlog, "step": step, "files": files})
 	id := made["id"].(string)
 	f.issues[code] = id
 	return id
 }
-
 func seedOverlaps(t *testing.T) *overlapFixture {
 	t.Helper()
 	f := newOverlapFixture(t)
@@ -55,7 +51,6 @@ func seedOverlaps(t *testing.T) *overlapFixture {
 	f.issue("NOFILES", "book", "in-progress")
 	return f
 }
-
 func overlapCodes(body map[string]any) string {
 	var codes []string
 	for _, raw := range body["items"].([]any) {
@@ -64,7 +59,6 @@ func overlapCodes(body map[string]any) string {
 	sort.Strings(codes)
 	return strings.Join(codes, ",")
 }
-
 func overlapItem(t *testing.T, body map[string]any, code string) map[string]any {
 	t.Helper()
 	for _, raw := range body["items"].([]any) {
@@ -75,7 +69,6 @@ func overlapItem(t *testing.T, body map[string]any, code string) map[string]any 
 	t.Fatalf("no item %s in %v", code, body)
 	return nil
 }
-
 func overlapPairs(item map[string]any) []string {
 	var pairs []string
 	for _, raw := range item["overlapping"].([]any) {
@@ -85,22 +78,16 @@ func overlapPairs(item map[string]any) []string {
 	sort.Strings(pairs)
 	return pairs
 }
-
 func TestFileOverlapsListsTheInProgressIssuesSharingAFileOrAFolderAndNothingElse(t *testing.T) {
 	f := seedOverlaps(t)
-
 	body := f.h.expect(http.StatusOK, "dev", "GET", "/file-overlaps?taskID="+f.issues["ASKED"], nil)
-
 	if got := overlapCodes(body); got != "INFOLDER,SAMEFILE" {
 		t.Fatalf("got %s, want INFOLDER and SAMEFILE", got)
 	}
 }
-
 func TestFileOverlapsNamesTheOverlappingPairsAndTheIssueIdentity(t *testing.T) {
 	f := seedOverlaps(t)
-
 	body := f.h.expect(http.StatusOK, "dev", "GET", "/file-overlaps?taskID="+f.issues["ASKED"], nil)
-
 	same := overlapItem(t, body, "SAMEFILE")
 	if same["id"] != f.issues["SAMEFILE"] || same["title"] != "issue SAMEFILE" || same["step"] != "In progress" {
 		t.Errorf("identity %v", same)
@@ -113,23 +100,17 @@ func TestFileOverlapsNamesTheOverlappingPairsAndTheIssueIdentity(t *testing.T) {
 		t.Errorf("folder pairs = %s", got)
 	}
 }
-
 func TestFileOverlapsNeverListsTheIssueAgainstItself(t *testing.T) {
 	f := seedOverlaps(t)
-
 	body := f.h.expect(http.StatusOK, "owner", "GET", "/file-overlaps?taskID="+f.issues["INFOLDER"], nil)
-
 	if got := overlapCodes(body); got != "ASKED" {
 		t.Fatalf("got %s, want ASKED only", got)
 	}
 }
-
 func TestFileOverlapsDoesNotCountAnIssueInABacklogTheCallerCannotSee(t *testing.T) {
 	f := seedOverlaps(t)
-
 	asOwner := f.h.expect(http.StatusOK, "owner", "GET", "/file-overlaps?taskID="+f.issues["ASKED"], nil)
 	asDev := f.h.expect(http.StatusOK, "dev", "GET", "/file-overlaps?taskID="+f.issues["ASKED"], nil)
-
 	if got := overlapCodes(asOwner); got != "HIDDEN,INFOLDER,SAMEFILE" {
 		t.Errorf("owner sees %s", got)
 	}
@@ -137,13 +118,10 @@ func TestFileOverlapsDoesNotCountAnIssueInABacklogTheCallerCannotSee(t *testing.
 		t.Errorf("dev sees %s", got)
 	}
 }
-
 func TestFileOverlapsWorksFromAListOfFilesWithNoIssue(t *testing.T) {
 	f := seedOverlaps(t)
 	query := url.Values{"files": {menuFile, "hub-steward:code/wakala-api/"}}
-
 	body := f.h.expect(http.StatusOK, "dev", "GET", "/file-overlaps?"+query.Encode(), nil)
-
 	if got := overlapCodes(body); got != "ASKED,INFOLDER,SAMEFILE" {
 		t.Fatalf("got %s", got)
 	}
@@ -151,22 +129,38 @@ func TestFileOverlapsWorksFromAListOfFilesWithNoIssue(t *testing.T) {
 		t.Errorf("folder pairs = %s", got)
 	}
 }
-
 func TestFileOverlapsOfAnIssueWithNoFilesIsEmpty(t *testing.T) {
 	f := seedOverlaps(t)
-
 	body := f.h.expect(http.StatusOK, "owner", "GET", "/file-overlaps?taskID="+f.issues["NOFILES"], nil)
-
 	if items := body["items"].([]any); len(items) != 0 {
 		t.Errorf("items = %v", items)
 	}
 }
-
 func TestFileOverlapsNeedsAnIssueOrFilesAndRefusesBadEntries(t *testing.T) {
 	f := seedOverlaps(t)
-
 	f.h.expect(http.StatusBadRequest, "owner", "GET", "/file-overlaps", nil)
 	f.h.expect(http.StatusBadRequest, "owner", "GET", "/file-overlaps?files=/etc/passwd", nil)
 	f.h.expect(http.StatusNotFound, "owner", "GET", "/file-overlaps?taskID=missing", nil)
 	f.h.expect(http.StatusNotFound, "nobody", "GET", "/file-overlaps?taskID="+f.issues["ASKED"], nil)
+}
+
+const evidenceFolder = "projects/guide-book/documentation/3. implementation/todo/"
+
+func TestFileOverlapsIgnoresAnEvidenceFolderTwoIssuesShare(t *testing.T) {
+	f := newOverlapFixture(t)
+	f.issue("MINE", "book", "in-progress", evidenceFolder, "hub-steward:code/app/src/one.tsx")
+	f.issue("THEIRS", "book", "in-progress", evidenceFolder, "hub-steward:code/app/src/two.tsx")
+	body := f.h.expect(http.StatusOK, "dev", "GET", "/file-overlaps?taskID="+f.issues["MINE"], nil)
+	if got := overlapCodes(body); got != "" {
+		t.Fatalf("got %s, want no clash for a shared evidence folder", got)
+	}
+}
+func TestFileOverlapsStillClashesOnACodeFileBesideASharedEvidenceFolder(t *testing.T) {
+	f := newOverlapFixture(t)
+	f.issue("MINE", "book", "in-progress", evidenceFolder, "hub-steward:code/app/src/one.tsx")
+	f.issue("THEIRS", "book", "in-progress", evidenceFolder, "hub-steward:code/app/src/one.tsx")
+	body := f.h.expect(http.StatusOK, "dev", "GET", "/file-overlaps?taskID="+f.issues["MINE"], nil)
+	if got := strings.Join(overlapPairs(overlapItem(t, body, "THEIRS")), "|"); got != "hub-steward:code/app/src/one.tsx ~ hub-steward:code/app/src/one.tsx" {
+		t.Fatalf("pairs = %s", got)
+	}
 }

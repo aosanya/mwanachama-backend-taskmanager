@@ -3,23 +3,19 @@ package mwanachamataskmanager
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	"github.com/aosanya/mwanachama-backend-shared/specstore"
+	"strings"
 )
 
 type FileOverlapsFilter struct {
-	TaskID string   `query:"taskID"`
-	Files  []string `query:"files"`
-
-	RequesterID string `query:"-" json:"-"`
+	TaskID      string   `query:"taskID"`
+	Files       []string `query:"files"`
+	RequesterID string   `query:"-" json:"-"`
 }
-
 type FileOverlapPair struct {
 	Asked  string `json:"asked"`
 	Theirs string `json:"theirs"`
 }
-
 type FileOverlap struct {
 	ID          string            `json:"id"`
 	Code        string            `json:"code"`
@@ -27,7 +23,6 @@ type FileOverlap struct {
 	Step        string            `json:"step"`
 	Overlapping []FileOverlapPair `json:"overlapping"`
 }
-
 type FileOverlaps struct {
 	Items []FileOverlap `json:"items"`
 }
@@ -59,7 +54,6 @@ func (m *taskManager) FileOverlaps(ctx context.Context, filter FileOverlapsFilte
 	}
 	return out, nil
 }
-
 func (m *taskManager) askedFiles(ctx context.Context, filter FileOverlapsFilter) (FileList, error) {
 	taskID := strings.TrimSpace(filter.TaskID)
 	if taskID == "" && len(filter.Files) == 0 {
@@ -78,7 +72,6 @@ func (m *taskManager) askedFiles(ctx context.Context, filter FileOverlapsFilter)
 	}
 	return append(issue.Files, listed...), nil
 }
-
 func (m *taskManager) inProgressWithFiles(ctx context.Context, filter FileOverlapsFilter) ([]Task, error) {
 	backlogs, err := m.backlogs(ctx)
 	if err != nil {
@@ -91,7 +84,6 @@ func (m *taskManager) inProgressWithFiles(ctx context.Context, filter FileOverla
 	where, args := atInProgressSteps(backlogs)
 	return specstore.List[Task](m.store, q.Where(where, args...).Order(taskOrder).Limit(maxListPage), roleTask)
 }
-
 func overlappingPairs(asked, theirs FileList) []FileOverlapPair {
 	pairs := []FileOverlapPair{}
 	for _, mine := range asked {
@@ -104,14 +96,18 @@ func overlappingPairs(asked, theirs FileList) []FileOverlapPair {
 	return pairs
 }
 
+const evidenceFolderSegment = "documentation/3. implementation/todo/"
+
 func filesOverlap(a, b string) bool {
 	pathA, pathB := pathOfFileEntry(a), pathOfFileEntry(b)
+	if strings.Contains(pathA, evidenceFolderSegment) || strings.Contains(pathB, evidenceFolderSegment) {
+		return false
+	}
 	if a[:len(a)-len(pathA)] != b[:len(b)-len(pathB)] {
 		return false
 	}
 	return pathA == pathB || insideFolder(pathA, pathB) || insideFolder(pathB, pathA)
 }
-
 func insideFolder(folder, path string) bool {
 	return strings.HasSuffix(folder, "/") && strings.HasPrefix(path, folder)
 }
