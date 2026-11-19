@@ -1,0 +1,98 @@
+# Hub import drift
+
+What stands between this repository and the hub requiring it as a tagged module in place of the copy under `projects/hub-steward/code/wakala-api/modules/taskmanager`. Written on 2026-11-19 at this repository's `e683a52` (the project-parties commit; an earlier hash of the same change, `43db398`, was rewritten and is no longer on `master`) against the hub's `dev` branch at `d5ebaa82`, the last commit that touches the module there. `master` here carries one commit that `origin/master` lacks (`e683a52`) and has no tag.
+
+The comparison is the one [hub-copy-diff.md](hub-copy-diff.md) describes, run on an export of the hub's committed `dev`, not its working tree. Comments and layout do not show; only code does. Exit code 1, 779 lines of differences besides the 76 `Only in backend` test files that this repository wrote and the hub never had.
+
+## Verdict in three lines
+
+- The two trees have drifted in both directions. The hub moved on by about twenty-five commits since the last mirror here (2026-11-16 and 2026-11-17); this repository added project parties and a contract reference that the hub lacks.
+- Importing the sibling as it stands would change the hub's wire behaviour in nine places (the table below), so those are ported here first.
+- Independently of the ported behaviour, the import is blocked by the shared module: the hub has its own copy of `modules/shared`, and the two copies are different Go packages, so the first package that passes a `spec.Spec` between them does not compile.
+
+## The drift table
+
+"Hub only" means the hub has it and this repository does not. "Sibling only" means the reverse. A disposition is a proposal; the rows that change what the hub answers carry a question in the last section.
+
+| # | Difference | Side | What it does | Proposed disposition |
+|---|---|---|---|---|
+| 1 | Project `contract_reference`, the `project_party` object, `FindProjects` with party filters, `AddProjectParty`, `RemoveProjectParty`, `ListProjectParties`, three sentinels, `DeleteProject` clearing parties, the `objective_party` object in `spec/examples/agency.taskmanager.json` | Sibling only | A project carries the contract it is carried out under and any number of parties, named by the id of a record row another module holds, each in a role. `GET /projects` now takes a query where the hub's takes none. Adds one table and one column to the hub's database. | Already in the sibling. The hub gets it from the tag. |
+| 2 | `GET /tasks` answers `{"items": [...]}` (`task_fields.go`, tests in four files) | Hub only (a6205286) | Here the same route answers a bare array. Every hub client reads `items`. | Keep in hub, port to the sibling. A wire change. |
+| 3 | A move into Done or Archive completes the issue, into Cancelled cancels it, and a move out of them reopens it (`ImpliedStatuses` in `models/backlog.go`, `task_move_path.go`, three test files) | Hub only (33aeabe2, 0c090d87, ff932910) | An issue moved to a step that names no status now still gets the status, so the issues that wait on it are freed. A closed issue also refuses a priority edit, which is why the hub's `step_wip_test` patches the title. | Keep in hub, port to the sibling. Changes behaviour. |
+| 4 | `ClaimTaskAs` takes a `ClaimRequest` with `holder` and `lease_minutes` and answers `NextClaim`; `claim_next` fields `agent` and `lease_until` become `omitempty`; the claim route's body is optional (`task_claim.go`, `task_claim_next.go`, operations file) | Hub only (47472669) | A claim with a holder records the agent as assignee and a lease, as `claim_next` does. The Go method's signature differs, so the `Manager` interface here is not the hub's. Needs the optional-body argument in the shared `dispatch` package (row 16). | Keep in hub, port to the sibling, signature included. |
+| 5 | `FinishTodoFor` and the `finish_task_todo` route (`todo_finish.go`) | Hub only (a5e22263) | Sets a todo Done and writes its Log entry in one call. | Keep in hub, port to the sibling. |
+| 6 | `AddTodos` and the `add_todos` route (`task_add_todos.go`) | Hub only (6230a7f9) | Writes several todos of an existing issue in one call. | Keep in hub, port to the sibling. |
+| 7 | `ListBacklogsMatching` and the optional `backlog` query of `GET /backlogs` | Hub only (31d57bc4) | Lists one backlog with its steps instead of all. | Keep in hub, port to the sibling. |
+| 8 | `skipped_limit` and `skipped_total` of `next_ready_batch` | Hub only (d30374c6) | Caps the listed skipped issues (default 3, at most 50) and counts all of them. | Keep in hub, port to the sibling. |
+| 9 | `next_due_at`, `last_task_id`, `last_due_at`, `last_done_at` on a repeating task (`repeating_upkeep.go`, `repeating_last_upkeep.go`, `repeating_store.go`, the model) | Hub only (8ddefd03, d2b82a61) | A repeating task's read and list say when the next job is due and what the last one was. | Keep in hub, port to the sibling. Adds four optional fields. |
+| 10 | The working-time clock starts at the latest claim, not at an older worker note (`task_clock_start.go`; `firstWorkerNoteTimes` is gone in the hub) | Hub only (8f26c263) | Changes when `task_timed_out` and `task_caps_nearest` count a worker's time from. | Keep in hub, port to the sibling, and delete `firstWorkerNoteTimes`. Changes behaviour. |
+| 11 | An evidence folder that two issues share is not a clash (`task_file_overlaps.go`) | Hub only (ef952cd9) | `next_ready_batch`, `task_stuck` and `task_file_overlaps` stop reporting two issues as clashing over a folder named `documentation/3. implementation/todo/`. The hub's test names a project folder of one deployment. | Keep in hub, port to the sibling with a test path invented for this repository. |
+| 12 | `due_at` must be an RFC 3339 time on create and on a change (`task_due.go`, `task_impl_task.go`) | Hub only (09e613ca, a commit that also touches pages) | Refuses a malformed due time with a 400. | Keep in hub, port to the sibling. |
+| 13 | `projectCreateLock`, a process-wide mutex around `CreateProject` (`project.go`) | Hub only (09e613ca) | Serialises two creates so the key and code counters do not race. A package variable: it does nothing across processes. | Decision needed (question 4). |
+| 14 | Test-only differences: list tests that read `items`, `integration_backlog_test.go`, `step_wip_test.go`, the probe list of tools, an `fmt` import, a different helper in `repeating_task_update_test.go` | Both | Follow rows 2, 3 and 5. The repeating-update test is the same case written against two helpers. | Port with the rows they follow; keep this repository's repeating-update test. |
+| 15 | Hub-only test files: `backlog_close_status_test.go`, `backlog_list_filter_test.go`, `repeating_last_upkeep_test.go`, `repeating_next_due_test.go`, `task_clock_claim_start_test.go`, `task_list_items_test.go`, `waiting_close_move_test.go`, `waiting_other_close_paths_test.go`, and in `routes/`: `backlog_list_filter_test.go`, `claim_holder_test.go`, `issue_alias_test.go`, `task_add_todos_test.go`, `todo_finish_routes_test.go` | Hub only | The tests of rows 2 to 11 and of the id alias (row 16). | Port with the rows they follow. |
+| 16 | Shared module: the hub's `dispatch` folds `id` into `taskID`, reports a busy store as 409 and takes an optional body argument; `recur` refuses an impossible `BYMONTHDAY` and finds the period of a long-running schedule; `plaintext` reads the pgx error directly; `answerrules` and `versioncheck` exist only in the hub | Hub only, in `mwanachama-backend-shared` | The id alias and the optional body are what rows 4 and the `issue_alias_test.go` rely on. This is a separate repository and a separate drift page (`documentation/3. implementation/hub-copy-diff.md` and `scripts/hub-copy-diff.sh` of the shared repository). | Settle there first; see blocker 1. |
+| 17 | Cosmetic: the order of three sentinels in the operations file, the order of three methods in the `Manager` interface, `ErrNoReadyIssue`'s position | Both | None. | Drop; no change. |
+
+Everything else that the hub has under this module is identical after the import path is rewritten, including the work for linked-reference filtering and in-place repeating-task update that were mirrored on 2026-11-18.
+
+## What the hub must do to require the tagged module
+
+1. In `code/wakala-api/go.mod`, add `require github.com/aosanya/mwanachama-backend-taskmanager vX.Y.Z` (the hub has no require of it today, and no `replace`).
+2. In every Go file outside the module, change the import `wakalaserver/modules/taskmanager` to `github.com/aosanya/mwanachama-backend-taskmanager`, and its `/models` and `/routes` the same way. That is 42 import lines in 38 files under `internal/`, all outside `modules/taskmanager` (most already alias the root package as `mwanachamataskmanager`, which is the package's real name, so the alias stays; one uses `taskmanager`). The `models` and `routes` packages are named like their last path element, so they need no alias.
+3. Delete `modules/taskmanager`. Its hub-only test files go with it (rows 14 and 15 travel to this repository first).
+4. Build with the shared module resolved one way (blocker 1).
+5. The module path in this repository's `go.mod`, `github.com/aosanya/mwanachama-backend-taskmanager`, equals the path of its remote, `https://github.com/aosanya/mwanachama-backend-taskmanager.git`. The module is at the repository root, so the tag is plain `vX.Y.Z`, with no folder prefix.
+
+## What blocks it
+
+1. **Two copies of the shared module.** The hub's own packages import `wakalaserver/modules/shared/...`; this module imports `github.com/aosanya/mwanachama-backend-shared/...`. They are different packages with the same shape, so a `spec.Spec` or a store passed between them does not compile. The first failure is `internal/agencies/test_copy.go:143` (`SpecForMount` returns the repository's `spec.Spec`, the hub's `mounted` wants its own). Fix: the hub requires the shared repository too and deletes the packages of `modules/shared` that the repository has; `answerrules` and `versioncheck` stay in the hub or move to the repository. Before that the shared drift of row 16 has to be settled and a shared tag cut.
+2. **No usable shared version in this repository's `go.mod`.** It requires `mwanachama-backend-shared v0.0.0` and a `replace` to `../mwanachama-backend-shared`. A `replace` in a dependency is ignored by whoever requires it, so a consumer cannot resolve `v0.0.0`. The shared repository has tags `v0.1.0` and `v0.2.0`; `v0.2.0` (2026-11-16) is one commit behind its `master` (`f5c781e`, flatten embedded structs in the tool schema), which this repository's `create_with_todos` mirror needs. So: a new shared tag, then here `require ... vA.B.C` and the `replace` removed.
+3. **This repository's behaviour is behind the hub's** (rows 2 to 12). Without the port, importing it changes what the hub answers.
+4. **The hub's tests read this module's files by path.** The permission-catalog tests glob `modules/*/*.operations.json`, so they need the operations file from the tagged module (for example through `go list -m -f '{{.Dir}}'`) once the in-tree folder is deleted. The roster files under `internal/api/http/testdata/mcp_roster` also change with the tool set.
+5. **Unpushed work.** `e683a52` is not on `origin/master`, and nothing is tagged anywhere. Nothing is pushed or tagged without the owner's yes.
+
+Not a blocker: unexported helpers (the hub code outside the module uses only exported names, and the build below passed), package names (the alias already exists), `replace` in the hub (not needed once both modules are tagged), the Dockerfile (it runs `go mod download` from the public module proxy and the repositories are public), minimum versions (the hub's own pgx, x/crypto and others are higher and win).
+
+## Dry run, without touching the hub
+
+An export of the hub's `dev` branch `code/wakala-api` in a scratch folder outside every repository, with `modules/taskmanager` deleted, the imports rewritten, and `go.mod` given a `require` and a `replace` to this checkout. The scratch copies were deleted afterwards.
+
+| Step | Result |
+|---|---|
+| Import the sibling only, shared left in the hub | `go build ./...` fails: `internal/agencies/test_copy.go:143:18: cannot use mwanachamataskmanager.SpecForMount (value of type func(...) (*"github.com/aosanya/mwanachama-backend-shared/spec".Spec, error)) as func(...) (*"wakalaserver/modules/shared/spec".Spec, error)`. Every package that imports `internal/agencies` stops behind it. |
+| Import the sibling and point the hub's shared packages at the shared repository's checkout as well (`modules/shared` keeps only `answerrules` and `versioncheck`) | `go build ./...` and `go vet ./...` (which compile every test) are clean. |
+| `go test ./...` on that tree, against `go test ./...` on an unchanged export of the hub | On the unchanged export, five tests of `internal/api/http` that read demo agency files outside `code/wakala-api` fail (an artefact of the export) and so does one git-import test in `modules/git`; everything else passes. On the imported tree the same five demo-file tests fail (the git-import test passed that time) and eight more fail, in two packages: `TestTaskDueDatesRound3`, `Round4`, `Round5` and `Round6` (row 12: a malformed due time is accepted); `TestJourney07_GroupRolesWalkedThroughTheRoutes` (row 2: the list is a bare array); `TestEveryMountConfigurationListsExactlyItsPinnedMCPTools` (the three `taskmanager_project_party_*` tools appear, and `taskmanager_task_add_todos` and `taskmanager_task_todo_finish` vanish: rows 1, 5 and 6, and the hub's pinned roster files then need the party tools added); and in `modules/agency/models` `TestPermissionCatalog_TaskEditOwnsStartingChangingAndStoppingARepeatingTask` and `TestPermissionCatalog_CaseVoteCanSeeAndRankTheCasesItVotesOn`, which glob `../../*/*.operations.json` for the declared actions and find none once `modules/taskmanager` is gone (blocker 4). |
+
+## Recommended order of work
+
+1. Settle the shared drift (its own page there), port what the hub needs into the shared repository with tests, and tag it. Todo 2 of the hub issue cannot start before the owner answers the questions below.
+2. Port rows 2 to 12 here, one commit each, red test first, with the hub's test files (rows 14 and 15), keeping this repository's `e683a52`. Order: the rows that change the interface first (4, 5, 6, 7), then 2, 3, 10, 11, 8, 9, 12, then 13 if the owner keeps it.
+3. Point this repository's `go.mod` at the shared tag, drop the `replace`, run `go build`, `go vet` and `go test -race` here, then run [hub-copy-diff.md](hub-copy-diff.md)'s script again: the target is that nothing is `Only in hub` and every `diff` line is cosmetic.
+4. With the owner's yes, push `master` and a tag (the first tag of this repository).
+5. In the hub: require the tags, rewrite the imports, delete `modules/taskmanager` and the shared packages the repository now owns, and run the hub's tests on the memory backend and then the QA stack. Leave the result uncommitted for review.
+
+## Questions for the owner
+
+Each of these changes what the hub does, so none is decided here.
+
+1. **Which hub-only behaviours does this repository adopt?** Rows 2 to 12 are all in use by the hub's clients and tools today.
+   - A: port all of them (recommended). The hub loses nothing and this repository becomes the one source.
+   - B: port all except named rows and let the hub lose those behaviours. Say which.
+   - C: keep the hub's copy and do not import. This ends the plan to import.
+2. **`GET /tasks` answers `{items}` here too?** (row 2) The hub's clients read `items`; the older callers of this repository's route read a bare array.
+   - A: change here to `{items}` (recommended; one shape in both places). Its other callers (the gateway) must be checked.
+   - B: keep both shapes behind a query switch.
+3. **A closing move sets the status** (row 3) and a closed issue then refuses a priority edit.
+   - A: adopt as the hub has it (recommended).
+   - B: adopt the status setting but keep priority edits on closed issues allowed.
+4. **Keep `projectCreateLock`?** (row 13) It protects one process only and is a package variable.
+   - A: drop it and make the key and code counters safe in the store, as `codesequence` already is for issues (recommended, a larger change).
+   - B: port it as it is, with a test.
+   - C: drop it and accept the race.
+5. **Who owns the shared drift?** (blocker 1) The hub's shared packages differ from the shared repository in `dispatch`, `recur`, `plaintext`, `answerrules` and `versioncheck`.
+   - A: port into the shared repository and cut a shared tag first, then this one (recommended).
+   - B: make the hub's `modules/shared` the source and publish it as the shared repository.
+6. **The first tag number.** This repository has none and the shared one is at `v0.2.0`.
+   - A: `v0.1.0` for this repository (recommended; it matches how the shared repository began).
+   - B: `v1.0.0`.
