@@ -755,7 +755,7 @@
     "lint": {
       "method": "GET", "path": "/lint", "call": "Lint", "action": "taskmanager.task.lint",
       "title": "Which issues break the filing rules",
-      "description": "Check issues against the filing rules before an agent picks them up. Send taskID for one issue (404 when it does not exist or the caller cannot see it), or backlog and step (id or name, both optional) for the open issues there, in rank order. Each item is an issue (id, code, title) with its findings, each a rule and a short message; an issue that breaks nothing has an empty findings list. The rules are no_description, no_done_when (the description has no Done looks like, Pass when or Done when), no_todos, last_todo_not_documentation (the last todo's title does not say document), no_files, effort_unknown, no_priority and todo_without_description. total counts every issue that matches and clean counts the issues on this page with no findings. limit defaults to 50 and is at most 200; a larger one is refused with 400; pass offset (0 or more) for the next page. Read-only.",
+      "description": "Check issues against the filing rules before an agent picks them up. Send taskID for one issue (404 when it does not exist or the caller cannot see it), or backlog and step (id or name, both optional) for the open issues there, in rank order. Each item is an issue (id, code, title) with its findings, each a rule and a short message; an issue that breaks nothing has an empty findings list. The rules are no_description, no_done_when (the description has no Done looks like, Pass when or Done when), no_todos, last_todo_not_documentation (the last todo's title does not say document), no_files, effort_unknown, no_priority and todo_without_description. total counts every issue that matches and clean counts the issues on this page with no findings. When no taskID, backlog or step is sent, offset is 0 and a path check is attached, rules lists the in-force rules with a rule_file_missing finding for each file link whose path the check reports gone from main. limit defaults to 50 and is at most 200; a larger one is refused with 400; pass offset (0 or more) for the next page. Read-only.",
       "args": [{"from": "query", "whole": true},
                {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session; a person sees only the issues of the backlogs their groups can see."}],
       "returns": [{"body": true}]
@@ -1362,7 +1362,7 @@
     "create_rule": {
       "method": "POST", "path": "/rules", "status": 201, "call": "CreateRule", "action": "taskmanager.rule.create",
       "title": "Create a rule, decision or question",
-      "description": "Write down one rule (what to do today), one decision (what was chosen once, and why) or one question (a standing question a decision will answer). Send kind (rule, decision or question), title (one sentence), body (the reason and detail), tags (the same tags issues carry, so the rule meets the issues it governs) priority (P1, P2 or P3, questions only; a question without one is P2) and decided_by and decided_at when known. The code (R-<n>, D-<n> or Q-<n>) and id are set by the server; a rule or decision starts proposed and a question starts open. A missing title, an unknown kind, or a priority that is not P1 to P3 or is sent on a rule or decision is refused with 400. A person needs Can move on a backlog.",
+      "description": "Write down one rule (what to do today), one decision (what was chosen once, and why) or one question (a standing question a decision will answer). Send kind (rule, decision or question), title (one sentence), body (the reason and detail), tags (the same tags issues carry, so the rule meets the issues it governs) priority (P1, P2 or P3, questions only; a question without one is P2) and decided_by and decided_at when known. applies_when (rules only, a decision or question with one is refused with 400; optional: {match: all or any, rules: [{field, operator, value}]} with the fields and operators of a smart backlog, saying which issues the rule governs; stored normalised, and a set the rules engine refuses is refused with 400). The code (R-<n>, D-<n> or Q-<n>) and id are set by the server; a rule or decision starts proposed and a question starts open. A missing title, an unknown kind, or a priority that is not P1 to P3 or is sent on a rule or decision is refused with 400. A person needs Can move on a backlog.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on a backlog."},
                {"from": "body", "whole": true}],
       "returns": [{"body": true}]
@@ -1378,7 +1378,7 @@
     "update_rule": {
       "method": "PATCH", "path": "/rules/{ruleCode}", "call": "UpdateRule", "action": "taskmanager.rule.update",
       "title": "Change a rule, decision or question",
-      "description": "Change only the fields you send of one record: title, body, tags, decided_by, decided_at and, on a question, priority (P1 to P3; on a rule or decision, or any other value, it is refused with 400). The code, kind and status stay; use taskmanager_rule_set_status to change the status, taskmanager_rule_answer to answer a question and taskmanager_rule_supersede to replace a rule or decision. A person needs Can move on a backlog.",
+      "description": "Change only the fields you send of one record: title, body, tags, applies_when (a new set replaces the old one; {} clears it), decided_by, decided_at and, on a question, priority (P1 to P3; on a rule or decision, or any other value, it is refused with 400). The code, kind and status stay; use taskmanager_rule_set_status to change the status, taskmanager_rule_answer to answer a question and taskmanager_rule_supersede to replace a rule or decision. A person needs Can move on a backlog.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on a backlog."},
                {"from": "path", "as": "ruleCode", "description": "The code of the rule or decision to change."},
                {"from": "body", "whole": true}],
@@ -1431,7 +1431,7 @@
     "supersede_rule": {
       "method": "POST", "path": "/rules/{ruleCode}/supersede", "status": 201, "call": "SupersedeRule", "action": "taskmanager.rule.supersede",
       "title": "Replace a rule or decision",
-      "description": "Replace one record that is in force (rule) or decided (decision) with a new one in a single step. Send the replacement's fields (kind, title, body, tags); it gets a new code and supersedes the old one, which becomes superseded and points to it. A record already superseded is refused with 400. A person needs Can move on a backlog.",
+      "description": "Replace one record that is in force (rule) or decided (decision) with a new one in a single step. Send the replacement's fields (kind, title, body, tags, applies_when: left out it keeps the old rule's set, {} clears it); it gets a new code and supersedes the old one, which becomes superseded and points to it. A record already superseded is refused with 400. A person needs Can move on a backlog.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on a backlog."},
                {"from": "path", "as": "ruleCode", "description": "The code of the record being replaced."},
                {"from": "body", "whole": true}],
@@ -1472,6 +1472,13 @@
       "description": "List the rules a decision produced: the rules linked decided_in to an issue the decision is also linked decided_in to, in code order and in every status. A code that is not a decision is refused with 400 and one that does not exist with 404. A person needs Can see on a backlog.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person needs Can see on a backlog."},
                {"from": "path", "as": "ruleCode", "description": "The code of the decision, such as D-3."}],
+      "returns": [{"body": true}]
+    },
+    "list_rule_overlaps": {
+      "method": "GET", "path": "/rules/overlaps", "call": "ListRuleOverlaps", "action": "taskmanager.rule.overlap_list",
+      "title": "List the rules that may contradict each other",
+      "description": "List pairs of in-force rules that could govern the same issue, so a person can read each pair and decide whether it is a contradiction. Only in-force rules that carry an applies_when set count. A pair is listed when the two sets are the same once normalised (reason shared_key) or when both sets match at least one open issue the caller can see (done, archived and cancelled issues do not count; reason shared_issue, with the codes of the issues in shared_issues); a pair that is both has both reasons. Each item has first and second (the whole rule records, lower code first), reasons, shared_key and shared_issues. Nothing here says the rules disagree: it only says they meet. Read-only. A person needs Can see on a backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person needs Can see on a backlog."}],
       "returns": [{"body": true}]
     },
     "list_rule_issues": {
@@ -1564,6 +1571,7 @@
     "ErrRequesterVoteStays": 409,
     "ErrInvalidRule": 400,
     "ErrRuleNotFound": 404,
+    "ErrRuleChanged": 409,
     "ErrInvalidRuleFile": 400,
     "ErrDuplicateRuleFile": 409,
     "ErrRuleFileNotFound": 404,

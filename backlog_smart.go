@@ -10,7 +10,6 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/aosanya/mwanachama-backend-shared/specstore"
 	"github.com/aosanya/mwanachama-backend-taskmanager/models"
 )
 
@@ -145,43 +144,19 @@ func hasRuleOn(set RuleSet, field string) bool {
 }
 
 func (m *taskManager) smartTaskIDs(ctx context.Context, requesterID string, set RuleSet) ([]string, error) {
-	backlogs, err := m.backlogs(ctx)
+	subjects, err := m.visibleRuleSubjects(ctx, requesterID, hasRuleOn(set, RuleFieldWaitsOn))
 	if err != nil {
 		return nil, err
 	}
-	q, err := m.narrowToVisible(ctx, m.store.Query(ctx, roleTask).Where("deleted = ?", false), requesterID)
-	if err != nil {
-		return nil, err
-	}
-	tasks, err := specstore.List[Task](m.store, q, roleTask)
-	if err != nil {
-		return nil, fmt.Errorf("smart backlog: %w", err)
-	}
-	needsWaits := hasRuleOn(set, RuleFieldWaitsOn)
 	now := time.Now().UTC()
 	ids := []string{}
-	for _, t := range tasks {
-		bid, sid := models.PlaceOf(backlogs, t)
-		subject := RuleSubject{Task: t}
-		if bi, ok := models.FindBacklog(backlogs, bid); ok {
-			subject.BacklogName = backlogs[bi].Name
-			if si, ok := models.FindStep(backlogs[bi], sid); ok {
-				subject.StepName = backlogs[bi].Steps[si].Name
-			}
-		}
-		if needsWaits {
-			edges, err := m.TraverseRelationships(ctx, t.ID, RelLabelDependsOn, DirectionOutbound)
-			if err != nil {
-				return nil, err
-			}
-			subject.WaitsOn = len(edges)
-		}
+	for _, subject := range subjects {
 		matched, err := set.Matches(subject, now)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s", ErrInvalidBacklog, err)
 		}
 		if matched {
-			ids = append(ids, t.ID)
+			ids = append(ids, subject.Task.ID)
 		}
 	}
 	return ids, nil

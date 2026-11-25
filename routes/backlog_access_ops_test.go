@@ -23,6 +23,7 @@ type accessHub struct {
 	t     *testing.T
 	mux   *http.ServeMux
 	tools []routes.Tool
+	db    *gorm.DB
 }
 
 func newAccessHub(t *testing.T, groupsOf map[string][]string) *accessHub {
@@ -94,7 +95,7 @@ func newAccessHubWithChecker(t *testing.T, dsn string, groupsOf map[string][]str
 	for _, r := range built {
 		mux.HandleFunc(r.Pattern(""), r.Handler)
 	}
-	return &accessHub{t: t, mux: mux, tools: tools}
+	return &accessHub{t: t, mux: mux, tools: tools, db: db}
 }
 
 func (h *accessHub) tool(name string) routes.Tool {

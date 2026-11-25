@@ -35,6 +35,14 @@ func (m *taskManager) supersedeRead(ctx context.Context, old, replacement RuleRe
 		return RuleRecord{}, err
 	}
 	replacement.AnsweredBy = ""
+	if appliesWhenOmitted(replacement.AppliesWhen) {
+		replacement.AppliesWhen = old.AppliesWhen
+	}
+	appliesWhen, err := appliesWhenOfKind(old.Kind, replacement.AppliesWhen)
+	if err != nil {
+		return RuleRecord{}, err
+	}
+	replacement.AppliesWhen = appliesWhen
 	tags, err := m.cleanAndRegisterTags(ctx, replacement.Tags)
 	if err != nil {
 		return RuleRecord{}, fmt.Errorf("SupersedeRule: %w", err)

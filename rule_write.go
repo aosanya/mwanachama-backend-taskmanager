@@ -57,6 +57,13 @@ func (m *taskManager) updateRead(ctx context.Context, rule RuleRecord, patch Rul
 		}
 		rule.Tags = tags
 	}
+	if patch.AppliesWhen != nil {
+		appliesWhen, err := appliesWhenOfKind(rule.Kind, *patch.AppliesWhen)
+		if err != nil {
+			return RuleRecord{}, err
+		}
+		rule.AppliesWhen = appliesWhen
+	}
 	if patch.DecidedBy != nil {
 		rule.DecidedBy = *patch.DecidedBy
 	}

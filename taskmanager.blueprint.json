@@ -1533,6 +1533,7 @@
         {"name": "body", "type": "text", "description": "The reason and the detail, in plain words."},
         {"name": "status", "type": "string", "description": "A rule is proposed, in_force, superseded or retired; a decision is proposed, decided or superseded; a question is open, answered or dropped.", "required": true},
         {"name": "tags", "type": "json", "description": "The tags issues carry, so a rule meets the issues it governs."},
+        {"name": "applies_when", "type": "json", "description": "Optional: the conditions an issue meets for this rule to govern it, as the rules engine writes them ({match: all or any, rules: [{field, operator, value}]}), stored normalised. Empty when the rule is not tied to conditions."},
         {"name": "supersedes", "type": "string", "description": "The code of the record this one replaces; empty when none."},
         {"name": "superseded_by", "type": "string", "description": "The code of the record that replaced this one; empty until it is replaced."},
         {"name": "decided_by", "type": "string", "description": "Who decided it."},

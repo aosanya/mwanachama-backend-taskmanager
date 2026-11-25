@@ -27,6 +27,10 @@ type LintFilter struct {
 	RequesterID string `query:"-" json:"-"`
 }
 
+func (f LintFilter) listsRules() bool {
+	return strings.TrimSpace(f.TaskID) == "" && strings.TrimSpace(f.Backlog) == "" && strings.TrimSpace(f.Step) == "" && f.Offset == 0
+}
+
 type LintFinding struct {
 	Rule    string `json:"rule"`
 	Message string `json:"message"`
@@ -40,9 +44,10 @@ type LintItem struct {
 }
 
 type Lint struct {
-	Items []LintItem `json:"items"`
-	Clean int        `json:"clean"`
-	Total int        `json:"total"`
+	Items []LintItem     `json:"items"`
+	Clean int            `json:"clean"`
+	Total int            `json:"total"`
+	Rules []LintRuleItem `json:"rules,omitempty"`
 }
 
 type lintSubject struct {
@@ -132,6 +137,11 @@ func (m *taskManager) Lint(ctx context.Context, filter LintFilter) (Lint, error)
 			out.Clean++
 		}
 		out.Items = append(out.Items, LintItem{ID: task.ID, Code: task.Code, Title: task.Title, Findings: findings})
+	}
+	if filter.listsRules() {
+		if out.Rules, err = m.ruleLintItems(ctx, filter.RequesterID); err != nil {
+			return out, fmt.Errorf("Lint: %w", err)
+		}
 	}
 	return out, nil
 }

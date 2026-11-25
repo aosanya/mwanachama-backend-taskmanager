@@ -107,6 +107,7 @@ var sentinels = map[string]error{
 	"ErrStepOutOfOrder":                mwanachamataskmanager.ErrStepOutOfOrder,
 	"ErrInvalidRule":                   mwanachamataskmanager.ErrInvalidRule,
 	"ErrRuleNotFound":                  mwanachamataskmanager.ErrRuleNotFound,
+	"ErrRuleChanged":                   ruleChanged,
 	"ErrInvalidRuleFile":               mwanachamataskmanager.ErrInvalidRuleFile,
 	"ErrDuplicateRuleFile":             mwanachamataskmanager.ErrDuplicateRuleFile,
 	"ErrRuleFileNotFound":              mwanachamataskmanager.ErrRuleFileNotFound,
@@ -135,7 +136,7 @@ func BuildFor(tm mwanachamataskmanager.TaskManager, m Mount) ([]Route, error) {
 		return nil, err
 	}
 	return dispatch.Dispatch(s, dispatch.Deps{
-		Manager: tm, Errors: sentinels, Authorize: m.Authorize, Caller: m.Caller,
+		Manager: withRuleChangedMarked(tm), Errors: sentinels, Authorize: m.Authorize, Caller: m.Caller,
 	})
 }
 

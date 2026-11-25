@@ -123,6 +123,11 @@ func (m *taskManager) CreateRule(ctx context.Context, requesterID string, rule R
 		return RuleRecord{}, err
 	}
 	rule.AnsweredBy = ""
+	appliesWhen, err := appliesWhenOfKind(rule.Kind, rule.AppliesWhen)
+	if err != nil {
+		return RuleRecord{}, err
+	}
+	rule.AppliesWhen = appliesWhen
 	tags, err := m.cleanAndRegisterTags(ctx, rule.Tags)
 	if err != nil {
 		return RuleRecord{}, fmt.Errorf("CreateRule: %w", err)
