@@ -1378,7 +1378,7 @@
     "update_rule": {
       "method": "PATCH", "path": "/rules/{ruleCode}", "call": "UpdateRule", "action": "taskmanager.rule.update",
       "title": "Change a rule, decision or question",
-      "description": "Change only the fields you send of one record: title, body, tags, applies_when (a new set replaces the old one; {} clears it), decided_by, decided_at and, on a question, priority (P1 to P3; on a rule or decision, or any other value, it is refused with 400). The code, kind and status stay; use taskmanager_rule_set_status to change the status, taskmanager_rule_answer to answer a question and taskmanager_rule_supersede to replace a rule or decision. A person needs Can move on a backlog.",
+      "description": "Change only the fields you send of one record: title, body, tags, applies_when (a new set replaces the old one; {} clears it), decided_by, decided_at and, on a question, priority (P1 to P3; on a rule or decision, or any other value, it is refused with 400). Send expected_updated_at, the updated_at you read, to refuse a stale write: when it differs from the stored updated_at nothing is written and the answer is 409; left out, the change is made whatever the record holds, and a blank value is refused with 400. The code, kind and status stay; use taskmanager_rule_set_status to change the status, taskmanager_rule_answer to answer a question and taskmanager_rule_supersede to replace a rule or decision. A person needs Can move on a backlog.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on a backlog."},
                {"from": "path", "as": "ruleCode", "description": "The code of the rule or decision to change."},
                {"from": "body", "whole": true}],
@@ -1599,6 +1599,7 @@
     "ErrNoPathToState": 409,
     "ErrInvalidPlacement": 400,
     "ErrTaskMoveConflict": 409,
+    "ErrRuleStale": 409,
     "ErrTaskNotClaimable": 409,
     "ErrWipLimit": 409,
     "ErrInvalidEffort": 400,

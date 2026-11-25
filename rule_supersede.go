@@ -68,7 +68,7 @@ func (m *taskManager) supersedeRead(ctx context.Context, old, replacement RuleRe
 		if err := tx.Table(m.store.Table(roleRule)).Create(row).Error; err != nil {
 			return err
 		}
-		old.Status, old.SupersededBy, old.UpdatedAt = ruleSuperseded, next, now
+		old.Status, old.SupersededBy, old.UpdatedAt = ruleSuperseded, next, stampAfter(old.UpdatedAt)
 		return m.saveRuleFrom(ctx, tx, old, readStatus)
 	})
 	if err != nil {

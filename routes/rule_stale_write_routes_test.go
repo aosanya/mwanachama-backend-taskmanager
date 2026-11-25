@@ -1,7 +1,9 @@
 package routes_test
 
 import (
+	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 
@@ -74,4 +76,80 @@ func TestAnAnswerFromAStaleReadAnswers409(t *testing.T) {
 	changeRuleStatusBeforeNextUpdate(h, ruleTableOf(h), "dropped")
 
 	h.expect(http.StatusConflict, "bob", "PUT", "/rules/"+question+"/answer", map[string]any{"decision_code": decision})
+}
+
+func TestAnUpdateCarryingTheStampJustReadAnswers200AndTheSameStampAgainAnswers409(t *testing.T) {
+	h := newRuleFixture(t).h
+	made := h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "rule", "title": "No comments in code"})
+	read := h.expect(http.StatusOK, "bob", "GET", "/rules/"+made["code"].(string), nil)
+	stamp := read["updated_at"].(string)
+
+	h.expect(http.StatusOK, "bob", "PATCH", "/rules/R-1", map[string]any{"title": "No comments, ever", "expected_updated_at": stamp})
+	h.expect(http.StatusConflict, "bob", "PATCH", "/rules/R-1", map[string]any{"title": "No comments at all", "expected_updated_at": stamp})
+	h.expect(http.StatusOK, "bob", "PATCH", "/rules/R-1", map[string]any{"title": "Plainly: none"})
+	if got := h.expect(http.StatusOK, "bob", "GET", "/rules/R-1", nil); got["title"] != "Plainly: none" {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestTheRuleUpdateToolTakesExpectedUpdatedAtAndRefusesAStaleOne(t *testing.T) {
+	h := newRuleFixture(t).h
+	made, err := h.invoke("bob", "taskmanager_rule_create", map[string]any{"kind": "rule", "title": "Tests first"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, err := h.invoke("bob", "taskmanager_rule_read", map[string]any{"ruleCode": made["code"]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := func(title string) map[string]any {
+		return map[string]any{"ruleCode": made["code"], "title": title, "expected_updated_at": read["updated_at"]}
+	}
+	if _, err := h.invoke("bob", "taskmanager_rule_update", args("first")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.invoke("bob", "taskmanager_rule_update", args("second")); err == nil {
+		t.Fatal("a stale tool write succeeded")
+	}
+	got, err := h.invoke("bob", "taskmanager_rule_read", map[string]any{"ruleCode": made["code"]})
+	if err != nil || got["title"] != "first" {
+		t.Fatalf("got %v, %v", got, err)
+	}
+}
+
+func TestAnUpdateWhoseStampMovesBetweenTheCheckAndTheWriteAnswers409(t *testing.T) {
+	h := newRuleFixture(t).h
+	made := h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "rule", "title": "No comments in code"})
+	stamp := made["updated_at"].(string)
+	table := ruleTableOf(h)
+	var once sync.Once
+	err := h.db.Callback().Update().Before("gorm:update").Register("test:stamp_moves_mid_write", func(tx *gorm.DB) {
+		if tx.Statement.Table != table {
+			return
+		}
+		once.Do(func() {
+			if _, execErr := tx.Statement.ConnPool.ExecContext(tx.Statement.Context, "UPDATE "+table+" SET updated_at = ?", "2999-01-01T00:00:00Z"); execErr != nil {
+				h.t.Error(execErr)
+			}
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h.expect(http.StatusConflict, "bob", "PATCH", "/rules/"+made["code"].(string), map[string]any{"title": "No comments, ever", "expected_updated_at": stamp})
+}
+
+func TestTheRuleUpdateToolDeclaresExpectedUpdatedAt(t *testing.T) {
+	h := newRuleFixture(t).h
+	schema, err := json.Marshal(h.tool("taskmanager_rule_update").InputSchema)
+	if err != nil || !strings.Contains(string(schema), `"expected_updated_at"`) {
+		t.Fatalf("schema %s, %v", schema, err)
+	}
+}
+
+func TestABlankExpectedUpdatedAtAnswers400(t *testing.T) {
+	h := newRuleFixture(t).h
+	made := h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "rule", "title": "No comments in code"})
+	h.expect(http.StatusBadRequest, "bob", "PATCH", "/rules/"+made["code"].(string), map[string]any{"title": "x", "expected_updated_at": " "})
 }

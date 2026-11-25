@@ -29,6 +29,7 @@ const (
 var (
 	ErrInvalidRule  = errors.New("invalid rule, decision or question")
 	ErrRuleNotFound = errors.New("rule not found")
+	ErrRuleStale    = errors.New("the record changed since it was read; read it again and send its new updated_at")
 	ErrRuleChanged  = fmt.Errorf("%w: the record changed while it was being written; read it and try again", ErrInvalidRule)
 
 	errNeedsKindAndTitle = fmt.Errorf("%w: a rule, decision or question needs a kind (rule, decision or question) and a title", ErrInvalidRule)

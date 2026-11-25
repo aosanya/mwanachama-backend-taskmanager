@@ -29,6 +29,8 @@ type RulePatch struct {
 	DecidedBy   *string          `json:"decided_by,omitempty"`
 	DecidedAt   *string          `json:"decided_at,omitempty"`
 	Priority    *string          `json:"priority,omitempty"`
+
+	ExpectedUpdatedAt *string `json:"expected_updated_at,omitempty"`
 }
 
 type RuleFilter struct {

@@ -4,17 +4,25 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 )
 
 func (m *taskManager) saveRuleFrom(ctx context.Context, db *gorm.DB, rule RuleRecord, readStatus string) error {
+	return m.saveRuleWhere(ctx, db, rule, readStatus, "")
+}
+
+func (m *taskManager) saveRuleWhere(ctx context.Context, db *gorm.DB, rule RuleRecord, readStatus, readUpdatedAt string) error {
 	row, err := m.store.Row(roleRule, rule)
 	if err != nil {
 		return err
 	}
-	res := db.WithContext(ctx).Table(m.store.Table(roleRule)).
-		Where("id = ? AND status = ?", rule.ID, readStatus).Updates(row)
+	q := db.WithContext(ctx).Table(m.store.Table(roleRule)).Where("id = ? AND status = ?", rule.ID, readStatus)
+	if readUpdatedAt != "" {
+		q = q.Where("updated_at = ?", readUpdatedAt)
+	}
+	res := q.Updates(row)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -22,6 +30,18 @@ func (m *taskManager) saveRuleFrom(ctx context.Context, db *gorm.DB, rule RuleRe
 		return ErrRuleChanged
 	}
 	return nil
+}
+
+func stampAfter(previous string) string {
+	now := nowStamp()
+	if now > previous {
+		return now
+	}
+	before, err := time.Parse(time.RFC3339, previous)
+	if err != nil {
+		return now
+	}
+	return before.Add(time.Second).UTC().Format(time.RFC3339)
 }
 
 func (m *taskManager) UpdateRule(ctx context.Context, requesterID, code string, patch RulePatch) (RuleRecord, error) {
@@ -35,7 +55,25 @@ func (m *taskManager) UpdateRule(ctx context.Context, requesterID, code string, 
 	return m.updateRead(ctx, rule, patch)
 }
 
+func checkExpectedUpdatedAt(rule RuleRecord, expected *string) (string, error) {
+	if expected == nil {
+		return "", nil
+	}
+	want := strings.TrimSpace(*expected)
+	if want == "" {
+		return "", fmt.Errorf("%w: expected_updated_at is blank; send the updated_at read from the record, or leave it out", ErrInvalidRule)
+	}
+	if want != rule.UpdatedAt {
+		return "", fmt.Errorf("%w: %s was updated at %s, not %s", ErrRuleStale, rule.Code, rule.UpdatedAt, want)
+	}
+	return want, nil
+}
+
 func (m *taskManager) updateRead(ctx context.Context, rule RuleRecord, patch RulePatch) (RuleRecord, error) {
+	guardedAt, err := checkExpectedUpdatedAt(rule, patch.ExpectedUpdatedAt)
+	if err != nil {
+		return RuleRecord{}, err
+	}
 	readStatus := rule.Status
 	if readStatus == ruleSuperseded || readStatus == ruleRetired {
 		return RuleRecord{}, fmt.Errorf("%w: %s is %s and its words stay as they are", ErrInvalidRule, rule.Code, readStatus)
@@ -79,8 +117,8 @@ func (m *taskManager) updateRead(ctx context.Context, rule RuleRecord, patch Rul
 		}
 		rule.Priority = *patch.Priority
 	}
-	rule.UpdatedAt = nowStamp()
-	if err := m.saveRuleFrom(ctx, m.db, rule, readStatus); err != nil {
+	rule.UpdatedAt = stampAfter(rule.UpdatedAt)
+	if err := m.saveRuleWhere(ctx, m.db, rule, readStatus, guardedAt); err != nil {
 		return RuleRecord{}, fmt.Errorf("UpdateRule: %w", err)
 	}
 	return rule, nil
@@ -115,7 +153,7 @@ func (m *taskManager) setStatusRead(ctx context.Context, rule RuleRecord, status
 	if status == questionOpen || status == questionDropped {
 		rule.AnsweredBy = ""
 	}
-	rule.UpdatedAt = nowStamp()
+	rule.UpdatedAt = stampAfter(rule.UpdatedAt)
 	if err := m.saveRuleFrom(ctx, m.db, rule, readStatus); err != nil {
 		return RuleRecord{}, fmt.Errorf("SetRuleStatus: %w", err)
 	}
@@ -162,7 +200,7 @@ func (m *taskManager) answerRead(ctx context.Context, question, decision RuleRec
 	}
 	readStatus := question.Status
 	question.Status, question.AnsweredBy = questionAnswered, decision.Code
-	question.UpdatedAt = nowStamp()
+	question.UpdatedAt = stampAfter(question.UpdatedAt)
 	if err := m.saveRuleFrom(ctx, m.db, question, readStatus); err != nil {
 		return RuleRecord{}, fmt.Errorf("AnswerQuestion: %w", err)
 	}
