@@ -20,6 +20,7 @@ func writesOnABacklog(backlog, stepName string) map[string]probeCall {
 		"reorder_backlog_steps":      {"PUT", b + "/step-order", map[string]any{"steps": []string{"done", "write"}}},
 		"give_backlog_access":        {"PUT", b + "/access/contributors", map[string]string{"level": "move"}},
 		"take_backlog_access":        {"DELETE", b + "/access/contributors", nil},
+		"add_backlog_tag":            {"POST", b + "/tags", map[string]string{"tag": "emea"}},
 	}
 }
 
