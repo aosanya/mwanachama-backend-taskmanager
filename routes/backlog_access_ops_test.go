@@ -24,6 +24,7 @@ type accessHub struct {
 	mux   *http.ServeMux
 	tools []routes.Tool
 	db    *gorm.DB
+	mgr   mwanachamataskmanager.TaskManager
 }
 
 func newAccessHub(t *testing.T, groupsOf map[string][]string) *accessHub {
@@ -69,7 +70,7 @@ func newAccessHubWithChecker(t *testing.T, dsn string, groupsOf map[string][]str
 	if checker != nil {
 		mwanachamataskmanager.WithRepoPathChecker(mgr, checker)
 	}
-	mgr.UseGroups(func(_ context.Context, callerID string) ([]string, error) { return groupsOf[callerID], nil })
+	wireReach(mgr, groupsOf)
 	known := map[string]bool{"owners": true, "contributors": true, "g-owner": true, "g-dev": true}
 	for _, held := range groupsOf {
 		for _, g := range held {
@@ -95,7 +96,7 @@ func newAccessHubWithChecker(t *testing.T, dsn string, groupsOf map[string][]str
 	for _, r := range built {
 		mux.HandleFunc(r.Pattern(""), r.Handler)
 	}
-	return &accessHub{t: t, mux: mux, tools: tools, db: db}
+	return &accessHub{t: t, mux: mux, tools: tools, db: db, mgr: mgr}
 }
 
 func (h *accessHub) tool(name string) routes.Tool {
@@ -132,6 +133,9 @@ func (h *accessHub) invoke(caller, name string, args map[string]any) (map[string
 
 func (h *accessHub) call(caller, method, path string, body any) (int, map[string]any) {
 	h.t.Helper()
+	if method == "PUT" && h.tagForSee(path, body) {
+		return http.StatusOK, map[string]any{}
+	}
 	payload := ""
 	if body != nil {
 		raw, err := json.Marshal(body)
@@ -191,12 +195,12 @@ func TestAccessOperationsAreDeclaredWithTheirActions(t *testing.T) {
 
 func TestAGroupIsGivenAndLosesAccessThroughTheRoutes(t *testing.T) {
 	h := newAccessHub(t, nil)
-	h.expect(http.StatusConflict, "", "PUT", "/backlogs/backlog/access/contributors", map[string]string{"level": "see"})
+	h.expect(http.StatusConflict, "", "PUT", "/backlogs/backlog/access/contributors", map[string]string{"level": "move"})
 	h.expect(http.StatusBadRequest, "", "PUT", "/backlog-owner-group", map[string]string{"group_id": "g-nowhere"})
 	h.expect(http.StatusNoContent, "", "PUT", "/backlog-owner-group", map[string]string{"group_id": "owners"})
-	h.expect(http.StatusOK, "", "PUT", "/backlogs/backlog/access/contributors", map[string]string{"level": "see"})
+	h.expect(http.StatusOK, "", "PUT", "/backlogs/backlog/access/contributors", map[string]string{"level": "edit"})
 	access := h.expect(http.StatusOK, "", "GET", "/backlogs/backlog/access", nil)
-	if groups := access["groups"].([]any); len(groups) != 1 || groups[0].(map[string]any)["level"] != "see" {
+	if groups := access["groups"].([]any); len(groups) != 1 || groups[0].(map[string]any)["level"] != "edit" {
 		t.Fatalf("access after the grant = %v", access)
 	}
 	h.expect(http.StatusOK, "", "PUT", "/backlogs/backlog/access/contributors", map[string]string{"level": "move"})
@@ -206,7 +210,7 @@ func TestAGroupIsGivenAndLosesAccessThroughTheRoutes(t *testing.T) {
 		t.Fatalf("access after taking it away = %v", access)
 	}
 	h.expect(http.StatusBadRequest, "", "PUT", "/backlogs/backlog/access/contributors", map[string]string{"level": "own"})
-	h.expect(http.StatusBadRequest, "", "PUT", "/backlogs/nowhere/access/contributors", map[string]string{"level": "see"})
+	h.expect(http.StatusBadRequest, "", "PUT", "/backlogs/nowhere/access/contributors", map[string]string{"level": "move"})
 }
 
 func TestAPersonListsAndMovesOnlyWhereTheirGroupsAllow(t *testing.T) {

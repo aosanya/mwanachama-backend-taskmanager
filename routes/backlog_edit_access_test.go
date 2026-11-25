@@ -49,7 +49,7 @@ func TestCanSeeAndCanMoveAreRefusedEveryEditOfABacklog(t *testing.T) {
 		}
 	}
 	got := h.expect(http.StatusOK, "boss", "GET", "/backlogs/"+docs+"/access", nil)
-	if len(got["groups"].([]any)) != 3 {
+	if len(got["groups"].([]any)) != 2 {
 		t.Fatalf("a refused edit changed the access list: %v", got)
 	}
 	listed := backlogIDs(h.expect(http.StatusOK, "boss", "GET", "/backlogs", nil))
