@@ -666,10 +666,10 @@
       "returns": [{"body": true}]
     },
     "list_projects_for_task": {
-      "method": "GET", "path": "/tasks/{taskID}/projects", "call": "ListProjectsForTask", "action": "taskmanager.project.list_for_task",
+      "method": "GET", "path": "/tasks/{taskID}/projects", "call": "ListProjectsForTaskFor", "action": "taskmanager.project.list_for_task",
       "title": "List a task's projects",
       "description": "List the projects one task belongs to.",
-      "args": [{"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task whose projects to list."}],
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person reaches only what the tags of the assumed group reach."}, {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task whose projects to list."}],
       "returns": [{"body": true}]
     },
 
@@ -835,17 +835,17 @@
     },
 
     "list_deliverables_for_task": {
-      "method": "GET", "path": "/tasks/{taskID}/deliverables", "call": "ListDeliverablesForTask", "action": "taskmanager.deliverable.list",
+      "method": "GET", "path": "/tasks/{taskID}/deliverables", "call": "ListDeliverablesForTaskFor", "action": "taskmanager.deliverable.list",
       "title": "List deliverables",
       "description": "List what one task owes, in order.",
-      "args": [{"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task whose deliverables to list."}],
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person reaches only what the tags of the assumed group reach."}, {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task whose deliverables to list."}],
       "returns": [{"body": true}]
     },
     "list_acceptance_criteria_for_task": {
-      "method": "GET", "path": "/tasks/{taskID}/acceptance-criteria", "call": "ListAcceptanceCriteriaForTask", "action": "taskmanager.acceptance_criteria.list",
+      "method": "GET", "path": "/tasks/{taskID}/acceptance-criteria", "call": "ListAcceptanceCriteriaForTaskFor", "action": "taskmanager.acceptance_criteria.list",
       "title": "List acceptance criteria",
       "description": "List the conditions one task has to satisfy, in order.",
-      "args": [{"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task whose criteria to list."}],
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person reaches only what the tags of the assumed group reach."}, {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The task whose criteria to list."}],
       "returns": [{"body": true}]
     },
     "write_acceptance_criteria_result": {
@@ -860,26 +860,26 @@
     },
 
     "create_task_todo": {
-      "method": "POST", "path": "/todos", "call": "CreateTaskTodo", "action": "taskmanager.task_todo.create",
+      "method": "POST", "path": "/todos", "call": "CreateTaskTodoAs", "action": "taskmanager.task_todo.create",
       "status": 201,
       "title": "Create step",
       "description": "Create one step of a task's decomposition. A step with predecessors lands blocked and is not dispatched until they finish. Send a description with every step: what it makes, where the output goes and when it is done, never the title copied in. The issue page shows it under the step's title, and task_lint reports a step without one as todo_without_description.",
-      "args": [{"from": "body", "whole": true}],
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person reaches only what the tags of the assumed group reach."}, {"from": "body", "whole": true}],
       "returns": [{"body": true}]
     },
     "get_task_todo": {
-      "method": "GET", "path": "/todos/{todoID}", "call": "GetTaskTodo", "action": "taskmanager.task_todo.read",
+      "method": "GET", "path": "/todos/{todoID}", "call": "GetTaskTodoFor", "action": "taskmanager.task_todo.read",
       "title": "Read step",
       "description": "Read one step of a decomposition.",
-      "args": [{"from": "path", "as": "todoID", "refers": "taskmanager.task_todo", "description": "The step to read."}],
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person reaches only what the tags of the assumed group reach."}, {"from": "path", "as": "todoID", "refers": "taskmanager.task_todo", "description": "The step to read."}],
       "returns": [{"body": true}]
     },
     "dispatch_task_todo": {
-      "method": "POST", "path": "/todos/{todoID}/dispatch", "call": "DispatchTaskTodo", "action": "taskmanager.task_todo.dispatch",
+      "method": "POST", "path": "/todos/{todoID}/dispatch", "call": "DispatchTaskTodoAs", "action": "taskmanager.task_todo.dispatch",
       "status": 204,
       "title": "Dispatch step",
       "description": "Announce one step so a worker picks it up, releasing it from its hold first if it is still blocked.",
-      "args": [{"from": "path", "as": "todoID", "refers": "taskmanager.task_todo", "description": "The step to dispatch."}],
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person reaches only what the tags of the assumed group reach."}, {"from": "path", "as": "todoID", "refers": "taskmanager.task_todo", "description": "The step to dispatch."}],
       "returns": [{"body": true}]
     },
     "update_task_todo_status": {
@@ -970,10 +970,10 @@
       "returns": [{"body": true}]
     },
     "list_task_todos": {
-      "method": "GET", "path": "/workflow-runs/{runID}/todos", "call": "ListTaskTodos", "action": "taskmanager.task_todo.list",
+      "method": "GET", "path": "/workflow-runs/{runID}/todos", "call": "ListTaskTodosFor", "action": "taskmanager.task_todo.list",
       "title": "List a run's steps",
       "description": "List the steps belonging to one run.",
-      "args": [{"from": "path", "as": "runID", "refers": "taskmanager.workflow_run", "description": "The run whose steps to list."}],
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person reaches only what the tags of the assumed group reach."}, {"from": "path", "as": "runID", "refers": "taskmanager.workflow_run", "description": "The run whose steps to list."}],
       "returns": [{"body": true}]
     },
 
@@ -1097,10 +1097,10 @@
       "returns": [{"body": true}]
     },
     "get_workflow_run_closure": {
-      "method": "GET", "path": "/workflow-runs/{runID}/closure", "call": "GetWorkflowRunClosure", "action": "taskmanager.workflow_run.read_closure",
+      "method": "GET", "path": "/workflow-runs/{runID}/closure", "call": "GetWorkflowRunClosureFor", "action": "taskmanager.workflow_run.read_closure",
       "title": "Read run closure",
       "description": "Read everything one run produced — its tasks, its steps, the edges between them, and the outside things it touched.",
-      "args": [{"from": "path", "as": "runID", "refers": "taskmanager.workflow_run", "description": "The run whose closure to read."}],
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person reaches only what the tags of the assumed group reach."}, {"from": "path", "as": "runID", "refers": "taskmanager.workflow_run", "description": "The run whose closure to read."}],
       "returns": [{"body": true}]
     },
     "list_tasks_for_run": {
@@ -1122,11 +1122,11 @@
       "returns": [{"body": true}]
     },
     "link_todo_to_run": {
-      "method": "POST", "path": "/workflow-runs/{runID}/todos/{todoID}/link", "call": "LinkTodoToRun", "action": "taskmanager.workflow_run.link_todo",
+      "method": "POST", "path": "/workflow-runs/{runID}/todos/{todoID}/link", "call": "LinkTodoToRunAs", "action": "taskmanager.workflow_run.link_todo",
       "status": 204,
       "title": "Link step to run",
       "description": "Record that one step belongs to one run, so rolling the run back reaches it.",
-      "args": [{"from": "path", "as": "runID", "refers": "taskmanager.workflow_run", "description": "The run."},
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person reaches only what the tags of the assumed group reach."}, {"from": "path", "as": "runID", "refers": "taskmanager.workflow_run", "description": "The run."},
                {"from": "path", "as": "todoID", "refers": "taskmanager.task_todo", "description": "The step to link."}],
       "returns": [{"body": true}]
     },

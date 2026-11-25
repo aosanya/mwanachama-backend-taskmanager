@@ -327,3 +327,89 @@ func TestReach_TheSeeLevelIsNoLongerGiven(t *testing.T) {
 }
 
 func reachPtr[T any](v T) *T { return &v }
+
+func TestReach_TheCallerlessOperationsFollowTheirIssue(t *testing.T) {
+	b := newReachBoard(t)
+	ctx := context.Background()
+	id := b.idOf(emeaTask)
+	added, err := b.mgr.AddTodos(ctx, "emea", id, mwanachamataskmanager.AddTodosRequest{Todos: []mwanachamataskmanager.TodoSpec{{Title: "one", Instructions: "do it"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	todoID := added.Todos[0].ID
+	for _, person := range []string{"emea", "admin", "both", ""} {
+		if _, err := b.mgr.GetTaskTodoFor(ctx, person, todoID); err != nil {
+			t.Fatalf("%q reads the todo: %v", person, err)
+		}
+		if _, err := b.mgr.ListProjectsForTaskFor(ctx, person, id); err != nil {
+			t.Fatalf("%q lists projects: %v", person, err)
+		}
+		if _, err := b.mgr.ListDeliverablesForTaskFor(ctx, person, id); err != nil {
+			t.Fatalf("%q lists deliverables: %v", person, err)
+		}
+		if _, err := b.mgr.ListAcceptanceCriteriaForTaskFor(ctx, person, id); err != nil {
+			t.Fatalf("%q lists criteria: %v", person, err)
+		}
+	}
+	for _, person := range []string{"apac", "none"} {
+		if _, err := b.mgr.GetTaskTodoFor(ctx, person, todoID); !errors.Is(err, mwanachamataskmanager.ErrTaskTodoNotFound) {
+			t.Fatalf("%s reads the todo: %v", person, err)
+		}
+		if _, err := b.mgr.ListProjectsForTaskFor(ctx, person, id); !errors.Is(err, mwanachamataskmanager.ErrTaskNotFound) {
+			t.Fatalf("%s lists projects: %v", person, err)
+		}
+		if _, err := b.mgr.ListDeliverablesForTaskFor(ctx, person, id); !errors.Is(err, mwanachamataskmanager.ErrTaskNotFound) {
+			t.Fatalf("%s lists deliverables: %v", person, err)
+		}
+		if _, err := b.mgr.ListAcceptanceCriteriaForTaskFor(ctx, person, id); !errors.Is(err, mwanachamataskmanager.ErrTaskNotFound) {
+			t.Fatalf("%s lists criteria: %v", person, err)
+		}
+		if err := b.mgr.DispatchTaskTodoAs(ctx, person, todoID); !errors.Is(err, mwanachamataskmanager.ErrTaskTodoNotFound) {
+			t.Fatalf("%s dispatches: %v", person, err)
+		}
+		_, err := b.mgr.CreateTaskTodoAs(ctx, person, mwanachamataskmanager.TaskTodo{Title: "x", Instructions: "y", ParentTaskID: id})
+		if !errors.Is(err, mwanachamataskmanager.ErrTaskNotFound) {
+			t.Fatalf("%s creates a todo: %v", person, err)
+		}
+	}
+}
+
+func TestReach_ARunListsAndClosesOverOnlyReachedIssuesAndTodos(t *testing.T) {
+	b := newReachBoard(t)
+	ctx := context.Background()
+	run, err := b.mgr.CreateWorkflowRun(ctx, "release", "manual", "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{emeaTask, apacTask} {
+		if err := b.mgr.LinkTaskToRunAs(ctx, "", run.ID, b.idOf(title)); err != nil {
+			t.Fatal(err)
+		}
+		added, err := b.mgr.AddTodos(ctx, "", b.idOf(title), mwanachamataskmanager.AddTodosRequest{Todos: []mwanachamataskmanager.TodoSpec{{Title: title, Instructions: "do it"}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := b.mgr.LinkTodoToRunAs(ctx, "", run.ID, added.Todos[0].ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := map[string]int{"emea": 1, "apac": 1, "both": 2, "admin": 2, "none": 0, "": 2}
+	for person, n := range want {
+		closure, err := b.mgr.GetWorkflowRunClosureFor(ctx, person, run.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(closure.Tasks) != n || len(closure.Todos) != n {
+			t.Fatalf("%q closure holds %d tasks and %d todos, want %d each", person, len(closure.Tasks), len(closure.Todos), n)
+		}
+	}
+	todos, err := b.mgr.ListTaskTodosFor(ctx, "emea", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, todo := range todos {
+		if todo.ParentTaskID == b.idOf(apacTask) {
+			t.Fatal("emea listed a todo of the apac issue")
+		}
+	}
+}

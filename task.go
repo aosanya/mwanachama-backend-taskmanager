@@ -110,6 +110,15 @@ type TaskManager interface {
 	SetBacklogOwnerGroup(ctx context.Context, groupID string) error
 	UseGroups(g Groups)
 	UseGroupTags(g GroupTags)
+	GetTaskTodoFor(ctx context.Context, requesterID, todoID string) (TaskTodo, error)
+	ListTaskTodosFor(ctx context.Context, requesterID, workflowRunID string) ([]TaskTodo, error)
+	CreateTaskTodoAs(ctx context.Context, requesterID string, todo TaskTodo) (TaskTodo, error)
+	DispatchTaskTodoAs(ctx context.Context, requesterID, todoID string) error
+	LinkTodoToRunAs(ctx context.Context, requesterID, runID, todoID string) error
+	ListProjectsForTaskFor(ctx context.Context, requesterID, taskID string) ([]Project, error)
+	ListDeliverablesForTaskFor(ctx context.Context, requesterID, taskID string) ([]Deliverable, error)
+	ListAcceptanceCriteriaForTaskFor(ctx context.Context, requesterID, taskID string) ([]AcceptanceCriteria, error)
+	GetWorkflowRunClosureFor(ctx context.Context, requesterID, runID string) (WorkflowRunClosure, error)
 	CreateBacklogAs(ctx context.Context, requesterID, name string, steps []string, rules *BacklogRules) (BacklogSummary, error)
 	AddBacklogTagAs(ctx context.Context, requesterID, backlogID, tagID string) (BacklogSummary, error)
 	UseGroupExists(g GroupExists)
@@ -612,18 +621,18 @@ type Publisher = events.Publisher
 
 // taskManager is the concrete implementation of [TaskManager].
 type taskManager struct {
-	db            *gorm.DB
-	store         *store
-	publisher     events.Publisher
-	spec          *spec.Spec
-	overdueGrace  time.Duration
-	groups        Groups
-	groupTags     GroupTags
-	groupExists   GroupExists
-	roleSync      RoleSync
-	roleHolder    RoleHolder
-	partyRows     PartyRows
-	pathChecker   RepoPathChecker
+	db           *gorm.DB
+	store        *store
+	publisher    events.Publisher
+	spec         *spec.Spec
+	overdueGrace time.Duration
+	groups       Groups
+	groupTags    GroupTags
+	groupExists  GroupExists
+	roleSync     RoleSync
+	roleHolder   RoleHolder
+	partyRows    PartyRows
+	pathChecker  RepoPathChecker
 }
 
 func NewTaskManager(db *gorm.DB, s *spec.Spec, pub events.Publisher) (TaskManager, error) {
