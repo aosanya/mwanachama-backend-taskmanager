@@ -98,7 +98,7 @@ func TestTaskNotes_ACanSeeReaderMayAddButAnUnseenIssueIsNotFound(t *testing.T) {
 	ctx := context.Background()
 	mgr := restrictedManager(t)
 	task := softwareTask(t, mgr)
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "see"); err != nil {
+	if _, err := giveSee(mgr, ctx, "software", devGroup); err != nil {
 		t.Fatal(err)
 	}
 

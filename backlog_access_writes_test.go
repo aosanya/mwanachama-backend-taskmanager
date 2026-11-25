@@ -24,7 +24,7 @@ func knownGroups(ids ...string) mwanachamataskmanager.GroupExists {
 
 func restrictedManager(t *testing.T) mwanachamataskmanager.TaskManager {
 	t.Helper()
-	mgr := managerWithTwoBacklogs(t)
+	mgr := withReach(managerWithTwoBacklogs(t))
 	mgr.UseGroupExists(knownGroups(ownerGroup, devGroup, docsGroup))
 	ctx := context.Background()
 	if err := mgr.SetBacklogOwnerGroup(ctx, ownerGroup); err != nil {
@@ -50,7 +50,7 @@ func TestBacklogWrites_CanSeeDoesNotAllowWriting(t *testing.T) {
 	mgr := restrictedManager(t)
 	task := softwareTask(t, mgr)
 	other := softwareTask(t, mgr)
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "see"); err != nil {
+	if _, err := giveSee(mgr, ctx, "software", devGroup); err != nil {
 		t.Fatal(err)
 	}
 
@@ -75,7 +75,7 @@ func TestBacklogWrites_CanMoveAllowsWritingAndNoPersonIsNotNarrowed(t *testing.T
 	ctx := context.Background()
 	mgr := restrictedManager(t)
 	task := softwareTask(t, mgr)
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "software", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 	renamed := task
@@ -112,7 +112,7 @@ func TestBacklogWrites_UpdatingIntoAnotherBacklogNeedsCanMoveThere(t *testing.T)
 	ctx := context.Background()
 	mgr := restrictedManager(t)
 	task := softwareTask(t, mgr)
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "software", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 	moved := task
@@ -127,14 +127,14 @@ func TestBacklogWrites_RelationshipsNeedCanMoveOnTheFromIssueAndCanSeeOnTheOther
 	mgr := restrictedManager(t)
 	waiting := softwareTask(t, mgr)
 	hidden := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "hidden"})
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "see"); err != nil {
+	if _, err := giveSee(mgr, ctx, "software", devGroup); err != nil {
 		t.Fatal(err)
 	}
 	edge := mwanachamataskmanager.Relationship{Label: "depends_on", FromID: waiting.ID, ToID: hidden.ID}
 	_, err := mgr.CreateRelationshipAs(ctx, "dev", edge)
 	wantForbidden(t, "edge from a Can see issue", err)
 
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "software", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 	_, err = mgr.CreateRelationshipAs(ctx, "dev", edge)
@@ -143,11 +143,11 @@ func TestBacklogWrites_RelationshipsNeedCanMoveOnTheFromIssueAndCanSeeOnTheOther
 	if _, err := mgr.CreateRelationshipAs(ctx, "owner", edge); err != nil {
 		t.Fatalf("owner: %v", err)
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "see"); err != nil {
+	if _, err := mgr.TakeBacklogAccess(ctx, "software", devGroup); err != nil {
 		t.Fatal(err)
 	}
 	wantForbidden(t, "delete edge with Can see", mgr.DeleteRelationshipAs(ctx, "dev", waiting.ID, hidden.ID, "depends_on"))
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "software", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 	if err := mgr.DeleteRelationshipAs(ctx, "dev", waiting.ID, hidden.ID, "depends_on"); err != nil {
@@ -168,6 +168,7 @@ func TestBacklogWrites_AMissingGroupLookupSeesNothingOnceAccessIsSet(t *testing.
 	if err := mgr.SetBacklogOwnerGroup(ctx, ownerGroup); err != nil {
 		t.Fatal(err)
 	}
+	mgr.UseGroupTags(fixtureGroupTags())
 	if got := visibleIDs(t, mgr, "dev"); len(got) != 0 {
 		t.Fatalf("a person sees %v on a restricted hub whose groups cannot be looked up", got)
 	}
@@ -204,7 +205,7 @@ func TestBacklogOwnerGroup_TheFirstGrantNeedsAnOwnerGroup(t *testing.T) {
 	ctx := context.Background()
 	mgr := managerWithTwoBacklogs(t)
 	mgr.UseGroupExists(knownGroups(ownerGroup, devGroup))
-	_, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "see")
+	_, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move")
 	if !errors.Is(err, mwanachamataskmanager.ErrOwnerGroupNotSet) {
 		t.Fatalf("got %v, want ErrOwnerGroupNotSet", err)
 	}
@@ -214,7 +215,7 @@ func TestBacklogOwnerGroup_TheFirstGrantNeedsAnOwnerGroup(t *testing.T) {
 	if err := mgr.SetBacklogOwnerGroup(ctx, ownerGroup); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "see"); err != nil {
+	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 	if got := visibleIDs(t, mgr, "owner"); len(got) != 2 {
@@ -225,7 +226,7 @@ func TestBacklogOwnerGroup_TheFirstGrantNeedsAnOwnerGroup(t *testing.T) {
 func TestBacklogOwnerGroup_ANewBacklogIsSeenByTheOwnerGroupAndNobodyElse(t *testing.T) {
 	ctx := context.Background()
 	mgr := restrictedManager(t)
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "software", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := mgr.CreateBacklog(ctx, "Design", []string{"Open"}); err != nil {
@@ -254,7 +255,7 @@ func TestBacklogAccess_AnIssueWhoseBacklogNoLongerExistsStaysVisibleInTheFirstBa
 	if err := db.Table(table).Where("id = ?", stray.ID).Update("backlog", "ghost").Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, "backlog", devGroup, "see"); err != nil {
+	if _, err := giveSee(mgr, ctx, "backlog", devGroup); err != nil {
 		t.Fatal(err)
 	}
 	got, err := mgr.ListTasks(ctx, mwanachamataskmanager.TaskFilter{RequesterID: "dev"})
@@ -305,7 +306,7 @@ func TestBacklogAccess_GivingToDifferentGroupsAtOnceLosesNoGrant(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := mgr.GiveBacklogAccess(ctx, "software", g, "see"); err != nil {
+			if _, err := mgr.GiveBacklogAccess(ctx, "software", g, "move"); err != nil {
 				t.Errorf("give %s: %v", g, err)
 			}
 		}()
@@ -323,7 +324,7 @@ func TestBacklogAccess_GivingToDifferentGroupsAtOnceLosesNoGrant(t *testing.T) {
 func TestBacklogAccess_AGrantToAGroupThatNoLongerExistsIsListedAsGone(t *testing.T) {
 	ctx := context.Background()
 	mgr := restrictedManager(t)
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "see"); err != nil {
+	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 	mgr.UseGroupExists(knownGroups(ownerGroup))
@@ -340,7 +341,7 @@ func TestBacklogEdit_APersonInNoGroupIsRefusedEvenWhenTheRoleAllowsEditing(t *te
 	ctx := context.Background()
 	mgr := restrictedManager(t)
 	mgr.UseGroups(groupsOfPeople())
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "software", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 	_, err := mgr.RenameBacklogAs(ctx, "none", "software", "Software team")

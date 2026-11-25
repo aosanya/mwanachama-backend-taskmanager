@@ -42,7 +42,7 @@ func TestSourcedAndGeneratedTasks_NeedCanMoveOnTheFirstBacklog(t *testing.T) {
 	_, err = mgr.GenerateTasksAs(ctx, "dev", generateRequest())
 	wantForbidden(t, "generated tasks with no access", err)
 
-	if _, err := mgr.GiveBacklogAccess(ctx, "backlog", devGroup, "see"); err != nil {
+	if _, err := giveSee(mgr, ctx, "backlog", devGroup); err != nil {
 		t.Fatal(err)
 	}
 	_, err = mgr.OpenSourcedTasksAs(ctx, "dev", sourcedRequest())
@@ -53,7 +53,7 @@ func TestSourcedAndGeneratedTasks_NeedCanMoveOnTheFirstBacklog(t *testing.T) {
 		t.Fatalf("refused calls created %d issues", got)
 	}
 
-	if _, err := mgr.GiveBacklogAccess(ctx, "backlog", devGroup, "move"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "backlog", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := mgr.OpenSourcedTasksAs(ctx, "dev", sourcedRequest()); err != nil {

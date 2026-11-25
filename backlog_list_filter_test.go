@@ -61,7 +61,7 @@ func TestBacklogListFilter_NoFilterReturnsTheSameListAsBefore(t *testing.T) {
 	}
 }
 func TestBacklogListFilter_ABacklogThePersonCannotSeeStaysHidden(t *testing.T) {
-	mgr := managerWithTwoBacklogs(t)
+	mgr := withReach(managerWithTwoBacklogs(t))
 	ctx := context.Background()
 	if err := mgr.SetBacklogOwnerGroup(ctx, ownerGroup); err != nil {
 		t.Fatal(err)

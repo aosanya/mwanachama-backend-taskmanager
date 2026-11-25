@@ -36,23 +36,23 @@ func managerWithRoles(t *testing.T) (mwanachamataskmanager.TaskManager, *recorde
 func TestBacklogRoles_AGroupHoldsTheRoleOfItsHighestLevelAcrossBacklogs(t *testing.T) {
 	mgr, roles := managerWithRoles(t)
 	ctx := context.Background()
-	if _, err := mgr.GiveBacklogAccess(ctx, "backlog", devGroup, "see"); err != nil {
-		t.Fatal(err)
-	}
-	if roles.set[devGroup] != mwanachamataskmanager.RoleCodeBacklogMember {
-		t.Fatalf("after Can see the group's role is %q", roles.set[devGroup])
-	}
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "backlog", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 	if roles.set[devGroup] != mwanachamataskmanager.RoleCodeBacklogWorker {
-		t.Fatalf("after Can move on another backlog the role is %q", roles.set[devGroup])
+		t.Fatalf("after Can move the group's role is %q", roles.set[devGroup])
+	}
+	if _, err := giveAccess(mgr, ctx, "software", devGroup, "edit"); err != nil {
+		t.Fatal(err)
+	}
+	if roles.set[devGroup] != mwanachamataskmanager.RoleCodeBacklogManager {
+		t.Fatalf("after Can edit on another backlog the role is %q", roles.set[devGroup])
 	}
 	if _, err := mgr.TakeBacklogAccess(ctx, "software", devGroup); err != nil {
 		t.Fatal(err)
 	}
-	if roles.set[devGroup] != mwanachamataskmanager.RoleCodeBacklogMember {
-		t.Fatalf("after Can move is taken the role falls back to %q", roles.set[devGroup])
+	if roles.set[devGroup] != mwanachamataskmanager.RoleCodeBacklogWorker {
+		t.Fatalf("after Can edit is taken the role falls back to %q", roles.set[devGroup])
 	}
 	if _, err := mgr.TakeBacklogAccess(ctx, "backlog", devGroup); err != nil {
 		t.Fatal(err)
@@ -64,7 +64,7 @@ func TestBacklogRoles_AGroupHoldsTheRoleOfItsHighestLevelAcrossBacklogs(t *testi
 
 func TestBacklogRoles_TheOwnerGroupIsNeverGivenABacklogRole(t *testing.T) {
 	mgr, roles := managerWithRoles(t)
-	if _, err := mgr.GiveBacklogAccess(context.Background(), "backlog", ownerGroup, "see"); err != nil {
+	if _, err := mgr.GiveBacklogAccess(context.Background(), "backlog", ownerGroup, "move"); err != nil {
 		t.Logf("giving the owner group access: %v", err)
 	}
 	if _, called := roles.set[ownerGroup]; called {
@@ -75,10 +75,10 @@ func TestBacklogRoles_TheOwnerGroupIsNeverGivenABacklogRole(t *testing.T) {
 func TestBacklogRoles_TheAccessListSaysWhenARoleIsMissingOrTooSmall(t *testing.T) {
 	mgr, roles := managerWithRoles(t)
 	ctx := context.Background()
-	if _, err := mgr.GiveBacklogAccess(ctx, "backlog", devGroup, "move"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "backlog", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, "backlog", docsGroup, "see"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "backlog", docsGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 	roles.state[devGroup] = mwanachamataskmanager.RoleState{Codes: []string{"backlog_member"}, CanRead: true}
@@ -94,7 +94,7 @@ func TestBacklogRoles_TheAccessListSaysWhenARoleIsMissingOrTooSmall(t *testing.T
 				t.Fatalf("dev entry = %+v, want a role that is too small", g)
 			}
 		case docsGroup:
-			if !g.NoRole || g.RoleTooSmall {
+			if !g.NoRole {
 				t.Fatalf("docs entry = %+v, want no role", g)
 			}
 		}
@@ -108,10 +108,10 @@ func TestBacklogRoles_TheAccessListSaysWhenARoleIsMissingOrTooSmall(t *testing.T
 func TestBacklogRoles_CanEditGivesTheBacklogManagerRoleAndFallsBackToWorker(t *testing.T) {
 	mgr, roles := managerWithRoles(t)
 	ctx := context.Background()
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "software", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, "backlog", devGroup, "edit"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "backlog", devGroup, "edit"); err != nil {
 		t.Fatal(err)
 	}
 	if roles.set[devGroup] != mwanachamataskmanager.RoleCodeBacklogManager {

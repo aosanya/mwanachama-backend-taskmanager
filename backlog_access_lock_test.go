@@ -32,7 +32,7 @@ func giveAll(mgr mwanachamataskmanager.TaskManager, backlogID string, groups []s
 		wg.Add(1)
 		go func(i int, group string) {
 			defer wg.Done()
-			_, errs[i] = mgr.GiveBacklogAccess(context.Background(), backlogID, group, "see")
+			_, errs[i] = mgr.GiveBacklogAccess(context.Background(), backlogID, group, "move")
 		}(i, group)
 	}
 	wg.Wait()
@@ -81,7 +81,7 @@ func TestSimultaneousAccessGivesSurviveADeleteThatPrunesGrants(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateBacklog: %v", err)
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, doomed.ID, groups[8], "see"); err != nil {
+	if _, err := mgr.GiveBacklogAccess(ctx, doomed.ID, groups[8], "move"); err != nil {
 		t.Fatalf("give on doomed: %v", err)
 	}
 

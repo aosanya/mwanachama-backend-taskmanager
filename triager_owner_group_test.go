@@ -11,12 +11,7 @@ func triagerSeatedInOwnerGroup(t *testing.T) (mwanachamataskmanager.TaskManager,
 	t.Helper()
 	mgr := restrictedManager(t)
 	task := softwareTask(t, mgr)
-	mgr.UseGroups(func(_ context.Context, id string) ([]string, error) {
-		if id == triagerAccount {
-			return []string{ownerGroup}, nil
-		}
-		return nil, nil
-	})
+	seatTriagerInOwnerGroup(mgr)
 	return mgr, task
 }
 

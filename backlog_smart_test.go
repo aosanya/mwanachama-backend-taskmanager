@@ -20,7 +20,7 @@ func titleHas(word string) models.BacklogRule {
 
 func smartManager(t *testing.T) mwanachamataskmanager.TaskManager {
 	t.Helper()
-	mgr := managerWithTwoBacklogs(t)
+	mgr := withReach(managerWithTwoBacklogs(t))
 	for _, title := range []string{"Fix the import route", "Write the guide", "Import the catalog"} {
 		mustCreate(t, mgr, mwanachamataskmanager.Task{Title: title})
 	}
@@ -130,11 +130,11 @@ func TestSmartBacklog_IsNoMoveTargetTakesOnlySeeAndEditAndRenamesAndDeletes(t *t
 	if _, err := mgr.MoveTaskToStep(ctx, tasks[0].ID, made.ID, "open"); err == nil {
 		t.Fatal("a smart backlog took an issue")
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, made.ID, devGroup, "move"); !errors.Is(err, mwanachamataskmanager.ErrInvalidBacklog) {
+	if _, err := giveAccess(mgr, ctx, made.ID, devGroup, "move"); !errors.Is(err, mwanachamataskmanager.ErrInvalidBacklog) {
 		t.Fatalf("move level: %v", err)
 	}
-	for _, level := range []string{"see", "edit"} {
-		if _, err := mgr.GiveBacklogAccess(ctx, made.ID, devGroup, level); err != nil {
+	for _, level := range []string{"edit"} {
+		if _, err := giveAccess(mgr, ctx, made.ID, devGroup, level); err != nil {
 			t.Fatalf("%s: %v", level, err)
 		}
 	}
@@ -154,9 +154,6 @@ func TestSmartBacklog_TwoCallersSeeDifferentCounts(t *testing.T) {
 	}
 	made, err := mgr.CreateBacklogWithRules(ctx, "Everything", nil, rulesOf("all", titleHas("the")))
 	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := mgr.GiveBacklogAccess(ctx, made.ID, devGroup, "see"); err != nil {
 		t.Fatal(err)
 	}
 	count := func(person string) int {

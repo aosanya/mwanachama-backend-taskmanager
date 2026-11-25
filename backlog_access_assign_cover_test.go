@@ -26,7 +26,7 @@ func TestBacklogWrites_AssigningAndLinkingAnIssueNeedsCanMoveOnItsBacklog(t *tes
 	wantForbidden(t, "link to a case with Can see", hub.mgr.LinkCaseTaskAs(ctx, "dev", "case-1", hub.shown.ID))
 	wantForbidden(t, "assign an issue in a hidden backlog", hub.mgr.AssignTaskAs(ctx, "dev", hub.hidden.ID, "agent-1", ""))
 
-	if _, err := hub.mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
+	if _, err := giveAccess(hub.mgr, ctx, "software", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 	notRefusedByAccess(t, "assign", hub.mgr.AssignTaskAs(ctx, "dev", hub.shown.ID, "agent-1", ""))

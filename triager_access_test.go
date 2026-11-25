@@ -12,7 +12,7 @@ const triagerAccount = "triager"
 func restrictedHubWithOneIssue(t *testing.T) mwanachamataskmanager.TaskManager {
 	t.Helper()
 	mgr := restrictedManager(t)
-	if _, err := mgr.GiveBacklogAccess(context.Background(), "software", devGroup, "move"); err != nil {
+	if _, err := giveAccess(mgr, context.Background(), "software", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 	softwareTask(t, mgr)
@@ -54,12 +54,7 @@ func TestTriagerAccess_ACallWithNoAccountIdIsNotNarrowed(t *testing.T) {
 
 func TestTriagerAccess_SeatingTheTriagerInTheOwnerGroupOpensEverything(t *testing.T) {
 	mgr := restrictedHubWithOneIssue(t)
-	mgr.UseGroups(func(_ context.Context, id string) ([]string, error) {
-		if id == triagerAccount {
-			return []string{ownerGroup}, nil
-		}
-		return nil, nil
-	})
+	seatTriagerInOwnerGroup(mgr)
 
 	if got := issueCountFor(t, mgr, triagerAccount); got != 1 {
 		t.Fatalf("the Triager in the owner group lists %d issues, want 1", got)
@@ -67,4 +62,20 @@ func TestTriagerAccess_SeatingTheTriagerInTheOwnerGroupOpensEverything(t *testin
 	if _, err := mgr.CreateTaskAs(context.Background(), triagerAccount, mwanachamataskmanager.Task{Title: "y", Backlog: "software", Step: "open"}); err != nil {
 		t.Fatalf("the Triager in the owner group creates: %v", err)
 	}
+}
+
+func seatTriagerInOwnerGroup(mgr mwanachamataskmanager.TaskManager) {
+	mgr.UseGroups(func(_ context.Context, id string) ([]string, error) {
+		if id == triagerAccount {
+			return []string{ownerGroup}, nil
+		}
+		return nil, nil
+	})
+	fixture := fixtureGroupTags()
+	mgr.UseGroupTags(func(ctx context.Context, id string) ([]string, error) {
+		if id == triagerAccount {
+			return []string{"all"}, nil
+		}
+		return fixture(ctx, id)
+	})
 }

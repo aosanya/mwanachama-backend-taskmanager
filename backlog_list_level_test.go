@@ -27,10 +27,10 @@ func TestBacklogList_EachBacklogCarriesTheCallersLevel(t *testing.T) {
 	if err := mgr.SetBacklogOwnerGroup(ctx, ownerGroup); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "software", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", docsGroup, "see"); err != nil {
+	if _, err := giveSee(mgr, ctx, "software", docsGroup); err != nil {
 		t.Fatal(err)
 	}
 	if got := levelsOf(t, mgr, "owner"); got["software"] != models.AccessEdit || got["backlog"] != models.AccessEdit {

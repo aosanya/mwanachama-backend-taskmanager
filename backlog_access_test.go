@@ -58,7 +58,7 @@ func TestBacklogAccess_OpenUntilAnOwnerGroupOrAGrantIsSet(t *testing.T) {
 }
 
 func TestBacklogAccess_OwnerGroupSeesEveryBacklogAndANewBacklogStartsWithItAlone(t *testing.T) {
-	mgr := managerWithTwoBacklogs(t)
+	mgr := withReach(managerWithTwoBacklogs(t))
 	ctx := context.Background()
 	if err := mgr.SetBacklogOwnerGroup(ctx, ownerGroup); err != nil {
 		t.Fatal(err)
@@ -86,7 +86,7 @@ func TestBacklogAccess_AGroupSeesOnlyTheBacklogsItWasGiven(t *testing.T) {
 	mgr := managerWithTwoBacklogs(t)
 	ctx := context.Background()
 	mgr.SetBacklogOwnerGroup(ctx, ownerGroup)
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "see"); err != nil {
+	if _, err := giveSee(mgr, ctx, "software", devGroup); err != nil {
 		t.Fatal(err)
 	}
 	if got := visibleIDs(t, mgr, "dev"); !equalIDs(got, []string{"software"}) {
@@ -104,8 +104,8 @@ func TestBacklogAccess_GivingAgainChangesTheLevelAndTakingRemovesIt(t *testing.T
 	mgr := managerWithTwoBacklogs(t)
 	ctx := context.Background()
 	mgr.SetBacklogOwnerGroup(ctx, ownerGroup)
-	mgr.GiveBacklogAccess(ctx, "software", devGroup, "see")
-	got, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move")
+	giveSee(mgr, ctx, "software", devGroup)
+	got, err := giveAccess(mgr, ctx, "software", devGroup, "move")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,10 +128,10 @@ func TestBacklogAccess_RefusesAnUnknownLevelBacklogOrEmptyGroup(t *testing.T) {
 	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "own"); !errors.Is(err, mwanachamataskmanager.ErrInvalidBacklog) {
 		t.Fatalf("level: %v", err)
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", " ", "see"); !errors.Is(err, mwanachamataskmanager.ErrInvalidBacklog) {
+	if _, err := mgr.GiveBacklogAccess(ctx, "software", " ", "move"); !errors.Is(err, mwanachamataskmanager.ErrInvalidBacklog) {
 		t.Fatalf("group: %v", err)
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, "nope", devGroup, "see"); !errors.Is(err, mwanachamataskmanager.ErrUnknownBacklog) {
+	if _, err := mgr.GiveBacklogAccess(ctx, "nope", devGroup, "move"); !errors.Is(err, mwanachamataskmanager.ErrUnknownBacklog) {
 		t.Fatalf("backlog: %v", err)
 	}
 	if _, err := mgr.ListBacklogAccess(ctx, "nope"); !errors.Is(err, mwanachamataskmanager.ErrUnknownBacklog) {
@@ -144,7 +144,7 @@ func TestBacklogAccess_MovingNeedsCanMoveOnBothBacklogs(t *testing.T) {
 	ctx := context.Background()
 	mgr.SetBacklogOwnerGroup(ctx, ownerGroup)
 	task := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "a"})
-	mgr.GiveBacklogAccess(ctx, "software", devGroup, "move")
+	giveAccess(mgr, ctx, "software", devGroup, "move")
 	if _, err := mgr.MoveTaskToStepAs(ctx, "dev", task.ID, "software", "open"); !errors.Is(err, mwanachamataskmanager.ErrBacklogForbidden) {
 		t.Fatalf("dev moves out of a backlog it cannot see: %v", err)
 	}
@@ -154,7 +154,9 @@ func TestBacklogAccess_MovingNeedsCanMoveOnBothBacklogs(t *testing.T) {
 	if _, err := mgr.MoveTaskToStepAs(ctx, "dev", task.ID, "software", "shipped"); err != nil {
 		t.Fatalf("dev with Can move: %v", err)
 	}
-	mgr.GiveBacklogAccess(ctx, "software", devGroup, "see")
+	if _, err := mgr.TakeBacklogAccess(ctx, "software", devGroup); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := mgr.MoveTaskToStepAs(ctx, "dev", task.ID, "software", "open"); !errors.Is(err, mwanachamataskmanager.ErrBacklogForbidden) {
 		t.Fatalf("dev with Can see: %v", err)
 	}
@@ -177,7 +179,7 @@ func TestBacklogAccess_DeletingABacklogDropsItsGrants(t *testing.T) {
 	mgr := managerWithTwoBacklogs(t)
 	ctx := context.Background()
 	mgr.SetBacklogOwnerGroup(ctx, ownerGroup)
-	mgr.GiveBacklogAccess(ctx, "software", devGroup, "move")
+	giveAccess(mgr, ctx, "software", devGroup, "move")
 	if err := mgr.DeleteBacklog(ctx, "software"); err != nil {
 		t.Fatal(err)
 	}

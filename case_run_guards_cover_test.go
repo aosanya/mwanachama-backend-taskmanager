@@ -33,7 +33,7 @@ func runWithIssues(t *testing.T, devAccess string, withHidden bool) runHub {
 		hidden = mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "in the first backlog", WorkflowRunID: run.ID})
 	}
 	if devAccess != "" {
-		if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, devAccess); err != nil {
+		if _, err := giveLevel(mgr, ctx, "software", devGroup, devAccess); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -127,7 +127,7 @@ func caseWithTwoBacklogsOfIssues(t *testing.T, devAccess string) caseHub {
 		}
 	}
 	if devAccess != "" {
-		if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, devAccess); err != nil {
+		if _, err := giveLevel(mgr, ctx, "software", devGroup, devAccess); err != nil {
 			t.Fatal(err)
 		}
 	}

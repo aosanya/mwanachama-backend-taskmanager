@@ -31,7 +31,7 @@ func sprintWithOneTaskDevCanSee(t *testing.T) sprintHub {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "see"); err != nil {
+	if _, err := giveSee(mgr, ctx, "software", devGroup); err != nil {
 		t.Fatal(err)
 	}
 	return sprintHub{mgr: mgr, project: project, shown: shown, hidden: hidden}
@@ -119,7 +119,7 @@ func TestBacklogWrites_ProjectMembershipAndAssignmentNeedCanMoveOnTheIssue(t *te
 	_, err = hub.mgr.CreateTaskInProjectAs(ctx, "dev", hub.project.ProjectName, mwanachamataskmanager.Task{Title: "x", Backlog: "software", Step: "open"})
 	wantForbidden(t, "create in a project with Can see", err)
 
-	if _, err := hub.mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
+	if _, err := giveAccess(hub.mgr, ctx, "software", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 	if err := hub.mgr.AddTaskToProjectAs(ctx, "dev", hub.shown.ID, other.ID); err != nil {

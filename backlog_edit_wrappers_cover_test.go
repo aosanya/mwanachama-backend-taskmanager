@@ -46,7 +46,7 @@ func softwareSummary(t *testing.T, mgr mwanachamataskmanager.TaskManager, person
 func TestBacklogEditWrappers_CanMoveIsRefusedOnEveryStepAndAccessChange(t *testing.T) {
 	ctx := context.Background()
 	mgr := restrictedManager(t)
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "software", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -59,7 +59,7 @@ func TestBacklogEditWrappers_CanMoveIsRefusedOnEveryStepAndAccessChange(t *testi
 	_, err = mgr.RemoveBacklogStepAs(ctx, "dev", "software", "shipped")
 	wantForbidden(t, "remove a step", err)
 	wantForbidden(t, "delete the backlog", mgr.DeleteBacklogAs(ctx, "dev", "software"))
-	_, err = mgr.GiveBacklogAccessAs(ctx, "dev", "software", docsGroup, "see")
+	_, err = mgr.GiveBacklogAccessAs(ctx, "dev", "software", docsGroup, "move")
 	wantForbidden(t, "give access", err)
 	_, err = mgr.TakeBacklogAccessAs(ctx, "dev", "software", devGroup)
 	wantForbidden(t, "take access", err)
@@ -83,10 +83,10 @@ func TestBacklogEditWrappers_CanEditChangesStepsAndAccessOfThatBacklogOnly(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "edit"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "software", devGroup, "edit"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, docs.ID, devGroup, "see"); err != nil {
+	if _, err := giveSee(mgr, ctx, docs.ID, devGroup); err != nil {
 		t.Fatal(err)
 	}
 
@@ -123,7 +123,7 @@ func TestBacklogEditWrappers_CanEditChangesStepsAndAccessOfThatBacklogOnly(t *te
 		t.Fatalf("steps after removing Review: %v", got)
 	}
 
-	given, err := mgr.GiveBacklogAccessAs(ctx, "dev", "software", docsGroup, "see")
+	given, err := mgr.GiveBacklogAccessAs(ctx, "dev", "software", docsGroup, "move")
 	if err != nil || len(given.Groups) != 2 {
 		t.Fatalf("give access with Can edit: %+v %v", given, err)
 	}
@@ -140,7 +140,7 @@ func TestBacklogEditWrappers_CanEditChangesStepsAndAccessOfThatBacklogOnly(t *te
 func TestBacklogEditWrappers_CanEditDeletesAnEmptyBacklogAndAHoldingOneRefuses(t *testing.T) {
 	ctx := context.Background()
 	mgr := restrictedManager(t)
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "edit"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "software", devGroup, "edit"); err != nil {
 		t.Fatal(err)
 	}
 	softwareTask(t, mgr)
@@ -160,7 +160,7 @@ func TestBacklogEditWrappers_CanEditDeletesAnEmptyBacklogAndAHoldingOneRefuses(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, empty.ID, devGroup, "edit"); err != nil {
+	if _, err := giveAccess(mgr, ctx, empty.ID, devGroup, "edit"); err != nil {
 		t.Fatal(err)
 	}
 	if err := mgr.DeleteBacklogAs(ctx, "dev", empty.ID); err != nil {
@@ -176,7 +176,7 @@ func TestBacklogEditWrappers_CanEditDeletesAnEmptyBacklogAndAHoldingOneRefuses(t
 func TestBacklogEditWrappers_ReplacingEveryBacklogNeedsCanEditOnAllOfThem(t *testing.T) {
 	ctx := context.Background()
 	mgr := restrictedManager(t)
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "edit"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "software", devGroup, "edit"); err != nil {
 		t.Fatal(err)
 	}
 	keep := []mwanachamataskmanager.Backlog{{ID: "software", Name: "Software", Steps: []mwanachamataskmanager.BacklogStep{{ID: "open", Name: "Open"}, {ID: "shipped", Name: "Shipped"}}}}

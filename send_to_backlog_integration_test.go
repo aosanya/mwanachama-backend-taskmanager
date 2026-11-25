@@ -28,12 +28,20 @@ func newSendHub(t *testing.T) *sendHub {
 	mgr := newTestManager(t)
 	byPerson := map[string][]string{
 		"owner":  {ownerGroup},
+		"tagger": {ownerGroup},
 		"ann":    {devGroup},
 		"bea":    {docsGroup},
 		"nobody": nil,
 	}
 	mgr.UseGroups(func(_ context.Context, id string) ([]string, error) { return byPerson[id], nil })
 	mgr.UseGroupExists(knownGroups(ownerGroup, devGroup, docsGroup))
+	tagsByPerson := map[string][]string{
+		"owner":  {"all"},
+		"tagger": {"all", tagOfGroup(devGroup), tagOfGroup(docsGroup)},
+		"ann":    {tagOfGroup(devGroup)},
+		"bea":    {tagOfGroup(docsGroup)},
+	}
+	mgr.UseGroupTags(func(_ context.Context, id string) ([]string, error) { return tagsByPerson[id], nil })
 	built, err := routes.BuildFor(mgr, routes.Mount{Caller: func(ctx context.Context) string {
 		id, _ := ctx.Value(sendPersonKey{}).(string)
 		return id
@@ -93,6 +101,10 @@ func (h *sendHub) expect(want int, person, method, path string, body any) map[st
 
 func (h *sendHub) grant(key, group, level string) {
 	h.t.Helper()
+	h.expect(http.StatusCreated, "tagger", http.MethodPost, "/backlogs/"+h.backlog[key]+"/tags", map[string]string{"tag": tagOfGroup(group)})
+	if level == "see" {
+		return
+	}
 	h.expect(http.StatusOK, "owner", http.MethodPut, "/backlogs/"+h.backlog[key]+"/access/"+group, map[string]string{"level": level})
 }
 

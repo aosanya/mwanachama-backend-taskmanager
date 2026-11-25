@@ -84,7 +84,7 @@ func TestBacklogArchive_TheFirstBacklogAndUnknownOnesAreRefused(t *testing.T) {
 func TestBacklogArchive_NeedsCanEditOnTheBacklog(t *testing.T) {
 	ctx := context.Background()
 	mgr := restrictedManager(t)
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "move"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "software", devGroup, "move"); err != nil {
 		t.Fatal(err)
 	}
 	_, err := mgr.ArchiveBacklogAs(ctx, "dev", "software")
@@ -94,7 +94,7 @@ func TestBacklogArchive_NeedsCanEditOnTheBacklog(t *testing.T) {
 	if archivedOf(t, mgr, "software") {
 		t.Fatal("a refused archive left a mark")
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "edit"); err != nil {
+	if _, err := giveAccess(mgr, ctx, "software", devGroup, "edit"); err != nil {
 		t.Fatal(err)
 	}
 	got, err := mgr.ArchiveBacklogAs(ctx, "dev", "software")

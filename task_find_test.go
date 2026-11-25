@@ -281,7 +281,7 @@ func TestFindTasks_ShowsAPersonOnlyTheBacklogsTheirGroupsCanSee(t *testing.T) {
 	if err := mgr.SetBacklogOwnerGroup(ctx, ownerGroup); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "see"); err != nil {
+	if _, err := giveSee(mgr, ctx, "software", devGroup); err != nil {
 		t.Fatal(err)
 	}
 

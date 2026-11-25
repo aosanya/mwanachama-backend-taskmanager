@@ -141,7 +141,7 @@ func TestTaskReferences_ACanSeeReaderMayAddAndRemoveButAnUnseenIssueIsNotFound(t
 	ctx := context.Background()
 	mgr := restrictedManager(t)
 	task := softwareTask(t, mgr)
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "see"); err != nil {
+	if _, err := giveSee(mgr, ctx, "software", devGroup); err != nil {
 		t.Fatal(err)
 	}
 
@@ -235,7 +235,7 @@ func TestTaskReferences_ACanSeeReaderMayProposeAndConfirmButAnUnseenIssueIsNotFo
 	ctx := context.Background()
 	mgr := restrictedManager(t)
 	task := softwareTask(t, mgr)
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "see"); err != nil {
+	if _, err := giveSee(mgr, ctx, "software", devGroup); err != nil {
 		t.Fatal(err)
 	}
 
