@@ -27,6 +27,16 @@ A backlog entry carries `tags`, a list of tag ids. The tags decide who reaches t
 - `add_backlog_tag` adds one tag. The caller needs Can edit on the backlog and the tag must be one of the assumed group's tags, supplied by the hub through `UseGroupTags` beside `UseGroups`. A tag already present stays once, and a smart backlog refuses it.
 - Nothing takes a tag off. `replace_backlogs` and every other save keep the tags the stored backlog already has (D27), whatever the request carries.
 
+### Reach decides what a person sees
+
+With `UseGroupTags` set, the `see` level is replaced by reach (ISS-220, D28, D32, D73). A person reaches a backlog, and so every task in it with its todos and notes, when the tags of the assumed group share one with the backlog or include `all`. A group with no tag, or a person with no group, reaches nothing, `next_ready` and `claim_next` included. A smart backlog is listed to anyone with a tag and runs its rules over the tasks the person reaches, so two groups see different counts.
+
+- `move` and `edit` stay per group and need reach first: a group with `move` on a backlog it does not reach can do nothing there. `give_backlog_access` takes `move` or `edit` only; a stored `see` grant is ignored on read.
+- The owner pass is gone: `UseInstanceOwner` no longer exists. The owner reaches a backlog through the assumed group, as anyone does. The owner group still holds `edit` on every backlog for the levels.
+- A call with no person is not limited, which keeps the hub's own jobs working.
+- Without `UseGroupTags` reach is off and the old group levels apply. The hub turns reach on only after its cleanup has tagged the backlogs that exist (F5).
+- The operations that had no caller and return a task or a todo now take one and follow their issue: `get_task_todo`, `list_task_todos`, `create_task_todo`, `dispatch_task_todo`, `link_todo_to_run`, `list_projects_for_task`, `list_deliverables_for_task`, `list_acceptance_criteria_for_task` and `get_workflow_run_closure`. A todo with no issue is reached by no person. The earlier methods without a caller stay for the hub's own jobs.
+
 Design: the hub's `task-tags.md` sections 3, 4 and 7.
 
 ## What the manager does
@@ -80,7 +90,7 @@ live in the `backlog_access` setting and the owner group in
 
 | Rule | Where |
 | --- | --- |
-| While no grant and no owner group is set, every backlog is open to everyone. Once either is set, a person sees only the backlogs one of their groups has a grant on, or all of them through the owner group. | `AccessLevelOf` in `models/backlog_access.go` |
+| While no grant and no owner group is set, every backlog is open to everyone. Once either is set, the levels below apply; with reach on (see Reach tags) seeing comes from the tags and the grants only give `move` or `edit`. | `AccessLevelOf` in `models/backlog_access.go` |
 | A person's level is the highest any of their groups gives on that backlog. | `AccessLevelOf` |
 | A new backlog starts seen by the owner group alone, because only it has a grant until someone gives more. | `CreateBacklog` adds no grant |
 | The first `give_backlog_access` is refused with 409 (`ErrOwnerGroupNotSet`) until `set_backlog_owner_group` has named a group, so a restricted hub cannot hide every backlog from its managers. | `GiveBacklogAccess` |
