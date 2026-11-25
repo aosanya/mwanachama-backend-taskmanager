@@ -109,6 +109,9 @@ type TaskManager interface {
 	TakeBacklogAccess(ctx context.Context, backlogID, groupID string) (BacklogAccess, error)
 	SetBacklogOwnerGroup(ctx context.Context, groupID string) error
 	UseGroups(g Groups)
+	UseGroupTags(g GroupTags)
+	CreateBacklogAs(ctx context.Context, requesterID, name string, steps []string, rules *BacklogRules) (BacklogSummary, error)
+	AddBacklogTagAs(ctx context.Context, requesterID, backlogID, tagID string) (BacklogSummary, error)
 	UseGroupExists(g GroupExists)
 	UseInstanceOwner(o InstanceOwner)
 	UseRoleSync(r RoleSync)
@@ -588,6 +591,7 @@ type taskManager struct {
 	spec          *spec.Spec
 	overdueGrace  time.Duration
 	groups        Groups
+	groupTags     GroupTags
 	groupExists   GroupExists
 	instanceOwner InstanceOwner
 	roleSync      RoleSync

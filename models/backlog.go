@@ -29,6 +29,7 @@ type Backlog struct {
 	Kind     string        `json:"kind,omitempty"`
 	Rules    *BacklogRules `json:"rules,omitempty"`
 	Archived bool          `json:"archived,omitempty"`
+	Tags     []string      `json:"tags,omitempty"`
 }
 type BacklogRules struct {
 	Match string        `json:"match"`
@@ -54,6 +55,7 @@ type BacklogSummary struct {
 	Kind     string        `json:"kind,omitempty"`
 	Rules    *BacklogRules `json:"rules,omitempty"`
 	Archived bool          `json:"archived,omitempty"`
+	Tags     []string      `json:"tags,omitempty"`
 }
 type BacklogList struct {
 	Items []BacklogSummary `json:"items"`
@@ -286,4 +288,32 @@ func ImpliedStatuses(step BacklogStep, current TaskStatus) []TaskStatus {
 		return []TaskStatus{TaskStatusInProgress}
 	}
 	return nil
+}
+
+func KeepTags(current, next []Backlog) []Backlog {
+	kept := make([]Backlog, len(next))
+	for i, b := range next {
+		kept[i] = b
+		if b.Smart() {
+			kept[i].Tags = nil
+			continue
+		}
+		if at, ok := FindBacklog(current, b.ID); ok {
+			kept[i].Tags = UnionTags(current[at].Tags, b.Tags)
+		}
+	}
+	return kept
+}
+
+func UnionTags(first, second []string) []string {
+	var union []string
+	seen := map[string]bool{}
+	for _, tag := range append(append([]string{}, first...), second...) {
+		if tag == "" || seen[tag] {
+			continue
+		}
+		seen[tag] = true
+		union = append(union, tag)
+	}
+	return union
 }
