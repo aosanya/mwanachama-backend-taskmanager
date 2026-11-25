@@ -46,7 +46,7 @@ func (m *taskManager) listBacklogKind(ctx context.Context, requesterID, backlogI
 	if err != nil {
 		return nil, err
 	}
-	filter.Kind, filter.Tags = kind, nil
+	filter.Kind = kind
 	records, err := m.ListRules(ctx, requesterID, filter)
 	if err != nil {
 		return nil, err

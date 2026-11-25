@@ -1395,7 +1395,7 @@
     "list_backlog_rules": {
       "method": "GET", "path": "/backlogs/{backlogID}/rules", "call": "ListBacklogRules", "action": "taskmanager.backlog.rules_list",
       "title": "List the rules of a backlog",
-      "description": "List the rules that bear on one backlog: those that carry at least one tag carried by an issue inside it, without regard to case. Repeat status to choose which statuses to show; with none given it returns the rules in force and the proposed ones, and superseded or retired rules only when asked for. A status that is not a rule's is refused with 400, and so is an unknown backlog. A person needs Can see on that backlog, otherwise 403.",
+      "description": "List the rules that bear on one backlog: those that carry at least one tag carried by an issue inside it, without regard to case. Repeat status to choose which statuses to show; with none given it returns the rules in force and the proposed ones, and superseded or retired rules only when asked for. A status that is not a rule's is refused with 400, and so is an unknown backlog. Repeat tag to narrow the list to records that carry every tag given, without regard to case, in addition to the backlog's own scope. A person needs Can see on that backlog, otherwise 403.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
                {"from": "path", "as": "backlogID", "description": "The backlog."},
                {"from": "query", "whole": true}],
@@ -1404,7 +1404,7 @@
     "list_backlog_decisions": {
       "method": "GET", "path": "/backlogs/{backlogID}/decisions", "call": "ListBacklogDecisions", "action": "taskmanager.backlog.decisions_list",
       "title": "List the decisions of a backlog",
-      "description": "List the decisions that bear on one backlog: those that carry at least one tag carried by an issue inside it, without regard to case. Repeat status to choose which statuses to show; with none given it returns the decided and proposed ones, and superseded decisions only when asked for. A status that is not a decision's is refused with 400, and so is an unknown backlog. A person needs Can see on that backlog, otherwise 403.",
+      "description": "List the decisions that bear on one backlog: those that carry at least one tag carried by an issue inside it, without regard to case. Repeat status to choose which statuses to show; with none given it returns the decided and proposed ones, and superseded decisions only when asked for. A status that is not a decision's is refused with 400, and so is an unknown backlog. Repeat tag to narrow the list to records that carry every tag given, without regard to case, in addition to the backlog's own scope. A person needs Can see on that backlog, otherwise 403.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
                {"from": "path", "as": "backlogID", "description": "The backlog."},
                {"from": "query", "whole": true}],
@@ -1460,7 +1460,7 @@
     "list_backlog_questions": {
       "method": "GET", "path": "/backlogs/{backlogID}/questions", "call": "ListBacklogQuestions", "action": "taskmanager.backlog.questions_list",
       "title": "List the questions of a backlog",
-      "description": "List the questions that bear on one backlog: those that carry at least one tag carried by an issue inside it, without regard to case, P1 first and by code inside one priority. Repeat status to choose which statuses to show (open, answered or dropped); with none given it returns the open ones. A status that is not a question's is refused with 400, and so is an unknown backlog. A person needs Can see on that backlog, otherwise 403.",
+      "description": "List the questions that bear on one backlog: those that carry at least one tag carried by an issue inside it, without regard to case, P1 first and by code inside one priority. Repeat status to choose which statuses to show (open, answered or dropped); with none given it returns the open ones. A status that is not a question's is refused with 400, and so is an unknown backlog. Repeat tag to narrow the list to records that carry every tag given, without regard to case, in addition to the backlog's own scope. A person needs Can see on that backlog, otherwise 403.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
                {"from": "path", "as": "backlogID", "description": "The backlog."},
                {"from": "query", "whole": true}],
