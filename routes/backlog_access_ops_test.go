@@ -32,6 +32,11 @@ func newAccessHub(t *testing.T, groupsOf map[string][]string) *accessHub {
 
 func newAccessHubOn(t *testing.T, dsn string, groupsOf map[string][]string) *accessHub {
 	t.Helper()
+	return newAccessHubWithChecker(t, dsn, groupsOf, nil)
+}
+
+func newAccessHubWithChecker(t *testing.T, dsn string, groupsOf map[string][]string, checker mwanachamataskmanager.RepoPathChecker) *accessHub {
+	t.Helper()
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -59,6 +64,9 @@ func newAccessHubOn(t *testing.T, dsn string, groupsOf map[string][]string) *acc
 	mgr, err := mwanachamataskmanager.NewTaskManager(db, s, nil)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if checker != nil {
+		mwanachamataskmanager.WithRepoPathChecker(mgr, checker)
 	}
 	mgr.UseGroups(func(_ context.Context, callerID string) ([]string, error) { return groupsOf[callerID], nil })
 	known := map[string]bool{"owners": true, "contributors": true, "g-owner": true, "g-dev": true}

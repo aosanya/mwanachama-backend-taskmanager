@@ -105,6 +105,11 @@ var sentinels = map[string]error{
 	"ErrWorkflowNotPublished":          mwanachamataskmanager.ErrWorkflowNotPublished,
 	"ErrStepNotInWorkflow":             mwanachamataskmanager.ErrStepNotInWorkflow,
 	"ErrStepOutOfOrder":                mwanachamataskmanager.ErrStepOutOfOrder,
+	"ErrInvalidRule":                   mwanachamataskmanager.ErrInvalidRule,
+	"ErrRuleNotFound":                  mwanachamataskmanager.ErrRuleNotFound,
+	"ErrInvalidRuleFile":               mwanachamataskmanager.ErrInvalidRuleFile,
+	"ErrDuplicateRuleFile":             mwanachamataskmanager.ErrDuplicateRuleFile,
+	"ErrRuleFileNotFound":              mwanachamataskmanager.ErrRuleFileNotFound,
 	"ErrStepRoleNotHeld":               mwanachamataskmanager.ErrStepRoleNotHeld,
 }
 

@@ -50,6 +50,12 @@ type (
 	CaseFilter         = models.CaseFilter
 	CaseVote           = models.CaseVote
 	TaskNote           = models.TaskNote
+	RuleRecord         = models.RuleRecord
+	RulePatch          = models.RulePatch
+	RuleFilter         = models.RuleFilter
+	RuleFile           = models.RuleFile
+	RuleFileLink       = models.RuleFileLink
+	RuleFileResult     = models.RuleFileResult
 	TaskNoteFilter     = models.TaskNoteFilter
 	WorkerCaps         = models.WorkerCaps
 	TaskCapsChange     = models.TaskCapsChange
@@ -125,4 +131,7 @@ const (
 	RelLabelPartOfRun             = models.RelLabelPartOfRun
 	RelLabelHasDeliverable        = models.RelLabelHasDeliverable
 	RelLabelHasAcceptanceCriteria = models.RelLabelHasAcceptanceCriteria
+	RelLabelAppliesTo             = models.RelLabelAppliesTo
+	RelLabelDecidedIn             = models.RelLabelDecidedIn
+	RelLabelBrokenBy              = models.RelLabelBrokenBy
 )

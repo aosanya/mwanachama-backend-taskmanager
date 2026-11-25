@@ -103,6 +103,12 @@
       "description": "Records that one label is attached to one work item."
     },
     {
+      "role": "rule_link",
+      "name": "rule_link",
+      "table": "rule_links",
+      "description": "Records that one rule or decision is linked to one issue, and how."
+    },
+    {
       "role": "code_sequence",
       "name": "code_sequence",
       "table": "code_sequences",
@@ -143,6 +149,18 @@
       "name": "task_note",
       "table": "task_notes",
       "description": "One dated entry in the Log of a work item, and who wrote it."
+    },
+    {
+      "role": "rule",
+      "name": "rule",
+      "table": "rules",
+      "description": "One rule, decision or question the team has written down, with a code of its own."
+    },
+    {
+      "role": "rule_file",
+      "name": "rule_file",
+      "table": "rule_files",
+      "description": "One file of a repo that a rule or decision points to as its best example."
     },
     {
       "role": "task_reference",

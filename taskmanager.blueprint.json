@@ -1361,6 +1361,19 @@
       ]
     },
     {
+      "role": "rule_link",
+      "description": "Records that one rule or decision is linked to one issue, and how: applies_to, decided_in or broken_by. Read from the rule's side and from the issue's.",
+      "fields": [
+        {"name": "rule_id", "type": "string", "description": "The rule or decision linked.", "primary": true},
+        {"name": "task_id", "type": "string", "description": "The issue it is linked to.", "primary": true},
+        {"name": "relation", "type": "string", "description": "applies_to, decided_in or broken_by.", "primary": true},
+        {"name": "linked_at", "type": "timestamp", "description": "When the link was made."}
+      ],
+      "indexes": [
+        {"name": "task", "description": "Reads every rule linked to one issue.", "fields": ["task_id"]}
+      ]
+    },
+    {
       "role": "code_sequence",
       "description": "The next number to mint for one kind of thing's stable code, one row per kind. Separate from the things it numbers so the counter can be read and advanced without touching them.",
       "fields": [
@@ -1510,6 +1523,31 @@
       ]
     },
     {
+      "role": "rule",
+      "description": "One rule, one decision or one question the team has written down. A rule says what to do today; a decision says what was chosen once and why; a question is a standing question about how the team works, waiting for a decision. Each has a code of its own that is never changed or reused: R-41 for a rule, D-41 for a decision, Q-41 for a question. A replaced record stays, marked superseded, and points to what replaced it.",
+      "fields": [
+        {"name": "id", "type": "string", "description": "Storage key, opaque to callers.", "primary": true},
+        {"name": "kind", "type": "string", "description": "rule, decision or question.", "required": true},
+        {"name": "code", "type": "string", "description": "R-41 for a rule, D-41 for a decision, Q-41 for a question; set when the record is made, never changed, never reused.", "required": true},
+        {"name": "title", "type": "string", "description": "One sentence stating the rule or the choice.", "required": true},
+        {"name": "body", "type": "text", "description": "The reason and the detail, in plain words."},
+        {"name": "status", "type": "string", "description": "A rule is proposed, in_force, superseded or retired; a decision is proposed, decided or superseded; a question is open, answered or dropped.", "required": true},
+        {"name": "tags", "type": "json", "description": "The tags issues carry, so a rule meets the issues it governs."},
+        {"name": "supersedes", "type": "string", "description": "The code of the record this one replaces; empty when none."},
+        {"name": "superseded_by", "type": "string", "description": "The code of the record that replaced this one; empty until it is replaced."},
+        {"name": "decided_by", "type": "string", "description": "Who decided it."},
+        {"name": "decided_at", "type": "string", "description": "When it was decided, as a date."},
+        {"name": "priority", "type": "string", "description": "P1, P2 or P3, on a question only and empty on a rule or decision; P1 is answered first."},
+        {"name": "answered_by", "type": "string", "description": "The code of the decision that settles a question; empty until it is answered."},
+        {"name": "created_at", "type": "timestamp", "description": "When the record was made."},
+        {"name": "updated_at", "type": "timestamp", "description": "When the record last changed."}
+      ],
+      "indexes": [
+        {"name": "code", "description": "Reads a record by its code.", "fields": ["code"], "unique": true},
+        {"name": "kind_status", "description": "Lists one kind by status.", "fields": ["kind", "status"]}
+      ]
+    },
+    {
       "role": "task_note",
       "description": "One dated entry in the Log of an issue: who wrote it, whether a person or a worker, the text, and links to the work. Entries are only added; none is changed or removed.",
       "fields": [
@@ -1549,6 +1587,23 @@
         {"name": "clock_stopped", "type": "bool", "description": "Whether the runtime clock is stopped because the worker waits for the owner's answer."},
         {"name": "idle_stopped", "type": "bool", "description": "Whether the hub stopped the clock itself because no usage write arrived for the idle limit; the run is then read as interrupted or idle, not as passing a cap. The next usage write clears it."},
         {"name": "updated_at", "type": "timestamp", "description": "When the hook last wrote it."}
+      ]
+    },
+    {
+      "role": "rule_file",
+      "description": "One file of a repo's main branch that a rule or decision points to as the best example of it done right. Only the link is kept: repo, path, an optional line and a note, never a copy of the file. The id is a digest of the rule, repo, path and line, so a rule links to the same place once. Whether the path still exists is not stored.",
+      "fields": [
+        {"name": "id", "type": "string", "description": "A digest of the rule, repo, path and line.", "primary": true},
+        {"name": "rule_id", "type": "string", "description": "The rule or decision it belongs to.", "required": true},
+        {"name": "repo", "type": "string", "description": "The repo the file is in.", "required": true},
+        {"name": "path", "type": "string", "description": "The path inside the repo, on main.", "required": true},
+        {"name": "line", "type": "int", "description": "The line to open at; zero when the whole file is meant."},
+        {"name": "note", "type": "text", "description": "What the reader should see in the file."},
+        {"name": "added_by", "type": "string", "description": "The account that added it, from the session."},
+        {"name": "created_at", "type": "timestamp", "description": "When it was added."}
+      ],
+      "indexes": [
+        {"name": "rule", "description": "Reads one rule's file links in order.", "fields": ["rule_id", "created_at"]}
       ]
     },
     {

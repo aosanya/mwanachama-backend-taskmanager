@@ -293,6 +293,24 @@ type TaskManager interface {
 	AddTaskNote(ctx context.Context, requesterID, taskID, kind, text string, links []string) (TaskNote, error)
 	ListTaskNotes(ctx context.Context, requesterID, taskID string) ([]TaskNote, error)
 	ListTaskNotesFiltered(ctx context.Context, filter TaskNoteFilter) ([]TaskNote, error)
+	CreateRule(ctx context.Context, requesterID string, rule RuleRecord) (RuleRecord, error)
+	GetRuleByCode(ctx context.Context, requesterID, code string) (RuleRecord, error)
+	UpdateRule(ctx context.Context, requesterID, code string, patch RulePatch) (RuleRecord, error)
+	ListRules(ctx context.Context, requesterID string, filter RuleFilter) ([]RuleRecord, error)
+	ListBacklogRules(ctx context.Context, requesterID, backlogID string, filter RuleFilter) ([]RuleRecord, error)
+	ListBacklogDecisions(ctx context.Context, requesterID, backlogID string, filter RuleFilter) ([]RuleRecord, error)
+	ListBacklogQuestions(ctx context.Context, requesterID, backlogID string, filter RuleFilter) ([]RuleRecord, error)
+	SetRuleStatus(ctx context.Context, requesterID, code, status string) (RuleRecord, error)
+	SupersedeRule(ctx context.Context, requesterID, code string, replacement RuleRecord) (RuleRecord, error)
+	AnswerQuestion(ctx context.Context, requesterID, code, decisionCode string) (RuleRecord, error)
+	LinkRule(ctx context.Context, requesterID, code, issueID, relation string) error
+	UnlinkRule(ctx context.Context, requesterID, code, issueID, relation string) error
+	ListRulesOfIssue(ctx context.Context, requesterID, issueID string) (IssueRules, error)
+	ListRulesOfDecision(ctx context.Context, requesterID, code string) ([]RuleRecord, error)
+	ListIssuesOfRule(ctx context.Context, requesterID, code string) ([]RuleIssue, error)
+	AddRuleFile(ctx context.Context, requesterID, code, repo, path string, line int, note string) (RuleFileResult, error)
+	ListRuleFiles(ctx context.Context, requesterID, code string) ([]RuleFileLink, error)
+	RemoveRuleFile(ctx context.Context, requesterID, code, fileID string) error
 	ListTodosOfIssue(ctx context.Context, requesterID, issueID string) (IssueTodoList, error)
 	ReadyTodosFor(ctx context.Context, requesterID, issueID string) (ReadyTodos, error)
 	TaskReportFor(ctx context.Context, requesterID, issueID string) (TaskReport, error)
@@ -596,6 +614,7 @@ type taskManager struct {
 	instanceOwner InstanceOwner
 	roleSync      RoleSync
 	partyRows     PartyRows
+	pathChecker   RepoPathChecker
 }
 
 func NewTaskManager(db *gorm.DB, s *spec.Spec, pub events.Publisher) (TaskManager, error) {

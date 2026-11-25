@@ -1358,6 +1358,166 @@
       "args": [{"from": "caller", "as": "requester_id", "description": "Whose cases, from the session."},
                {"from": "query", "whole": true}],
       "returns": [{"body": true}]
+    },
+    "create_rule": {
+      "method": "POST", "path": "/rules", "status": 201, "call": "CreateRule", "action": "taskmanager.rule.create",
+      "title": "Create a rule, decision or question",
+      "description": "Write down one rule (what to do today), one decision (what was chosen once, and why) or one question (a standing question a decision will answer). Send kind (rule, decision or question), title (one sentence), body (the reason and detail), tags (the same tags issues carry, so the rule meets the issues it governs) priority (P1, P2 or P3, questions only; a question without one is P2) and decided_by and decided_at when known. The code (R-<n>, D-<n> or Q-<n>) and id are set by the server; a rule or decision starts proposed and a question starts open. A missing title, an unknown kind, or a priority that is not P1 to P3 or is sent on a rule or decision is refused with 400. A person needs Can move on a backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on a backlog."},
+               {"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "read_rule": {
+      "method": "GET", "path": "/rules/{ruleCode}", "call": "GetRuleByCode", "action": "taskmanager.rule.read",
+      "title": "Read a rule, decision or question",
+      "description": "Read one rule, decision or question by its code, such as R-12, D-3 or Q-5: kind, title, body, status, tags, what it supersedes or is superseded by, who decided and when, and for a question its priority and answered_by (the decision that settled it). A code that does not exist is refused with 404. A person needs Can see on a backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person needs Can see on a backlog."},
+               {"from": "path", "as": "ruleCode", "description": "The code of the rule or decision, such as R-12 or D-3."}],
+      "returns": [{"body": true}]
+    },
+    "update_rule": {
+      "method": "PATCH", "path": "/rules/{ruleCode}", "call": "UpdateRule", "action": "taskmanager.rule.update",
+      "title": "Change a rule, decision or question",
+      "description": "Change only the fields you send of one record: title, body, tags, decided_by, decided_at and, on a question, priority (P1 to P3; on a rule or decision, or any other value, it is refused with 400). The code, kind and status stay; use taskmanager_rule_set_status to change the status, taskmanager_rule_answer to answer a question and taskmanager_rule_supersede to replace a rule or decision. A person needs Can move on a backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on a backlog."},
+               {"from": "path", "as": "ruleCode", "description": "The code of the rule or decision to change."},
+               {"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "list_rules": {
+      "method": "GET", "path": "/rules", "call": "ListRules", "action": "taskmanager.rule.list",
+      "title": "List rules, decisions and questions",
+      "description": "List rules, decisions and questions so they can be read before starting an issue. Narrow by kind (rule, decision or question), status (repeat it for several) and tag (repeat it to ask for records that carry every tag given, without regard to case). With no status given it returns the rules in force and the decisions decided, plus those proposed, and the open questions; with kind=question it returns the open ones, P1 first. A question is open, answered or dropped; a status that does not belong to the kind asked for is refused with 400. An unknown kind is refused with 400. A person needs Can see on a backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person needs Can see on a backlog."},
+               {"from": "query", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "list_backlog_rules": {
+      "method": "GET", "path": "/backlogs/{backlogID}/rules", "call": "ListBacklogRules", "action": "taskmanager.backlog.rules_list",
+      "title": "List the rules of a backlog",
+      "description": "List the rules that bear on one backlog: those that carry at least one tag carried by an issue inside it, without regard to case. Repeat status to choose which statuses to show; with none given it returns the rules in force and the proposed ones, and superseded or retired rules only when asked for. A status that is not a rule's is refused with 400, and so is an unknown backlog. A person needs Can see on that backlog, otherwise 403.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "path", "as": "backlogID", "description": "The backlog."},
+               {"from": "query", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "list_backlog_decisions": {
+      "method": "GET", "path": "/backlogs/{backlogID}/decisions", "call": "ListBacklogDecisions", "action": "taskmanager.backlog.decisions_list",
+      "title": "List the decisions of a backlog",
+      "description": "List the decisions that bear on one backlog: those that carry at least one tag carried by an issue inside it, without regard to case. Repeat status to choose which statuses to show; with none given it returns the decided and proposed ones, and superseded decisions only when asked for. A status that is not a decision's is refused with 400, and so is an unknown backlog. A person needs Can see on that backlog, otherwise 403.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "path", "as": "backlogID", "description": "The backlog."},
+               {"from": "query", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "answer_rule": {
+      "method": "PUT", "path": "/rules/{ruleCode}/answer", "call": "AnswerQuestion", "action": "taskmanager.rule.answer",
+      "title": "Answer a question with a decision",
+      "description": "Answer one open question by naming the decision that settles it: the question becomes answered and its answered_by is the decision's code. A dropped question must be reopened first with taskmanager_rule_set_status. A code that is not a question, a decision_code that is not a decision, or a missing decision_code is refused with 400; a question or decision code that does not exist is refused with 404. A person needs Can move on a backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on a backlog."},
+               {"from": "path", "as": "ruleCode", "description": "The code of the question, such as Q-5."},
+               {"from": "body", "as": "decision_code", "required": true, "description": "The code of the decision that answers it, such as D-3."}],
+      "returns": [{"body": true}]
+    },
+    "set_rule_status": {
+      "method": "PUT", "path": "/rules/{ruleCode}/status", "call": "SetRuleStatus", "action": "taskmanager.rule.set_status",
+      "title": "Set the status of a rule or decision",
+      "description": "Move one record to a status of its kind: a rule is proposed, in_force, superseded or retired; a decision is proposed, decided or superseded. A status outside the kind's set is refused with 400 naming the allowed ones. A person needs Can move on a backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on a backlog."},
+               {"from": "path", "as": "ruleCode", "description": "The code of the rule or decision."},
+               {"from": "body", "as": "status", "required": true, "description": "The new status."}],
+      "returns": [{"body": true}]
+    },
+    "supersede_rule": {
+      "method": "POST", "path": "/rules/{ruleCode}/supersede", "status": 201, "call": "SupersedeRule", "action": "taskmanager.rule.supersede",
+      "title": "Replace a rule or decision",
+      "description": "Replace one record that is in force (rule) or decided (decision) with a new one in a single step. Send the replacement's fields (kind, title, body, tags); it gets a new code and supersedes the old one, which becomes superseded and points to it. A record already superseded is refused with 400. A person needs Can move on a backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on a backlog."},
+               {"from": "path", "as": "ruleCode", "description": "The code of the record being replaced."},
+               {"from": "body", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "link_rule": {
+      "method": "POST", "path": "/rules/{ruleCode}/links", "status": 204, "call": "LinkRule", "action": "taskmanager.rule.link",
+      "title": "Link a rule to an issue",
+      "description": "Link one rule or decision to one issue. The relation is applies_to (the rule governs the issue), decided_in (the issue settled it) or broken_by (the issue breaks it); any other is refused with 400. Linking the same rule, issue and relation twice is one link. A person needs Can move on a backlog and must be able to see the issue.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on a backlog."},
+               {"from": "path", "as": "ruleCode", "description": "The code of the rule or decision."},
+               {"from": "body", "as": "issue_id", "required": true, "description": "The issue to link."},
+               {"from": "body", "as": "relation", "required": true, "description": "applies_to, decided_in or broken_by."}],
+      "returns": [{"body": true}]
+    },
+    "unlink_rule": {
+      "method": "DELETE", "path": "/rules/{ruleCode}/links/{issueID}/{relation}", "status": 204, "call": "UnlinkRule", "action": "taskmanager.rule.unlink",
+      "title": "Unlink a rule from an issue",
+      "description": "Remove one link between a rule or decision and an issue, by the same relation it was linked with. A person needs Can move on a backlog and must be able to see the issue.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on a backlog."},
+               {"from": "path", "as": "ruleCode", "description": "The code of the rule or decision."},
+               {"from": "path", "as": "issueID", "description": "The issue."},
+               {"from": "path", "as": "relation", "description": "applies_to, decided_in or broken_by."}],
+      "returns": [{"body": true}]
+    },
+    "list_backlog_questions": {
+      "method": "GET", "path": "/backlogs/{backlogID}/questions", "call": "ListBacklogQuestions", "action": "taskmanager.backlog.questions_list",
+      "title": "List the questions of a backlog",
+      "description": "List the questions that bear on one backlog: those that carry at least one tag carried by an issue inside it, without regard to case, P1 first and by code inside one priority. Repeat status to choose which statuses to show (open, answered or dropped); with none given it returns the open ones. A status that is not a question's is refused with 400, and so is an unknown backlog. A person needs Can see on that backlog, otherwise 403.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "path", "as": "backlogID", "description": "The backlog."},
+               {"from": "query", "whole": true}],
+      "returns": [{"body": true}]
+    },
+    "list_rules_of_decision": {
+      "method": "GET", "path": "/rules/{ruleCode}/rules", "call": "ListRulesOfDecision", "action": "taskmanager.rule.produced_list",
+      "title": "List the rules a decision produced",
+      "description": "List the rules a decision produced: the rules linked decided_in to an issue the decision is also linked decided_in to, in code order and in every status. A code that is not a decision is refused with 400 and one that does not exist with 404. A person needs Can see on a backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person needs Can see on a backlog."},
+               {"from": "path", "as": "ruleCode", "description": "The code of the decision, such as D-3."}],
+      "returns": [{"body": true}]
+    },
+    "list_rule_issues": {
+      "method": "GET", "path": "/rules/{ruleCode}/issues", "call": "ListIssuesOfRule", "action": "taskmanager.rule.issue_list",
+      "title": "List the issues of a rule",
+      "description": "List the issues one rule or decision is linked to, each with its id, code, title and the relation. A person needs Can see on a backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person needs Can see on a backlog."},
+               {"from": "path", "as": "ruleCode", "description": "The code of the rule or decision."}],
+      "returns": [{"body": true}]
+    },
+    "list_rules_of_issue": {
+      "method": "GET", "path": "/tasks/{taskID}/rules", "call": "ListRulesOfIssue", "action": "taskmanager.rule.list_for_issue",
+      "title": "Read the rules of an issue",
+      "description": "Read the rules and decisions that bear on one issue, so an agent consults them before starting it: linked (each with its relation and, when it is superseded, the in-force replacement), suggested (rules in force and decisions decided that share a tag with the issue) and mentioned (a code such as R-12 typed in the issue's title, description or todos), plus questions: the open questions linked to the issue or sharing a tag with it, P1 first, never repeated under the other lists. A person sees only the issues of the backlogs their groups can see.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "path", "as": "taskID", "refers": "taskmanager.task", "description": "The issue."}],
+      "returns": [{"body": true}]
+    },
+    "add_rule_file": {
+      "method": "POST", "path": "/rules/{ruleCode}/files", "status": 201, "call": "AddRuleFile", "action": "taskmanager.rule.file_add",
+      "title": "Link a rule to a file that shows it done right",
+      "description": "Link one rule to a file on the main branch of a repo that is the best example of it. Send repo, path, an optional line (0 or more; 0 is the whole file) and a note. Only the link is stored. The answer holds the link and a warning when the path was not found on main; the link is saved either way. The same repo, path and line twice is refused with 409; a missing repo, a path outside the repo or a negative line with 400. A person needs Can move on a backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on a backlog."},
+               {"from": "path", "as": "ruleCode", "description": "The code of the rule."},
+               {"from": "body", "as": "repo", "required": true, "description": "The repo."},
+               {"from": "body", "as": "path", "required": true, "description": "The path inside the repo."},
+               {"from": "body", "as": "line", "description": "The line, or 0 for the whole file."},
+               {"from": "body", "as": "note", "description": "What the file shows."}],
+      "returns": [{"body": true}]
+    },
+    "list_rule_files": {
+      "method": "GET", "path": "/rules/{ruleCode}/files", "call": "ListRuleFiles", "action": "taskmanager.rule.file_list",
+      "title": "List the files that show a rule done right",
+      "description": "List the file links of one rule in the order they were added: repo, path, line, note, who added it and when. A link carries missing: true when the host's path check reports the path gone from main; with no check attached, or a check that fails, there is no flag. A person needs Can see on a backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person needs Can see on a backlog."},
+               {"from": "path", "as": "ruleCode", "description": "The code of the rule."}],
+      "returns": [{"body": true}]
+    },
+    "remove_rule_file": {
+      "method": "DELETE", "path": "/rules/{ruleCode}/files/{fileID}", "status": 204, "call": "RemoveRuleFile", "action": "taskmanager.rule.file_remove",
+      "title": "Remove a file link from a rule",
+      "description": "Remove one file link of a rule by its id. An id that is not one of the rule's links is refused with 404. A person needs Can move on a backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on a backlog."},
+               {"from": "path", "as": "ruleCode", "description": "The code of the rule."},
+               {"from": "path", "as": "fileID", "description": "The file link to remove, from the list."}],
+      "returns": [{"body": true}]
     }
   },
 
@@ -1402,6 +1562,11 @@
     "ErrLeaseNotHeld": 409,
     "ErrInvalidLease": 400,
     "ErrRequesterVoteStays": 409,
+    "ErrInvalidRule": 400,
+    "ErrRuleNotFound": 404,
+    "ErrInvalidRuleFile": 400,
+    "ErrDuplicateRuleFile": 409,
+    "ErrRuleFileNotFound": 404,
     "ErrTaskNotFound": 404,
     "ErrInvalidTaskNote": 400,
     "ErrInvalidTaskNoteFilter": 400,

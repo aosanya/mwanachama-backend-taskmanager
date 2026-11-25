@@ -30,3 +30,10 @@ type CodeSequence struct {
 	EntityType string `json:"entity_type"`
 	NextNumber int    `json:"next_number"`
 }
+
+type RuleLink struct {
+	RuleID   string `json:"rule_id"`
+	TaskID   string `json:"task_id"`
+	Relation string `json:"relation"`
+	LinkedAt string `json:"linked_at"`
+}

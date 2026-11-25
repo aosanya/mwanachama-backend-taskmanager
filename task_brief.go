@@ -37,6 +37,7 @@ type TaskBrief struct {
 	NeededBy        []DependencyItem  `json:"needed_by"`
 	HiddenDependsOn int               `json:"hidden_depends_on"`
 	HiddenNeededBy  int               `json:"hidden_needed_by"`
+	Rules           IssueRules        `json:"rules"`
 }
 
 func (m *taskManager) TaskBriefFor(ctx context.Context, filter TaskBriefFilter) (TaskBrief, error) {
@@ -71,8 +72,12 @@ func (m *taskManager) TaskBriefFor(ctx context.Context, filter TaskBriefFilter) 
 	if err != nil {
 		return TaskBrief{}, err
 	}
+	rules, err := m.ListRulesOfIssue(ctx, filter.RequesterID, filter.TaskID)
+	if err != nil {
+		return TaskBrief{}, err
+	}
 	return TaskBrief{
-		Issue: issue, Caps: caps, Log: log, Todos: todos, DependsOn: waitsOn, NeededBy: dependencies.NeededBy,
+		Rules: rules, Issue: issue, Caps: caps, Log: log, Todos: todos, DependsOn: waitsOn, NeededBy: dependencies.NeededBy,
 		HiddenDependsOn: dependencies.HiddenDependsOn, HiddenNeededBy: dependencies.HiddenNeededBy,
 	}, nil
 }

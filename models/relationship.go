@@ -79,4 +79,8 @@ const (
 
 	// RelLabelHasAcceptanceCriteria links a Task or TaskTodo to a verifiable AcceptanceCriteria.
 	RelLabelHasAcceptanceCriteria = "has_acceptance_criteria"
+
+	RelLabelAppliesTo = "applies_to"
+	RelLabelDecidedIn = "decided_in"
+	RelLabelBrokenBy  = "broken_by"
 )

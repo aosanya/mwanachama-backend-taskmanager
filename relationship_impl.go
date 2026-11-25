@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type relFieldKind int
@@ -29,6 +31,9 @@ type relSpec struct {
 	joinFromCol  string
 	joinToCol    string
 	joinExtraCol string
+
+	joinKindCol   string
+	joinKindValue string
 }
 
 func (m *taskManager) relSpecs() map[string]relSpec {
@@ -77,11 +82,29 @@ func (m *taskManager) relSpecs() map[string]relSpec {
 			kind: relFieldJoinTable, fromNotFound: ErrTaskNotFound, toNotFound: ErrProjectNotFound,
 			joinTable: m.store.Table(roleMembership), joinFromCol: "task_id", joinToCol: "project_id", joinExtraCol: "added_at",
 		},
+		RelLabelAppliesTo: m.ruleLinkSpec(RelLabelAppliesTo),
+		RelLabelDecidedIn: m.ruleLinkSpec(RelLabelDecidedIn),
+		RelLabelBrokenBy:  m.ruleLinkSpec(RelLabelBrokenBy),
 		RelLabelHasTag: {
 			kind: relFieldJoinTable, fromNotFound: ErrTaskNotFound, toNotFound: ErrTagNotFound,
 			joinTable: m.store.Table(roleTagging), joinFromCol: "task_id", joinToCol: "tag_id", joinExtraCol: "tagged_at",
 		},
 	}
+}
+
+func (m *taskManager) ruleLinkSpec(label string) relSpec {
+	return relSpec{
+		kind: relFieldJoinTable, fromNotFound: ErrRuleNotFound, toNotFound: ErrTaskNotFound,
+		joinTable: m.store.Table(roleRuleLink), joinFromCol: "rule_id", joinToCol: "task_id", joinExtraCol: "linked_at",
+		joinKindCol: "relation", joinKindValue: label,
+	}
+}
+
+func (m *taskManager) joinWhere(db *gorm.DB, spec relSpec) *gorm.DB {
+	if spec.joinKindCol == "" {
+		return db
+	}
+	return db.Where(spec.joinKindCol+" = ?", spec.joinKindValue)
 }
 
 func (m *taskManager) rowExists(ctx context.Context, table, id string) (bool, error) {
@@ -96,6 +119,7 @@ func (m *taskManager) vertexTables() []string {
 	return []string{
 		m.store.Table(roleTask), m.store.Table(roleAgent), m.store.Table(roleProject), m.store.Table(roleTag),
 		m.store.Table(roleTaskTodo), m.store.Table(roleWorkflowRun), m.store.Table(roleDeliverable), m.store.Table(roleAcceptanceCriteria),
+		m.store.Table(roleRule),
 	}
 }
 
@@ -164,7 +188,7 @@ func (m *taskManager) CreateRelationship(ctx context.Context, rel Relationship) 
 			return Relationship{}, err
 		}
 		var count int64
-		if err := m.onTable(m.db.WithContext(ctx), spec.joinTable).
+		if err := m.joinWhere(m.onTable(m.db.WithContext(ctx), spec.joinTable), spec).
 			Where(spec.joinFromCol+" = ? AND "+spec.joinToCol+" = ?", rel.FromID, rel.ToID).
 			Count(&count).Error; err != nil {
 			return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
@@ -174,6 +198,9 @@ func (m *taskManager) CreateRelationship(ctx context.Context, rel Relationship) 
 			row := map[string]any{spec.joinFromCol: rel.FromID, spec.joinToCol: rel.ToID}
 			if spec.joinExtraCol != "" {
 				row[spec.joinExtraCol] = now
+			}
+			if spec.joinKindCol != "" {
+				row[spec.joinKindCol] = spec.joinKindValue
 			}
 			if err := m.db.WithContext(ctx).Table(spec.joinTable).Create(m.stamped(row)).Error; err != nil {
 				return Relationship{}, fmt.Errorf("CreateRelationship: %w", err)
@@ -215,7 +242,7 @@ func (m *taskManager) DeleteRelationship(ctx context.Context, fromID, toID, labe
 			UpdateColumn(spec.fkColumn, "").Error
 
 	case relFieldJoinTable:
-		res := m.onTable(m.db.WithContext(ctx), spec.joinTable).
+		res := m.joinWhere(m.onTable(m.db.WithContext(ctx), spec.joinTable), spec).
 			Where(spec.joinFromCol+" = ? AND "+spec.joinToCol+" = ?", fromID, toID).
 			Delete(nil)
 		if res.Error != nil {
@@ -295,7 +322,7 @@ func (m *taskManager) traverseJoin(ctx context.Context, spec relSpec, vertexID s
 		matchCol, otherCol = spec.joinToCol, spec.joinFromCol
 	}
 	var others []string
-	if err := m.onTable(m.db.WithContext(ctx), spec.joinTable).Where(matchCol+" = ?", vertexID).
+	if err := m.joinWhere(m.onTable(m.db.WithContext(ctx), spec.joinTable), spec).Where(matchCol+" = ?", vertexID).
 		Pluck(otherCol, &others).Error; err != nil {
 		return nil, fmt.Errorf("TraverseRelationships: %w", err)
 	}
@@ -326,6 +353,8 @@ func (m *taskManager) fkOwnerFor(spec relSpec, fromID, toID string) (ownerTable,
 
 func (m *taskManager) joinFromEndpointTable(label string) string {
 	switch label {
+	case RelLabelAppliesTo, RelLabelDecidedIn, RelLabelBrokenBy:
+		return m.store.Table(roleRule)
 	case RelLabelAssignedTo, RelLabelBlocks, RelLabelSubtaskOf, RelLabelDependsOn,
 		RelLabelMemberOf, RelLabelHasTag, RelLabelHasTodo, RelLabelHasDeliverable, RelLabelHasAcceptanceCriteria:
 		return m.store.Table(roleTask)
@@ -341,7 +370,7 @@ func (m *taskManager) joinToEndpointTable(label string) string {
 	switch label {
 	case RelLabelAssignedTo, RelLabelTodoAssignedTo:
 		return m.store.Table(roleAgent)
-	case RelLabelBlocks, RelLabelSubtaskOf, RelLabelDependsOn:
+	case RelLabelBlocks, RelLabelSubtaskOf, RelLabelDependsOn, RelLabelAppliesTo, RelLabelDecidedIn, RelLabelBrokenBy:
 		return m.store.Table(roleTask)
 	case RelLabelMemberOf:
 		return m.store.Table(roleProject)

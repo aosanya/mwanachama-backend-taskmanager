@@ -23,12 +23,15 @@ const (
 	roleMembership         = "membership"
 	roleProjectParty       = "project_party"
 	roleTagging            = "tagging"
+	roleRuleLink           = "rule_link"
 	roleCodeSequence       = "code_sequence"
 	roleAssignment         = "assignment"
 	roleCase               = "case"
 	roleCaseTask           = "case_task"
 	roleCaseVote           = "case_vote"
 	roleTaskNote           = "task_note"
+	roleRule               = "rule"
+	roleRuleFile           = "rule_file"
 	roleTaskCaps           = "task_caps"
 	roleTaskUsage          = "task_usage"
 	roleTaskReference      = "task_reference"
@@ -42,9 +45,9 @@ func roles() []string {
 	return []string{
 		roleTask, roleTaskTodo, roleAgent, roleProject, roleTag,
 		roleDeliverable, roleAcceptanceCriteria, roleWorkflowRun, roleImportJob,
-		roleBlocker, roleDependency, roleMembership, roleProjectParty, roleTagging, roleCodeSequence,
+		roleBlocker, roleDependency, roleMembership, roleProjectParty, roleTagging, roleRuleLink, roleCodeSequence,
 		roleAssignment,
-		roleCase, roleCaseTask, roleCaseVote, roleTaskNote, roleTaskCaps, roleTaskUsage, roleTaskReference,
+		roleCase, roleCaseTask, roleCaseVote, roleTaskNote, roleRule, roleRuleFile, roleTaskCaps, roleTaskUsage, roleTaskReference,
 		roleRepeatingTask, roleRepeatingPeriod,
 		roleSourcedTask, roleGeneratedTask,
 	}
@@ -66,12 +69,15 @@ func carriers() map[string]any {
 		roleMembership:         models.Membership{},
 		roleProjectParty:       models.ProjectParty{},
 		roleTagging:            models.Tagging{},
+		roleRuleLink:           models.RuleLink{},
 		roleCodeSequence:       models.CodeSequence{},
 		roleAssignment:         models.Assignment{},
 		roleCase:               models.Case{},
 		roleCaseTask:           models.CaseTask{},
 		roleCaseVote:           models.CaseVote{},
 		roleTaskNote:           models.TaskNote{},
+		roleRule:               models.RuleRecord{},
+		roleRuleFile:           models.RuleFile{},
 		roleTaskCaps:           models.TaskCapsOverride{},
 		roleTaskUsage:          models.TaskUsage{},
 		roleTaskReference:      models.TaskReference{},

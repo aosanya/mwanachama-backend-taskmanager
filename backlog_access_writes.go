@@ -52,10 +52,26 @@ func (m *taskManager) requireSeeTask(ctx context.Context, requesterID, taskID st
 	return nil
 }
 
-func (m *taskManager) requireMoveOnEdgeSource(ctx context.Context, requesterID, fromID string) error {
+func isRuleRelationLabel(label string) bool {
+	for _, known := range ruleRelationLabels {
+		if known == label {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *taskManager) requireMoveOnEdgeSource(ctx context.Context, requesterID, fromID, label string) error {
 	visible, err := m.backlogVisibility(ctx, requesterID)
 	if err != nil || visible.all {
 		return err
+	}
+	if isRuleRelationLabel(label) {
+		if _, err := m.ruleByID(ctx, fromID); err == nil {
+			return m.requireRuleAccess(ctx, requesterID, true)
+		} else if !errors.Is(err, ErrRuleNotFound) {
+			return err
+		}
 	}
 	task, err := m.GetTask(ctx, fromID)
 	if errors.Is(err, ErrTaskNotFound) {
@@ -139,7 +155,7 @@ func (m *taskManager) DeleteTaskAs(ctx context.Context, requesterID, taskID stri
 }
 
 func (m *taskManager) CreateRelationshipAs(ctx context.Context, requesterID string, rel Relationship) (Relationship, error) {
-	if err := m.requireMoveOnEdgeSource(ctx, requesterID, rel.FromID); err != nil {
+	if err := m.requireMoveOnEdgeSource(ctx, requesterID, rel.FromID, rel.Label); err != nil {
 		return Relationship{}, err
 	}
 	if err := m.requireSeeTask(ctx, requesterID, rel.ToID); err != nil {
@@ -149,7 +165,7 @@ func (m *taskManager) CreateRelationshipAs(ctx context.Context, requesterID stri
 }
 
 func (m *taskManager) DeleteRelationshipAs(ctx context.Context, requesterID, fromID, toID, label string) error {
-	if err := m.requireMoveOnEdgeSource(ctx, requesterID, fromID); err != nil {
+	if err := m.requireMoveOnEdgeSource(ctx, requesterID, fromID, label); err != nil {
 		return err
 	}
 	return m.DeleteRelationship(ctx, fromID, toID, label)
