@@ -20,3 +20,16 @@ type RuleFileResult struct {
 	File    RuleFile `json:"file"`
 	Warning string   `json:"warning,omitempty"`
 }
+
+type RuleCompatible struct {
+	ID           string `json:"id"`
+	FirstRuleID  string `json:"first_rule_id"`
+	SecondRuleID string `json:"second_rule_id"`
+	AddedBy      string `json:"added_by"`
+	CreatedAt    string `json:"created_at"`
+}
+
+type RuleView struct {
+	RuleRecord
+	Compatible []string `json:"compatible"`
+}

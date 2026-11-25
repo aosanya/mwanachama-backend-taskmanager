@@ -19,6 +19,11 @@ type RuleOverlap struct {
 	SharedIssues []string   `json:"shared_issues,omitempty"`
 }
 
+type RuleOverlapList struct {
+	Items            []RuleOverlap `json:"items"`
+	HiddenCompatible int           `json:"hidden_compatible"`
+}
+
 type conditionedRule struct {
 	Rule RuleRecord
 	Key  string
@@ -68,24 +73,34 @@ func overlapOf(a, b conditionedRule, matched map[string]map[string]bool) (RuleOv
 	return overlap, len(overlap.Reasons) > 0
 }
 
-func (m *taskManager) ListRuleOverlaps(ctx context.Context, requesterID string) ([]RuleOverlap, error) {
+func (m *taskManager) ListRuleOverlaps(ctx context.Context, requesterID string) (RuleOverlapList, error) {
 	if err := m.requireRuleAccess(ctx, requesterID, false); err != nil {
-		return nil, err
+		return RuleOverlapList{}, err
 	}
 	rules, err := m.conditionedRules(ctx, requesterID)
 	if err != nil {
-		return nil, fmt.Errorf("ListRuleOverlaps: %w", err)
+		return RuleOverlapList{}, fmt.Errorf("ListRuleOverlaps: %w", err)
 	}
 	matched, err := m.issuesMatchedBy(ctx, requesterID, rules)
 	if err != nil {
-		return nil, fmt.Errorf("ListRuleOverlaps: %w", err)
+		return RuleOverlapList{}, fmt.Errorf("ListRuleOverlaps: %w", err)
 	}
-	out := []RuleOverlap{}
+	judged, err := m.compatiblePairs(ctx)
+	if err != nil {
+		return RuleOverlapList{}, fmt.Errorf("ListRuleOverlaps: %w", err)
+	}
+	out := RuleOverlapList{Items: []RuleOverlap{}}
 	for i, a := range rules {
 		for _, b := range rules[i+1:] {
-			if overlap, ok := overlapOf(a, b, matched); ok {
-				out = append(out, overlap)
+			overlap, ok := overlapOf(a, b, matched)
+			if !ok {
+				continue
 			}
+			if judged[ruleCompatibleKey(a.Rule.ID, b.Rule.ID)] {
+				out.HiddenCompatible++
+				continue
+			}
+			out.Items = append(out.Items, overlap)
 		}
 	}
 	return out, nil

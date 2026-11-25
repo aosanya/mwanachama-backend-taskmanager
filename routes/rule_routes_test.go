@@ -176,6 +176,7 @@ func TestTheRuleToolsAreNamedAfterTheirActions(t *testing.T) {
 		"taskmanager_rule_set_status", "taskmanager_rule_answer", "taskmanager_rule_supersede", "taskmanager_rule_link", "taskmanager_rule_unlink",
 		"taskmanager_rule_issue_list", "taskmanager_rule_list_for_issue",
 		"taskmanager_rule_file_add", "taskmanager_rule_file_list", "taskmanager_rule_file_remove",
+		"taskmanager_rule_compatible_add", "taskmanager_rule_compatible_remove",
 	} {
 		if h.tool(name).Description == "" {
 			t.Fatalf("tool %s has no description", name)

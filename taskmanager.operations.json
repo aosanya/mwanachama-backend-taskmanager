@@ -1368,9 +1368,9 @@
       "returns": [{"body": true}]
     },
     "read_rule": {
-      "method": "GET", "path": "/rules/{ruleCode}", "call": "GetRuleByCode", "action": "taskmanager.rule.read",
+      "method": "GET", "path": "/rules/{ruleCode}", "call": "ReadRule", "action": "taskmanager.rule.read",
       "title": "Read a rule, decision or question",
-      "description": "Read one rule, decision or question by its code, such as R-12, D-3 or Q-5: kind, title, body, status, tags, what it supersedes or is superseded by, who decided and when, and for a question its priority and answered_by (the decision that settled it). A code that does not exist is refused with 404. A person needs Can see on a backlog.",
+      "description": "Read one rule, decision or question by its code, such as R-12, D-3 or Q-5: kind, title, body, status, tags, what it supersedes or is superseded by, who decided and when, and for a question its priority and answered_by (the decision that settled it), and compatible: the codes of the rules a person judged compatible with this one (taskmanager_rule_compatible_add), without any that is superseded or retired. A code that does not exist is refused with 404. A person needs Can see on a backlog.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person needs Can see on a backlog."},
                {"from": "path", "as": "ruleCode", "description": "The code of the rule or decision, such as R-12 or D-3."}],
       "returns": [{"body": true}]
@@ -1477,8 +1477,26 @@
     "list_rule_overlaps": {
       "method": "GET", "path": "/rules/overlaps", "call": "ListRuleOverlaps", "action": "taskmanager.rule.overlap_list",
       "title": "List the rules that may contradict each other",
-      "description": "List pairs of in-force rules that could govern the same issue, so a person can read each pair and decide whether it is a contradiction. Only in-force rules that carry an applies_when set count. A pair is listed when the two sets are the same once normalised (reason shared_key) or when both sets match at least one open issue the caller can see (done, archived and cancelled issues do not count; reason shared_issue, with the codes of the issues in shared_issues); a pair that is both has both reasons. Each item has first and second (the whole rule records, lower code first), reasons, shared_key and shared_issues. Nothing here says the rules disagree: it only says they meet. Read-only. A person needs Can see on a backlog.",
+      "description": "List pairs of in-force rules that could govern the same issue, so a person can read each pair and decide whether it is a contradiction. Only in-force rules that carry an applies_when set count. A pair is listed when the two sets are the same once normalised (reason shared_key) or when both sets match at least one open issue the caller can see (done, archived and cancelled issues do not count; reason shared_issue, with the codes of the issues in shared_issues); a pair that is both has both reasons. A pair a person judged compatible (taskmanager_rule_compatible_add) is left out and counted. The answer is {items, hidden_compatible}: items are the pairs, each with first and second (the whole rule records, lower code first), reasons, shared_key and shared_issues, and hidden_compatible is how many pairs that would otherwise be listed were left out as compatible. Nothing here says the rules disagree: it only says they meet. Read-only. A person needs Can see on a backlog.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person needs Can see on a backlog."}],
+      "returns": [{"body": true}]
+    },
+    "add_rule_compatible": {
+      "method": "POST", "path": "/rules/{ruleCode}/compatible/{otherCode}", "status": 204, "call": "AddRuleCompatible", "action": "taskmanager.rule.compatible_add",
+      "title": "Judge two rules compatible",
+      "description": "Record that a person judged two rules compatible, so taskmanager_rule_overlap_list stops listing the pair and counts it as hidden. Both codes must be rules (kind rule); a decision or a question, the same code twice, or a missing code is refused: 400 for the kind or the same code, 404 for a code that does not exist. The pair is symmetric and stored once, so it reads from either side and the order of the codes does not matter. Recording a pair already recorded is refused with 409. A rule that is later superseded or retired keeps its pairs, which no longer show. A person needs Can move on a backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on a backlog."},
+               {"from": "path", "as": "ruleCode", "description": "The code of one rule, such as R-4."},
+               {"from": "path", "as": "otherCode", "description": "The code of the other rule."}],
+      "returns": [{"body": true}]
+    },
+    "remove_rule_compatible": {
+      "method": "DELETE", "path": "/rules/{ruleCode}/compatible/{otherCode}", "status": 204, "call": "RemoveRuleCompatible", "action": "taskmanager.rule.compatible_remove",
+      "title": "Take back a compatible judgement",
+      "description": "Remove the compatible judgement between two rules, given in either order, so the overlap read lists the pair again when it still meets. A pair that was not recorded is refused with 404, and a code that does not exist with 404. A person needs Can move on a backlog.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is writing, from the session; a person needs Can move on a backlog."},
+               {"from": "path", "as": "ruleCode", "description": "The code of one rule."},
+               {"from": "path", "as": "otherCode", "description": "The code of the other rule."}],
       "returns": [{"body": true}]
     },
     "list_rule_issues": {
@@ -1575,6 +1593,8 @@
     "ErrInvalidRuleFile": 400,
     "ErrDuplicateRuleFile": 409,
     "ErrRuleFileNotFound": 404,
+    "ErrDuplicateRuleCompatible": 409,
+    "ErrRuleCompatibleNotFound": 404,
     "ErrTaskNotFound": 404,
     "ErrInvalidTaskNote": 400,
     "ErrInvalidTaskNoteFilter": 400,

@@ -22,16 +22,17 @@ func newRuleOverlapFixture(t *testing.T) *ruleFixture {
 func TestTwoRulesThatGovernTheSameIssueAreListedAsAnOverlapOverTheRoutes(t *testing.T) {
 	f := newRuleOverlapFixture(t)
 
-	got := f.list("ann", "/rules/overlaps")
+	got := f.h.expect(http.StatusOK, "ann", "GET", "/rules/overlaps", nil)["items"].([]any)
 
 	if len(got) != 1 {
 		t.Fatalf("overlaps %v", got)
 	}
-	first, second := got[0]["first"].(map[string]any), got[0]["second"].(map[string]any)
+	pair := got[0].(map[string]any)
+	first, second := pair["first"].(map[string]any), pair["second"].(map[string]any)
 	if first["code"] != "R-1" || second["code"] != "R-2" {
-		t.Fatalf("pair %v", got[0])
+		t.Fatalf("pair %v", pair)
 	}
-	reasons := got[0]["reasons"].([]any)
+	reasons := pair["reasons"].([]any)
 	if len(reasons) != 1 || reasons[0] != "shared_issue" {
 		t.Fatalf("reasons %v", reasons)
 	}
@@ -69,5 +70,29 @@ func TestTheOverlapToolIsNamedAfterItsAction(t *testing.T) {
 	h := newAccessHub(t, map[string][]string{})
 	if h.tool("taskmanager_rule_overlap_list").Description == "" {
 		t.Fatal("tool taskmanager_rule_overlap_list has no description")
+	}
+}
+
+func TestACompatiblePairIsAddedReadHiddenAndRemovedOverTheRoutes(t *testing.T) {
+	f := newRuleOverlapFixture(t)
+
+	f.h.expect(http.StatusNoContent, "bob", "POST", "/rules/R-1/compatible/R-2", nil)
+	f.h.expect(http.StatusConflict, "bob", "POST", "/rules/R-2/compatible/R-1", nil)
+	f.h.expect(http.StatusBadRequest, "bob", "POST", "/rules/R-1/compatible/R-1", nil)
+	f.h.expect(http.StatusForbidden, "nog", "POST", "/rules/R-1/compatible/R-2", nil)
+
+	list := f.h.expect(http.StatusOK, "ann", "GET", "/rules/overlaps", nil)
+	if len(list["items"].([]any)) != 0 || list["hidden_compatible"] != float64(1) {
+		t.Fatalf("overlaps %v", list)
+	}
+	read := f.h.expect(http.StatusOK, "ann", "GET", "/rules/R-2", nil)
+	if got := read["compatible"].([]any); len(got) != 1 || got[0] != "R-1" {
+		t.Fatalf("read %v", read)
+	}
+
+	f.h.expect(http.StatusNoContent, "bob", "DELETE", "/rules/R-2/compatible/R-1", nil)
+	f.h.expect(http.StatusNotFound, "bob", "DELETE", "/rules/R-2/compatible/R-1", nil)
+	if list := f.h.expect(http.StatusOK, "ann", "GET", "/rules/overlaps", nil); len(list["items"].([]any)) != 1 {
+		t.Fatalf("after remove %v", list)
 	}
 }

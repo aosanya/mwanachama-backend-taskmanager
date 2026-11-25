@@ -36,7 +36,7 @@ func overlaps(t *testing.T, mgr mwanachamataskmanager.TaskManager) []mwanachamat
 	if err != nil {
 		t.Fatal(err)
 	}
-	return out
+	return out.Items
 }
 
 func TestRuleOverlap_TwoInForceRulesWithTheSameSetAreReported(t *testing.T) {

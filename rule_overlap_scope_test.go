@@ -23,14 +23,16 @@ func TestRuleOverlap_AnIssueInABacklogTheCallerCannotSeeStaysOutOfSharedIssues(t
 		t.Fatal(err)
 	}
 
-	asDev, err := mgr.ListRuleOverlaps(ctx, "dev")
+	devList, err := mgr.ListRuleOverlaps(ctx, "dev")
 	if err != nil {
 		t.Fatal(err)
 	}
-	asOwner, err := mgr.ListRuleOverlaps(ctx, "owner")
+	asDev := devList.Items
+	ownerList, err := mgr.ListRuleOverlaps(ctx, "owner")
 	if err != nil {
 		t.Fatal(err)
 	}
+	asOwner := ownerList.Items
 
 	if len(asDev) != 1 || len(asDev[0].SharedIssues) != 1 || asDev[0].SharedIssues[0] != seen.Code {
 		t.Fatalf("dev saw %+v, want only %s", asDev, seen.Code)

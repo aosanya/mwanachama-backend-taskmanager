@@ -32,6 +32,7 @@ const (
 	roleTaskNote           = "task_note"
 	roleRule               = "rule"
 	roleRuleFile           = "rule_file"
+	roleRuleCompatible     = "rule_compatible"
 	roleTaskCaps           = "task_caps"
 	roleTaskUsage          = "task_usage"
 	roleTaskReference      = "task_reference"
@@ -47,7 +48,7 @@ func roles() []string {
 		roleDeliverable, roleAcceptanceCriteria, roleWorkflowRun, roleImportJob,
 		roleBlocker, roleDependency, roleMembership, roleProjectParty, roleTagging, roleRuleLink, roleCodeSequence,
 		roleAssignment,
-		roleCase, roleCaseTask, roleCaseVote, roleTaskNote, roleRule, roleRuleFile, roleTaskCaps, roleTaskUsage, roleTaskReference,
+		roleCase, roleCaseTask, roleCaseVote, roleTaskNote, roleRule, roleRuleFile, roleRuleCompatible, roleTaskCaps, roleTaskUsage, roleTaskReference,
 		roleRepeatingTask, roleRepeatingPeriod,
 		roleSourcedTask, roleGeneratedTask,
 	}
@@ -78,6 +79,7 @@ func carriers() map[string]any {
 		roleTaskNote:           models.TaskNote{},
 		roleRule:               models.RuleRecord{},
 		roleRuleFile:           models.RuleFile{},
+		roleRuleCompatible:     models.RuleCompatible{},
 		roleTaskCaps:           models.TaskCapsOverride{},
 		roleTaskUsage:          models.TaskUsage{},
 		roleTaskReference:      models.TaskReference{},

@@ -163,6 +163,12 @@
       "description": "One file of a repo that a rule or decision points to as its best example."
     },
     {
+      "role": "rule_compatible",
+      "name": "rule_compatible",
+      "table": "rule_compatibles",
+      "description": "A pair of rules a person judged compatible, so the overlap read stops listing it."
+    },
+    {
       "role": "task_reference",
       "name": "task_reference",
       "table": "task_references",

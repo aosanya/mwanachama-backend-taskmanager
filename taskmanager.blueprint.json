@@ -1608,6 +1608,21 @@
       ]
     },
     {
+      "role": "rule_compatible",
+      "description": "Records that a person judged two rules compatible, so the overlap read stops listing the pair. One row per pair, symmetric: the id is a digest of the two rule ids in sorted order, so the pair is stored once and found from either side.",
+      "fields": [
+        {"name": "id", "type": "string", "description": "A digest of the two rule ids, lower id first.", "primary": true},
+        {"name": "first_rule_id", "type": "string", "description": "The rule with the lower id.", "required": true},
+        {"name": "second_rule_id", "type": "string", "description": "The rule with the higher id.", "required": true},
+        {"name": "added_by", "type": "string", "description": "The account that judged them compatible, from the session."},
+        {"name": "created_at", "type": "timestamp", "description": "When it was judged."}
+      ],
+      "indexes": [
+        {"name": "first", "description": "Reads the pairs of one rule from its lower side.", "fields": ["first_rule_id"]},
+        {"name": "second", "description": "Reads the pairs of one rule from its higher side.", "fields": ["second_rule_id"]}
+      ]
+    },
+    {
       "role": "task_reference",
       "description": "One thing an issue is about: a file or folder of a repo's main branch, another issue, a screen or tool, or a website link. The id is a digest of the issue, kind, repo and target, so an issue refers to the same thing once. Whether a file or folder still exists is not stored.",
       "fields": [

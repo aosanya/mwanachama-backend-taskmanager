@@ -308,7 +308,10 @@ type TaskManager interface {
 	ListRulesOfIssue(ctx context.Context, requesterID, issueID string) (IssueRules, error)
 	ListRulesOfDecision(ctx context.Context, requesterID, code string) ([]RuleRecord, error)
 	ListIssuesOfRule(ctx context.Context, requesterID, code string) ([]RuleIssue, error)
-	ListRuleOverlaps(ctx context.Context, requesterID string) ([]RuleOverlap, error)
+	ListRuleOverlaps(ctx context.Context, requesterID string) (RuleOverlapList, error)
+	AddRuleCompatible(ctx context.Context, requesterID, code, otherCode string) error
+	RemoveRuleCompatible(ctx context.Context, requesterID, code, otherCode string) error
+	ReadRule(ctx context.Context, requesterID, code string) (RuleView, error)
 	AddRuleFile(ctx context.Context, requesterID, code, repo, path string, line int, note string) (RuleFileResult, error)
 	ListRuleFiles(ctx context.Context, requesterID, code string) ([]RuleFileLink, error)
 	RemoveRuleFile(ctx context.Context, requesterID, code, fileID string) error
