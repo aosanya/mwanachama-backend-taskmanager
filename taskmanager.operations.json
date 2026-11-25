@@ -240,13 +240,24 @@
       "returns": [{"body": true}]
     },
     "create_backlog": {
-      "method": "POST", "path": "/backlogs", "call": "CreateBacklogWithRules", "action": "taskmanager.backlog.create",
+      "method": "POST", "path": "/backlogs", "call": "CreateBacklogAs", "action": "taskmanager.backlog.create",
       "status": 201,
       "title": "Create backlog",
       "description": "Add a backlog with a name and either its steps in order or rules. With steps it is a workflow: the name must not belong to another backlog and at least one step is needed. With rules (a match of all or any, and a list of rules each with a field, an operator and a value) it is a smart backlog: it holds no issues of its own and lists whatever the rules match, and the same rules cannot be saved twice (refused with the existing backlog's id and name).",
-      "args": [{"from": "body", "as": "name", "required": true, "description": "The new backlog's name."},
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session. The new backlog takes the tags of this person's assumed group; with none, it carries none."},
+               {"from": "body", "as": "name", "required": true, "description": "The new backlog's name."},
                {"from": "body", "as": "steps", "description": "The names of its steps, in order; leave out for a smart backlog."},
                {"from": "body", "as": "rules", "description": "For a smart backlog: {match: all or any, rules: [{field, operator, value}]}; leave out for a backlog with steps."}],
+      "returns": [{"body": true}]
+    },
+    "add_backlog_tag": {
+      "method": "POST", "path": "/backlogs/{backlogID}/tags", "call": "AddBacklogTagAs", "action": "taskmanager.backlog_tag.add",
+      "status": 201,
+      "title": "Add a reach tag to a backlog",
+      "description": "Add one reach tag to a backlog, taken from the tags of the caller's assumed group. The caller needs Can edit on the backlog. A tag already on the backlog stays once. No route takes a tag off, and a smart backlog carries none.",
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session."},
+               {"from": "path", "as": "backlogID", "description": "The backlog that gets the tag."},
+               {"from": "body", "as": "tag", "required": true, "description": "The id of the tag to add."}],
       "returns": [{"body": true}]
     },
     "set_backlog_rules": {

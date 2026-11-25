@@ -24,7 +24,7 @@ type probeCall struct {
 	body   any
 }
 
-var operationsNotBoundToABacklog = map[string]bool{"open_case": true, "vote_case": true, "take_back_vote": true, "add_task_note": true, "add_task_reference": true, "propose_task_reference": true, "confirm_task_reference": true, "remove_task_reference": true, "set_worker_caps_default": true, "claim_next": true, "batch": true}
+var operationsNotBoundToABacklog = map[string]bool{"open_case": true, "vote_case": true, "take_back_vote": true, "add_task_note": true, "add_task_reference": true, "propose_task_reference": true, "confirm_task_reference": true, "remove_task_reference": true, "set_worker_caps_default": true, "claim_next": true, "batch": true, "create_backlog": true}
 var readsSentAsPost = map[string]bool{"count_backlog_rules": true}
 
 func operationsTakingTheCallerThatWrite(t *testing.T) []string {

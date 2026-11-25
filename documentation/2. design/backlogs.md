@@ -19,6 +19,16 @@ manager methods. `Task.Backlog` and `Task.Step` are filled on every read
 (`GetTask`, `ListTasks`) and are checked on `CreateTask`; `UpdateTask` keeps
 the stored place, so changing a task's fields never moves it.
 
+## Reach tags
+
+A backlog entry carries `tags`, a list of tag ids. The tags decide who reaches the backlog and, through it, its tasks and their todos and notes; a task stores no reach tag of its own, and the label tags of a task are a separate list that a label patch cannot use to reach them.
+
+- `create_backlog` carries the caller. The new backlog takes the tags of the caller's assumed group as its first tags (D27). Made with no person, as the hub does, it carries none and an administrator adds one. A smart backlog carries none.
+- `add_backlog_tag` adds one tag. The caller needs Can edit on the backlog and the tag must be one of the assumed group's tags, supplied by the hub through `UseGroupTags` beside `UseGroups`. A tag already present stays once, and a smart backlog refuses it.
+- Nothing takes a tag off. `replace_backlogs` and every other save keep the tags the stored backlog already has (D27), whatever the request carries.
+
+Design: the hub's `task-tags.md` sections 3, 4 and 7.
+
 ## What the manager does
 
 - `ListBacklogs` returns each backlog with its steps and the number of issues
@@ -52,6 +62,7 @@ the stored place, so changing a task's fields never moves it.
 | `add_backlog_step` | `POST /backlogs/{backlogID}/steps` | `taskmanager.backlog_step.add` |
 | `rename_backlog_step` | `PUT /backlogs/{backlogID}/steps/{stepID}` | `taskmanager.backlog_step.rename` |
 | `remove_backlog_step` | `DELETE /backlogs/{backlogID}/steps/{stepID}` | `taskmanager.backlog_step.remove` |
+| `add_backlog_tag` | `POST /backlogs/{backlogID}/tags` | `taskmanager.backlog_tag.add` |
 | `reorder_backlog_steps` | `PUT /backlogs/{backlogID}/step-order` | `taskmanager.backlog_step.reorder` |
 | `move_task_to_step` | `POST /tasks/{taskID}/move-to-step` | `taskmanager.task.move_to_step` |
 

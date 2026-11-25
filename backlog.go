@@ -119,7 +119,7 @@ func summarize(backlogs []models.Backlog, tasks []Task) models.BacklogList {
 	}
 	out := models.BacklogList{Items: make([]models.BacklogSummary, len(backlogs))}
 	for i, b := range backlogs {
-		item := models.BacklogSummary{ID: b.ID, Name: b.Name, Issues: totals[b.ID], Steps: make([]models.StepSummary, len(b.Steps)), Kind: b.Kind, Rules: b.Rules, Archived: b.Archived}
+		item := models.BacklogSummary{ID: b.ID, Name: b.Name, Issues: totals[b.ID], Steps: make([]models.StepSummary, len(b.Steps)), Kind: b.Kind, Rules: b.Rules, Archived: b.Archived, Tags: b.Tags}
 		for j, s := range b.Steps {
 			item.Steps[j] = models.StepSummary{ID: s.ID, Name: s.Name, Issues: counts[b.ID][s.ID], WipLimit: s.WipLimit}
 		}
@@ -192,6 +192,7 @@ func (m *taskManager) saveBacklogs(ctx context.Context, change backlogChange) er
 		if err != nil {
 			return err
 		}
+		next = models.KeepTags(current, next)
 		if err := models.CheckBacklogs(next); err != nil {
 			return fmt.Errorf("%w: %s", ErrInvalidBacklog, err)
 		}
