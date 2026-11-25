@@ -94,7 +94,7 @@ func (m *taskManager) inTxKeepingAccess(tx *gorm.DB, held *heldEvents) (*taskMan
 	if err != nil {
 		return nil, err
 	}
-	txm.groups, txm.groupExists, txm.instanceOwner = m.groups, m.groupExists, m.instanceOwner
+	txm.groups, txm.groupExists, txm.groupTags = m.groups, m.groupExists, m.groupTags
 	return txm, nil
 }
 

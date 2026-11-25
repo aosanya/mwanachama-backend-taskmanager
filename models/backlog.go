@@ -317,3 +317,27 @@ func UnionTags(first, second []string) []string {
 	}
 	return union
 }
+
+const AllTag = "all"
+
+func Reaches(b Backlog, tags []string) bool {
+	if len(tags) == 0 {
+		return false
+	}
+	if b.Smart() {
+		return true
+	}
+	held := map[string]bool{}
+	for _, tag := range tags {
+		held[tag] = true
+	}
+	if held[AllTag] {
+		return true
+	}
+	for _, tag := range b.Tags {
+		if held[tag] {
+			return true
+		}
+	}
+	return false
+}

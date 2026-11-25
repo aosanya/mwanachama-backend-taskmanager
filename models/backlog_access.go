@@ -45,7 +45,7 @@ type BacklogAccess struct {
 	Groups     []GroupAccess `json:"groups"`
 }
 
-func (l AccessLevel) Valid() bool { return l == AccessSee || l == AccessMove || l == AccessEdit }
+func (l AccessLevel) Valid() bool { return l == AccessMove || l == AccessEdit }
 
 func (l AccessLevel) rank() int {
 	switch l {
@@ -70,12 +70,17 @@ func ParseGrants(value any) ([]BacklogGrant, error) {
 	if err := dec.Decode(&grants); err != nil {
 		return nil, fmt.Errorf("backlog access: %w", err)
 	}
+	kept := make([]BacklogGrant, 0, len(grants))
 	for _, g := range grants {
+		if g.Level == AccessSee {
+			continue
+		}
 		if err := CheckGrant(g); err != nil {
 			return nil, err
 		}
+		kept = append(kept, g)
 	}
-	return grants, nil
+	return kept, nil
 }
 
 func CheckGrant(g BacklogGrant) error {
@@ -83,7 +88,7 @@ func CheckGrant(g BacklogGrant) error {
 		return fmt.Errorf("backlog access: a grant names a backlog and a group")
 	}
 	if !g.Level.Valid() {
-		return fmt.Errorf("backlog access: level %q is not see, move or edit", g.Level)
+		return fmt.Errorf("backlog access: level %q is not move or edit; seeing comes from the backlog's reach tags", g.Level)
 	}
 	return nil
 }

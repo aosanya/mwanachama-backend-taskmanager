@@ -351,22 +351,3 @@ func TestBacklogEdit_APersonInNoGroupIsRefusedEvenWhenTheRoleAllowsEditing(t *te
 		t.Fatalf("the Product owner group edits: %v", err)
 	}
 }
-
-func TestBacklogEdit_TheInstanceOwnerEditsEveryBacklogWithoutAGroup(t *testing.T) {
-	ctx := context.Background()
-	mgr := restrictedManager(t)
-	mgr.UseGroups(groupsOfPeople())
-	mgr.UseInstanceOwner(func(_ context.Context, id string) (bool, error) { return id == "boss", nil })
-	if _, err := mgr.RenameBacklogAs(ctx, "boss", "software", "Run by the owner"); err != nil {
-		t.Fatalf("the instance owner is not in any group and still edits: %v", err)
-	}
-	docs, err := mgr.CreateBacklog(ctx, "Docs", []string{"Open"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := mgr.RenameBacklogAs(ctx, "boss", docs.ID, "Docs by the owner"); err != nil {
-		t.Fatalf("the instance owner edits a second backlog: %v", err)
-	}
-	_, err = mgr.RenameBacklogAs(ctx, "none", "software", "A stranger")
-	wantForbidden(t, "a stranger who is not the instance owner", err)
-}

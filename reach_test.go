@@ -39,7 +39,7 @@ func newReachBoard(t *testing.T) reachBoard {
 	mgr := newTestManager(t)
 	mgr.UseGroupTags(reachPeople())
 	for _, b := range []struct{ maker, name string }{{"emea", "EMEA board"}, {"apac", "APAC board"}, {"", "Open board"}} {
-		if _, err := mgr.CreateBacklogAs(ctx, b.maker, b.name, []string{"To do"}, nil); err != nil {
+		if _, err := mgr.CreateBacklogAs(ctx, b.maker, b.name, []string{"To do", "In progress"}, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -129,7 +129,7 @@ func TestReach_PendingAndFindShowOnlyWhatTheGroupReaches(t *testing.T) {
 			t.Fatal(err)
 		}
 		wantReached(t, "PendingTasks", pendingTitles(pending.Items), want)
-		found, err := b.mgr.FindTasks(context.Background(), mwanachamataskmanager.FindFilter{RequesterID: person})
+		found, err := b.mgr.FindTasks(context.Background(), mwanachamataskmanager.FindFilter{Q: "task", RequesterID: person})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -165,7 +165,7 @@ func containsTitle(titles []string, title string) bool {
 func TestReach_NextReadyAndTheBatchGiveOnlyReachedIssues(t *testing.T) {
 	b := newReachBoard(t)
 	eachPerson(t, func(t *testing.T, person string, want []string) {
-		ready, err := b.mgr.NextReady(context.Background(), mwanachamataskmanager.NextReadyFilter{RequesterID: person})
+		ready, err := b.mgr.NextReady(context.Background(), mwanachamataskmanager.NextReadyFilter{Limit: 5, RequesterID: person})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -222,7 +222,7 @@ func TestReach_NotesAndTodosFollowTheirIssue(t *testing.T) {
 	b := newReachBoard(t)
 	ctx := context.Background()
 	id := b.idOf(emeaTask)
-	if _, err := b.mgr.AddTodos(ctx, "emea", id, mwanachamataskmanager.AddTodosRequest{Todos: []mwanachamataskmanager.TodoSpec{{Title: "one"}}}); err != nil {
+	if _, err := b.mgr.AddTodos(ctx, "emea", id, mwanachamataskmanager.AddTodosRequest{Todos: []mwanachamataskmanager.TodoSpec{{Title: "one", Instructions: "do it"}}}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := b.mgr.AddTaskNote(ctx, "emea", id, "person", "hello", nil); err != nil {

@@ -23,7 +23,6 @@ var (
 
 type Groups func(ctx context.Context, callerID string) ([]string, error)
 type GroupExists func(ctx context.Context, groupID string) (bool, error)
-type InstanceOwner func(ctx context.Context, callerID string) (bool, error)
 type RoleHolder func(ctx context.Context, callerID, role string) (bool, error)
 
 func (m *taskManager) UseGroups(g Groups) {
@@ -31,9 +30,6 @@ func (m *taskManager) UseGroups(g Groups) {
 }
 func (m *taskManager) UseGroupExists(g GroupExists) {
 	m.groupExists = g
-}
-func (m *taskManager) UseInstanceOwner(o InstanceOwner) {
-	m.instanceOwner = o
 }
 func (m *taskManager) UseRoleHolder(h RoleHolder) {
 	m.roleHolder = h
@@ -43,26 +39,30 @@ func (m *taskManager) UseRoleSync(r RoleSync) {
 }
 
 type backlogVisibility struct {
-	all    bool
-	levels map[string]models.AccessLevel
+	all       bool
+	reachOpen bool
+	reached   map[string]bool
+	levels    map[string]models.AccessLevel
 }
 
 func (v backlogVisibility) Sees(backlogID string) bool {
-	return v.all || v.levels[backlogID] != ""
+	return v.all || v.reachOpen || v.reached[backlogID]
 }
 func (v backlogVisibility) LevelOf(backlogID string) models.AccessLevel {
 	if v.all {
 		return models.AccessEdit
 	}
-	return v.levels[backlogID]
+	if level := v.levels[backlogID]; v.Sees(backlogID) && level != "" {
+		return level
+	}
+	return models.AccessSee
 }
 func (v backlogVisibility) Moves(backlogID string) bool {
 	level := v.levels[backlogID]
-	return v.all || level == models.AccessMove || level == models.AccessEdit
+	return v.all || v.Sees(backlogID) && (level == models.AccessMove || level == models.AccessEdit)
 }
 func (v backlogVisibility) Edits(backlogID string) bool {
-	level := v.levels[backlogID]
-	return v.all || level == models.AccessEdit
+	return v.all || v.Sees(backlogID) && v.levels[backlogID] == models.AccessEdit
 }
 func (m *taskManager) storedGrants(ctx context.Context) ([]models.BacklogGrant, error) {
 	return m.grantsIn(m.db.WithContext(ctx))
@@ -102,15 +102,6 @@ func (m *taskManager) backlogVisibility(ctx context.Context, requesterID string)
 	if requesterID == "" {
 		return backlogVisibility{all: true}, nil
 	}
-	if m.instanceOwner != nil {
-		owns, err := m.instanceOwner(ctx, requesterID)
-		if err != nil {
-			return backlogVisibility{}, fmt.Errorf("backlog access: owner: %w", err)
-		}
-		if owns {
-			return backlogVisibility{all: true}, nil
-		}
-	}
 	grants, err := m.storedGrants(ctx)
 	if err != nil {
 		return backlogVisibility{}, err
@@ -119,27 +110,36 @@ func (m *taskManager) backlogVisibility(ctx context.Context, requesterID string)
 	if err != nil {
 		return backlogVisibility{}, err
 	}
-	if owner == "" && len(grants) == 0 {
+	reachOn := m.groupTags != nil
+	if !reachOn && owner == "" && len(grants) == 0 {
 		return backlogVisibility{all: true}, nil
-	}
-	if m.groups == nil {
-		return backlogVisibility{levels: map[string]models.AccessLevel{}}, nil
-	}
-	held, err := m.groups(ctx, requesterID)
-	if err != nil {
-		return backlogVisibility{}, fmt.Errorf("backlog access: groups: %w", err)
 	}
 	backlogs, err := m.backlogs(ctx)
 	if err != nil {
 		return backlogVisibility{}, err
 	}
-	levels := map[string]models.AccessLevel{}
-	for _, b := range backlogs {
-		if level := models.AccessLevelOf(grants, owner, b.ID, held); level != "" {
-			levels[b.ID] = level
+	visibility := backlogVisibility{reachOpen: !reachOn, reached: map[string]bool{}, levels: map[string]models.AccessLevel{}}
+	if reachOn {
+		tags, err := m.tagsOfCaller(ctx, requesterID)
+		if err != nil {
+			return backlogVisibility{}, err
+		}
+		for _, b := range backlogs {
+			visibility.reached[b.ID] = models.Reaches(b, tags)
 		}
 	}
-	return backlogVisibility{levels: levels}, nil
+	var held []string
+	if m.groups != nil {
+		if held, err = m.groups(ctx, requesterID); err != nil {
+			return backlogVisibility{}, fmt.Errorf("backlog access: groups: %w", err)
+		}
+	}
+	for _, b := range backlogs {
+		if level := models.AccessLevelOf(grants, owner, b.ID, held); level != "" {
+			visibility.levels[b.ID] = level
+		}
+	}
+	return visibility, nil
 }
 func (m *taskManager) ListBacklogsFor(ctx context.Context, requesterID string) (models.BacklogList, error) {
 	list, err := m.ListBacklogs(ctx)

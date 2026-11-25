@@ -113,7 +113,6 @@ type TaskManager interface {
 	CreateBacklogAs(ctx context.Context, requesterID, name string, steps []string, rules *BacklogRules) (BacklogSummary, error)
 	AddBacklogTagAs(ctx context.Context, requesterID, backlogID, tagID string) (BacklogSummary, error)
 	UseGroupExists(g GroupExists)
-	UseInstanceOwner(o InstanceOwner)
 	UseRoleSync(r RoleSync)
 	UseRoleHolder(h RoleHolder)
 	UsePartyRows(rows PartyRows)
@@ -621,7 +620,6 @@ type taskManager struct {
 	groups        Groups
 	groupTags     GroupTags
 	groupExists   GroupExists
-	instanceOwner InstanceOwner
 	roleSync      RoleSync
 	roleHolder    RoleHolder
 	partyRows     PartyRows
