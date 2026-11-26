@@ -192,6 +192,11 @@ func (m *taskManager) EditTodoFor(ctx context.Context, requesterID, todoID strin
 	if _, err := m.todoToEdit(ctx, requesterID, todoID); err != nil {
 		return TodoView{}, err
 	}
+	if change.DependsOn != nil {
+		if err := m.requireReachedDependencies(ctx, requesterID, *change.DependsOn); err != nil {
+			return TodoView{}, err
+		}
+	}
 	edited, err := m.UpdateTaskTodo(ctx, todoID, TaskTodoPatch{
 		Title: change.Title, Description: change.Description,
 		Instructions: change.Instructions, DependsOn: change.DependsOn,

@@ -1,6 +1,12 @@
 package mwanachamataskmanager
 
-import "context"
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/aosanya/mwanachama-backend-shared/specstore"
+)
 
 func (m *taskManager) todoReached(ctx context.Context, scope readScope, todo TaskTodo, cache map[string]bool) bool {
 	if scope.open() {
@@ -31,6 +37,34 @@ func (m *taskManager) requireTodoReach(ctx context.Context, requesterID, todoID 
 		return TaskTodo{}, ErrTaskTodoNotFound
 	}
 	return todo, nil
+}
+
+func (m *taskManager) hideUnreachedTodos(ctx context.Context, scope readScope, ids []string, hidden map[string]bool) error {
+	q := m.store.Query(ctx, roleTaskTodo).Where("id IN ?", ids)
+	todos, err := specstore.List[TaskTodo](m.store, q, roleTaskTodo)
+	if err != nil {
+		return err
+	}
+	cache := map[string]bool{}
+	for _, todo := range todos {
+		if !m.todoReached(ctx, scope, todo, cache) {
+			hidden[todo.ID] = true
+		}
+	}
+	return nil
+}
+
+func (m *taskManager) requireReachedDependencies(ctx context.Context, requesterID string, todoIDs []string) error {
+	for _, id := range todoIDs {
+		_, err := m.requireTodoReach(ctx, requesterID, id)
+		if errors.Is(err, ErrTaskTodoNotFound) {
+			return fmt.Errorf("%w: %s", ErrTaskTodoDependencyNotFound, id)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *taskManager) GetTaskTodoFor(ctx context.Context, requesterID, todoID string) (TaskTodo, error) {
@@ -66,6 +100,9 @@ func (m *taskManager) CreateTaskTodoAs(ctx context.Context, requesterID string, 
 		}
 	} else if requesterID != "" {
 		return TaskTodo{}, ErrTaskNotFound
+	}
+	if err := m.requireReachedDependencies(ctx, requesterID, todo.DependsOn); err != nil {
+		return TaskTodo{}, err
 	}
 	return m.CreateTaskTodo(ctx, todo)
 }

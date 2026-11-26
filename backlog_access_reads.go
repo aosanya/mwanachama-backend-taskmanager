@@ -130,7 +130,7 @@ func (m *taskManager) TraverseRelationshipsFor(ctx context.Context, requesterID,
 	for _, e := range edges {
 		ends = append(ends, e.FromID, e.ToID)
 	}
-	hidden, err := m.hiddenTaskIDs(ctx, scope, ends)
+	hidden, err := m.hiddenIssueAndTodoIDs(ctx, scope, ends)
 	if err != nil {
 		return nil, fmt.Errorf("TraverseRelationships: %w", err)
 	}
@@ -146,7 +146,7 @@ func (m *taskManager) TraverseRelationshipsFor(ctx context.Context, requesterID,
 	return kept, nil
 }
 
-func (m *taskManager) hiddenTaskIDs(ctx context.Context, scope readScope, ids []string) (map[string]bool, error) {
+func (m *taskManager) hiddenIssueAndTodoIDs(ctx context.Context, scope readScope, ids []string) (map[string]bool, error) {
 	q := m.store.Query(ctx, roleTask).Where("id IN ? AND deleted = ?", ids, false)
 	tasks, err := specstore.List[Task](m.store, q, roleTask)
 	if err != nil {
@@ -158,5 +158,5 @@ func (m *taskManager) hiddenTaskIDs(ctx context.Context, scope readScope, ids []
 			hidden[t.ID] = true
 		}
 	}
-	return hidden, nil
+	return hidden, m.hideUnreachedTodos(ctx, scope, ids, hidden)
 }

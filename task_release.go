@@ -63,7 +63,7 @@ func (m *taskManager) ReleaseTaskAs(ctx context.Context, requesterID string, req
 	if err := m.requireAtInProgressStep(ctx, plan.task); err != nil {
 		return TaskReleased{}, err
 	}
-	if err := m.requireOwnTodo(ctx, plan.task.ID, plan.todoID); err != nil {
+	if err := m.requireOwnTodo(ctx, requesterID, plan.task.ID, plan.todoID); err != nil {
 		return TaskReleased{}, err
 	}
 	plan.backlog = plan.task.Backlog
@@ -143,11 +143,11 @@ func (m *taskManager) releasableTask(ctx context.Context, requesterID, taskID st
 	return task, nil
 }
 
-func (m *taskManager) requireOwnTodo(ctx context.Context, taskID, todoID string) error {
+func (m *taskManager) requireOwnTodo(ctx context.Context, requesterID, taskID, todoID string) error {
 	if todoID == "" {
 		return nil
 	}
-	todo, err := m.GetTaskTodo(ctx, todoID)
+	todo, err := m.requireTodoReach(ctx, requesterID, todoID)
 	if err != nil {
 		return err
 	}

@@ -53,6 +53,23 @@ A smart backlog stores no reach tag (`add_backlog_tag` refuses it). Reach comes 
 - `list_backlog_rules`, `list_backlog_decisions` and `list_backlog_questions` of a smart backlog take their tags from the matched tasks the caller reaches.
 - The Tag rule compares label tags and the project name only. A backlog's reach tags are never part of what a rule matches, so a rule with `sprint 1` matches the label `sprint 1` and not a reach tag of that name.
 
+### A todo opened by id follows its issue
+
+Every place that looks a todo up by its id for a person checks the reach of its issue's backlog (ISS-251, D83, D88). An unreached todo answers the same as an id that does not exist.
+
+| Path that takes a todo id | What a group that does not reach the backlog gets |
+|---|---|
+| `get_task_todo`, `dispatch_task_todo`, `link_todo_to_run` | todo not found |
+| `edit_task_todo`, `delete_task_todo`, `update_task_todo_status`, `finish_task_todo` | todo not found |
+| `depends_on` on `create_task_todo` and `edit_task_todo` | dependency not found, not "belongs to another issue" |
+| `todo_id` on `release_task` | todo not found, not "belongs to another issue" |
+| `traverse_relationships` from the todo | no edges |
+| `traverse_relationships` from a run or an agent | the edges of reached todos only |
+
+`list_issue_todos`, `ready_issue_todos`, `count_issue_todos`, `list_task_todos`, `pending_todos`, the ready board and the run closure take an issue or a run and filter by the same reach. `add_todos` and `create_with_todos` name dependencies by position in one issue, so they take no todo id. The Go methods `GetTaskTodo`, `ListTaskTodos`, `ListIssueTodos` and `CountIssueTodos` take no caller and stay for the hub's own jobs; no operation calls them directly.
+
+Not covered: `create_relationship` and `delete_relationship` do not check the reach of a todo at either end, and `handle_task_timeout` takes no caller. Both write and show nothing back.
+
 Design: the hub's `task-tags.md` sections 3, 4 and 7.
 
 ## What the manager does
