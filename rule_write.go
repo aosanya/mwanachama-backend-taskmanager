@@ -70,13 +70,13 @@ func checkExpectedUpdatedAt(rule RuleRecord, expected *string) (string, error) {
 }
 
 func (m *taskManager) updateRead(ctx context.Context, rule RuleRecord, patch RulePatch) (RuleRecord, error) {
-	guardedAt, err := checkExpectedUpdatedAt(rule, patch.ExpectedUpdatedAt)
-	if err != nil {
-		return RuleRecord{}, err
-	}
 	readStatus := rule.Status
 	if readStatus == ruleSuperseded || readStatus == ruleRetired {
 		return RuleRecord{}, fmt.Errorf("%w: %s is %s and its words stay as they are", ErrInvalidRule, rule.Code, readStatus)
+	}
+	guardedAt, err := checkExpectedUpdatedAt(rule, patch.ExpectedUpdatedAt)
+	if err != nil {
+		return RuleRecord{}, err
 	}
 	if patch.Title != nil {
 		title := strings.TrimSpace(*patch.Title)
