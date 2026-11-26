@@ -180,8 +180,11 @@ func (m *taskManager) suggestedRulesFor(ctx context.Context, requesterID string,
 	return out, nil
 }
 
-func (m *taskManager) openQuestionsFor(ctx context.Context, requesterID string, issue Task) ([]RuleRecord, error) {
-	open, err := m.ListRules(ctx, requesterID, RuleFilter{Kind: ruleKindQuestion, Statuses: []string{questionOpen}})
+func (m *taskManager) questionsFor(ctx context.Context, requesterID string, issue Task, statuses []string) ([]RuleRecord, error) {
+	if len(statuses) == 0 {
+		statuses = []string{questionOpen}
+	}
+	open, err := m.ListRules(ctx, requesterID, RuleFilter{Kind: ruleKindQuestion, Statuses: statuses})
 	if err != nil {
 		return nil, err
 	}
@@ -247,6 +250,10 @@ func (m *taskManager) mentionedRulesFor(ctx context.Context, requesterID string,
 }
 
 func (m *taskManager) ListRulesOfIssue(ctx context.Context, requesterID, issueID string) (IssueRules, error) {
+	return m.ListRulesOfIssueWith(ctx, requesterID, issueID, RuleFilter{})
+}
+
+func (m *taskManager) ListRulesOfIssueWith(ctx context.Context, requesterID, issueID string, filter RuleFilter) (IssueRules, error) {
 	issue, err := m.GetTaskFor(ctx, requesterID, issueID)
 	if err != nil {
 		return IssueRules{}, err
@@ -259,7 +266,7 @@ func (m *taskManager) ListRulesOfIssue(ctx context.Context, requesterID, issueID
 	if err != nil {
 		return IssueRules{}, err
 	}
-	questions, err := m.openQuestionsFor(ctx, requesterID, issue)
+	questions, err := m.questionsFor(ctx, requesterID, issue, filter.Statuses)
 	if err != nil {
 		return IssueRules{}, err
 	}

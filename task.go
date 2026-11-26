@@ -312,6 +312,7 @@ type TaskManager interface {
 	LinkRule(ctx context.Context, requesterID, code, issueID, relation string) error
 	UnlinkRule(ctx context.Context, requesterID, code, issueID, relation string) error
 	ListRulesOfIssue(ctx context.Context, requesterID, issueID string) (IssueRules, error)
+	ListRulesOfIssueWith(ctx context.Context, requesterID, issueID string, filter RuleFilter) (IssueRules, error)
 	ListRulesOfDecision(ctx context.Context, requesterID, code string) ([]RuleRecord, error)
 	ListIssuesOfRule(ctx context.Context, requesterID, code string) ([]RuleIssue, error)
 	ListRuleOverlaps(ctx context.Context, requesterID string) (RuleOverlapList, error)

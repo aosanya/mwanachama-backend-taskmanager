@@ -37,13 +37,15 @@ type QuestionAnswer struct {
 }
 
 type RulePatch struct {
-	Title       *string          `json:"title,omitempty"`
-	Body        *string          `json:"body,omitempty"`
-	Tags        *[]string        `json:"tags,omitempty"`
-	AppliesWhen *json.RawMessage `json:"applies_when,omitempty"`
-	DecidedBy   *string          `json:"decided_by,omitempty"`
-	DecidedAt   *string          `json:"decided_at,omitempty"`
-	Priority    *string          `json:"priority,omitempty"`
+	Title       *string           `json:"title,omitempty"`
+	Body        *string           `json:"body,omitempty"`
+	Tags        *[]string         `json:"tags,omitempty"`
+	AppliesWhen *json.RawMessage  `json:"applies_when,omitempty"`
+	DecidedBy   *string           `json:"decided_by,omitempty"`
+	DecidedAt   *string           `json:"decided_at,omitempty"`
+	Priority    *string           `json:"priority,omitempty"`
+	TargetRole  *string           `json:"target_role,omitempty"`
+	Options     *[]QuestionOption `json:"options,omitempty"`
 
 	ExpectedUpdatedAt *string `json:"expected_updated_at,omitempty"`
 }

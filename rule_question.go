@@ -5,6 +5,12 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
+)
+
+const (
+	maxQuestionOptions    = 6
+	maxQuestionOptionText = 120
 )
 
 func errQuestionOnly(kind string) error {
@@ -16,10 +22,16 @@ func errOption(format string, args ...any) error {
 }
 
 func cleanOptions(options []QuestionOption) ([]QuestionOption, error) {
+	if len(options) > maxQuestionOptions {
+		return nil, errOption("a question has at most %d options, not %d", maxQuestionOptions, len(options))
+	}
 	var out []QuestionOption
 	recommended := 0
 	for i, option := range options {
 		option.Text = strings.TrimSpace(option.Text)
+		if utf8.RuneCountInString(option.Text) > maxQuestionOptionText {
+			return nil, errOption("option %d is longer than %d characters", i, maxQuestionOptionText)
+		}
 		option.Reason = strings.TrimSpace(option.Reason)
 		if option.Text == "" {
 			return nil, errOption("option %d has no text", i)
@@ -138,21 +150,11 @@ func (m *taskManager) AnswerQuestionWith(ctx context.Context, requesterID, code 
 		if err != nil {
 			return RuleRecord{}, err
 		}
-		return m.answerRead(ctx, question, decision)
+		return m.answerReadBy(ctx, requesterID, question, decision)
 	}
 	text, err := answerText(question, way, answer)
 	if err != nil {
 		return RuleRecord{}, err
 	}
-	return m.closeWithText(ctx, question, text)
-}
-
-func (m *taskManager) closeWithText(ctx context.Context, question RuleRecord, text string) (RuleRecord, error) {
-	readStatus := question.Status
-	question.Status, question.AnsweredBy, question.Answer = questionAnswered, "", text
-	question.UpdatedAt = stampAfter(question.UpdatedAt)
-	if err := m.saveRuleFrom(ctx, m.db, question, readStatus); err != nil {
-		return RuleRecord{}, fmt.Errorf("AnswerQuestion: %w", err)
-	}
-	return question, nil
+	return m.closeWithText(ctx, requesterID, question, text)
 }

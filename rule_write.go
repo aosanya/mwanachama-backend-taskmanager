@@ -117,6 +117,9 @@ func (m *taskManager) updateRead(ctx context.Context, rule RuleRecord, patch Rul
 		}
 		rule.Priority = *patch.Priority
 	}
+	if err := applyQuestionShape(&rule, patch); err != nil {
+		return RuleRecord{}, err
+	}
 	rule.UpdatedAt = stampAfter(rule.UpdatedAt)
 	if err := m.saveRuleWhere(ctx, m.db, rule, readStatus, guardedAt); err != nil {
 		return RuleRecord{}, fmt.Errorf("UpdateRule: %w", err)
@@ -175,17 +178,15 @@ func checkAnswerable(question RuleRecord) error {
 }
 
 func (m *taskManager) answerRead(ctx context.Context, question, decision RuleRecord) (RuleRecord, error) {
+	return m.answerReadBy(ctx, "", question, decision)
+}
+
+func (m *taskManager) answerReadBy(ctx context.Context, requesterID string, question, decision RuleRecord) (RuleRecord, error) {
 	if err := checkAnswerable(question); err != nil {
 		return RuleRecord{}, err
 	}
 	if decision.Kind != ruleKindDecision {
 		return RuleRecord{}, fmt.Errorf("%w: a question is answered by a decision, and %s is a %s", ErrInvalidRule, decision.Code, decision.Kind)
 	}
-	readStatus := question.Status
-	question.Status, question.AnsweredBy, question.Answer = questionAnswered, decision.Code, ""
-	question.UpdatedAt = stampAfter(question.UpdatedAt)
-	if err := m.saveRuleFrom(ctx, m.db, question, readStatus); err != nil {
-		return RuleRecord{}, fmt.Errorf("AnswerQuestion: %w", err)
-	}
-	return question, nil
+	return m.saveAnswer(ctx, requesterID, question, decision.Code, "")
 }
