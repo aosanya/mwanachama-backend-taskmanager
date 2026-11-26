@@ -20,8 +20,11 @@ A third kind, `question`, for what was a loose line in a markdown file and got a
 | Piece | Behaviour |
 |---|---|
 | `priority` | `P1`, `P2` or `P3`, on a question only. A question created without one is `P2`. A priority on a rule or a decision is refused with `ErrInvalidRule`, on create and on update, and so is any other value |
-| Answering | `AnswerQuestion(code, decisionCode)` sets `answered_by` to the decision's code and the status to `answered`. The second code must name an existing decision: unknown is `ErrRuleNotFound`, a rule or another question is `ErrInvalidRule`. A dropped question is reopened before it is answered |
-| Dropping and reopening | `SetRuleStatus` to `dropped` or back to `open`; both clear `answered_by`, so only an `answered` question names a decision (chosen in the ISS-234 review fixes; the page was silent). Setting `answered` by hand is refused, because an answer names its decision |
+| `target_role` | The agency role whose holders answer the question (ISS-274). Required when a question is made: blank is `ErrInvalidRule`. Any non-blank role name is stored as sent. A target role on a rule or a decision is refused with `ErrInvalidRule`. It is set at creation and not changed by `UpdateRule` |
+| `options` | The answers offered, in the order they are shown (ISS-274): a list of `{text, recommended, reason}`, questions only. Every option has a `text`. At most one is `recommended`; it must carry a `reason` of one line, and it is stored first whatever its place in the request. A `reason` on an option that is not recommended, a second recommended option, a blank `text` or options on a rule or decision are refused with `ErrInvalidRule`. A question may have none |
+| Answering | `AnswerQuestionWith(code, answer)` takes exactly one of `decision_code`, `option` (the index in `options`, counted from 0) or `other` (typed words); zero or more than one is `ErrInvalidRule`. A `decision_code` sets `answered_by` to the decision's code, as before: unknown is `ErrRuleNotFound`, a rule or another question is `ErrInvalidRule`. An `option` or `other` records no decision: the question becomes `answered`, `answer` holds the option's text or the typed words, and `answered_by` stays empty. An index outside `options` is `ErrInvalidRule`. `AnswerQuestion(code, decisionCode)` stays for the decision path. A dropped question is reopened before it is answered. Answering never moves an issue |
+| Who may answer | A question names a role, and `RoleHolder` (set with `UseRoleHolder`) says whether the caller holds it. A caller who does not is `ErrBacklogForbidden`, 403, on every kind of answer. With no `RoleHolder` set, or with no caller id, the role is not checked. An `option` or `other` answer needs Can see on a backlog and the role; a `decision_code` answer needs Can move, as before, and the role |
+| Dropping and reopening | `SetRuleStatus` to `dropped` or back to `open`; both clear `answered_by` and `answer`, so only an `answered` question names a decision or an answer (chosen in the ISS-234 review fixes; the page was silent). Setting `answered` by hand is refused, because an answer names its decision |
 | Superseding | A question is answered or dropped, never superseded, so `SupersedeRule` refuses it |
 | Listing | `ListRules` with `kind=question` returns `open` ones by default, sorted P1 first and by code inside one priority; with no kind the default list is rules, decisions and open questions, kinds in the order decision, question, rule |
 | Tags, issue links, files | Work as for rules and decisions: the same tag cleaning, the same `applies_to`, `decided_in` and `broken_by` links, the same file links |
@@ -47,7 +50,8 @@ On the issue brief, `rules.questions` carries the open questions linked to the i
 | `superseded_by` | Set on the old record when a replacement is created, so a reader of the old code finds the new one |
 | `decided_by`, `decided_at` | Who decided and when |
 | `priority` | `P1` to `P3`, questions only; empty on a rule or decision |
-| `answered_by` | The `D-<n>` that settles a question; empty until answered |
+| `answered_by` | The `D-<n>` that settles a question; empty until answered, and empty when an option or typed answer closed it |
+| `target_role`, `options`, `answer` | Questions only: the role that answers, the answers offered and the words that closed it (see Questions) |
 | `created_at`, `updated_at` | As elsewhere |
 
 ## Tags
@@ -96,7 +100,7 @@ Every rule method is a declared operation in `taskmanager.operations.json`, so e
 | `taskmanager_rule_update` | `PATCH /rules/{ruleCode}` | `UpdateRule` |
 | `taskmanager_rule_list` | `GET /rules?kind=&status=&tag=` | `ListRules` |
 | `taskmanager_rule_set_status` | `PUT /rules/{ruleCode}/status` | `SetRuleStatus` |
-| `taskmanager_rule_answer` | `PUT /rules/{ruleCode}/answer` | `AnswerQuestion` |
+| `taskmanager_rule_answer` | `PUT /rules/{ruleCode}/answer` | `AnswerQuestionWith` |
 | `taskmanager_rule_supersede` | `POST /rules/{ruleCode}/supersede` | `SupersedeRule` |
 | `taskmanager_rule_link` | `POST /rules/{ruleCode}/links` | `LinkRule` |
 | `taskmanager_rule_unlink` | `DELETE /rules/{ruleCode}/links/{issueID}/{relation}` | `UnlinkRule` |
@@ -116,7 +120,7 @@ Every rule method is a declared operation in `taskmanager.operations.json`, so e
 
 - The path parameter is `ruleCode`, not `code`, because the create, update and supersede bodies are whole rule records that already carry a `code`; two arguments arriving under one name are refused when the table is built.
 - `list` repeats `status` and `tag`: `?tag=style&tag=data` returns the records carrying both. `GET /tasks/{taskID}/rules` is how an agent reads the linked, suggested and mentioned rules before starting an issue.
-- **Questions over the routes** (ISS-253 on the wire): `kind` accepts `question` on create and on `taskmanager_rule_list`, whose `status` takes `open`, `answered` and `dropped`. `priority` (questions only) and `answered_by` ride on the create, update and read bodies as optional fields; `answered_by` is set by answering, never sent. The answer body is `{decision_code}`. A decision code that does not exist, or a question that does not, is 404; a missing `decision_code`, a code that is not a question, a decision code that names a rule or question, a dropped question, a bad priority, or a priority on a rule or decision is 400. `GET /tasks/{taskID}/rules` carries a fourth list, `questions`: the open questions linked to the issue or sharing a tag with it, P1 first, never repeated under `linked`.
+- **Questions over the routes** (ISS-253 on the wire): `kind` accepts `question` on create and on `taskmanager_rule_list`, whose `status` takes `open`, `answered` and `dropped`. `priority` (questions only) and `answered_by` ride on the create, update and read bodies as optional fields; `answered_by` is set by answering, never sent. The answer body is one of `{decision_code}`, `{option}` or `{other}`. A decision code that does not exist, or a question that does not, is 404; a missing `decision_code`, a code that is not a question, a decision code that names a rule or question, a dropped question, a bad priority, or a priority on a rule or decision is 400. `GET /tasks/{taskID}/rules` carries a fourth list, `questions`: the open questions linked to the issue or sharing a tag with it, P1 first, never repeated under `linked`. **Options and role** (ISS-274): `target_role` and `options` ride on the create body and on every read and list of a question; `answer` rides on the read. A question without `target_role` is 400, and so is an answer body naming none or more than one of `decision_code`, `option` and `other`. An answer from a caller who does not hold the question's role is 403. A question filed inside an issue is made with that issue's tags, so the backlog questions list carries it with the same options, and an answer in either place is the same write.
 - Errors: `ErrInvalidRule` and `ErrInvalidRuleFile` are 400, `ErrRuleNotFound` and `ErrRuleFileNotFound` 404, `ErrDuplicateRuleFile`, `ErrDuplicateRuleCompatible`, `ErrRuleChanged` and `ErrRuleStale` 409, `ErrRuleCompatibleNotFound` 404; a bad link relation is `ErrInvalidRelationship`, 400. The note errors are in the Notes section.
 
 ### Who may write
