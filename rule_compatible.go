@@ -151,15 +151,3 @@ func sortRuleCodes(codes []string) {
 		return a < b
 	})
 }
-
-func (m *taskManager) ReadRule(ctx context.Context, requesterID, code string) (RuleView, error) {
-	rule, err := m.GetRuleByCode(ctx, requesterID, code)
-	if err != nil {
-		return RuleView{}, err
-	}
-	compatible, err := m.compatibleCodesOf(ctx, rule.ID)
-	if err != nil {
-		return RuleView{}, fmt.Errorf("ReadRule: %w", err)
-	}
-	return RuleView{RuleRecord: rule, Compatible: compatible}, nil
-}

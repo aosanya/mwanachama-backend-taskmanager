@@ -295,6 +295,10 @@ type TaskManager interface {
 	ListTaskNotesFiltered(ctx context.Context, filter TaskNoteFilter) ([]TaskNote, error)
 	CreateRule(ctx context.Context, requesterID string, rule RuleRecord) (RuleRecord, error)
 	GetRuleByCode(ctx context.Context, requesterID, code string) (RuleRecord, error)
+	ReadRule(ctx context.Context, requesterID, code string) (RuleWithNotes, error)
+	AddRuleNote(ctx context.Context, draft RuleNoteDraft) (RuleNote, error)
+	ListRuleNotes(ctx context.Context, filter RuleNoteFilter) ([]RuleNote, error)
+	ResolveRuleNote(ctx context.Context, resolution RuleNoteResolution) (RuleNote, error)
 	UpdateRule(ctx context.Context, requesterID, code string, patch RulePatch) (RuleRecord, error)
 	ListRules(ctx context.Context, requesterID string, filter RuleFilter) ([]RuleRecord, error)
 	ListBacklogRules(ctx context.Context, requesterID, backlogID string, filter RuleFilter) ([]RuleRecord, error)
@@ -311,7 +315,6 @@ type TaskManager interface {
 	ListRuleOverlaps(ctx context.Context, requesterID string) (RuleOverlapList, error)
 	AddRuleCompatible(ctx context.Context, requesterID, code, otherCode string) error
 	RemoveRuleCompatible(ctx context.Context, requesterID, code, otherCode string) error
-	ReadRule(ctx context.Context, requesterID, code string) (RuleView, error)
 	AddRuleFile(ctx context.Context, requesterID, code, repo, path string, line int, note string) (RuleFileResult, error)
 	ListRuleFiles(ctx context.Context, requesterID, code string) ([]RuleFileLink, error)
 	RemoveRuleFile(ctx context.Context, requesterID, code, fileID string) error

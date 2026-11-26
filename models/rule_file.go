@@ -28,8 +28,3 @@ type RuleCompatible struct {
 	AddedBy      string `json:"added_by"`
 	CreatedAt    string `json:"created_at"`
 }
-
-type RuleView struct {
-	RuleRecord
-	Compatible []string `json:"compatible"`
-}

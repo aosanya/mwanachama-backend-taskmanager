@@ -16,7 +16,7 @@ func BuildToolsFor(tm mwanachamataskmanager.TaskManager, m Mount) ([]Tool, error
 		return nil, err
 	}
 	return dispatch.Tools(s, dispatch.Deps{
-		Manager: withRuleChangedMarked(tm), Errors: sentinels, Authorize: m.Authorize, Caller: m.Caller,
+		Manager: withRuleChangedMarked(tm), Errors: sentinels, Fields: noteFields, Authorize: m.Authorize, Caller: m.Caller,
 	})
 }
 

@@ -1623,6 +1623,31 @@
       ]
     },
     {
+      "role": "rule_note",
+      "description": "One dated entry in the Log of a rule, decision or question: what a person, a worker or the judge noted about it, with the codes of the records it is about and links to the work. A contradiction note is open until someone resolves it; the resolution fields are the only ones that ever change, and only once. No other entry is changed or removed.",
+      "fields": [
+        {"name": "id", "type": "string", "description": "Storage key, opaque to callers.", "primary": true},
+        {"name": "rule_id", "type": "string", "description": "The rule, decision or question whose Log it belongs to.", "required": true},
+        {"name": "rule_code", "type": "string", "description": "That record's code, kept beside the id so a note is read without a lookup; a code never changes.", "required": true},
+        {"name": "kind", "type": "string", "description": "note, contradiction, compatible or question.", "required": true},
+        {"name": "source", "type": "string", "description": "person, worker or judge: who wrote it, as an issue note's kind does. The author is set from the session whatever the source.", "required": true},
+        {"name": "state", "type": "string", "description": "open or resolved on a contradiction note; empty on every other kind."},
+        {"name": "text", "type": "text", "description": "The note, in plain words; never empty and never changed.", "required": true},
+        {"name": "related_codes", "type": "json", "description": "The codes (R-9, D-3, Q-5) of other records the note is about; each exists and none is the note's own record."},
+        {"name": "links", "type": "json", "description": "Links to the work: a commit, a file, a drawing, a CI run."},
+        {"name": "author_id", "type": "string", "description": "The account that wrote it, from the session."},
+        {"name": "created_at", "type": "timestamp", "description": "When it was written."},
+        {"name": "resolved_at", "type": "string", "description": "When a contradiction note was resolved; empty while open."},
+        {"name": "resolved_by", "type": "string", "description": "The account that resolved it, from the session; empty while open."},
+        {"name": "resolution", "type": "text", "description": "Optional words saying how it was settled."},
+        {"name": "resolved_by_code", "type": "string", "description": "Optional code of the rule or decision that settled it; it exists."}
+      ],
+      "indexes": [
+        {"name": "rule", "description": "Reads one record's notes in order.", "fields": ["rule_id", "created_at"]},
+        {"name": "kind_state", "description": "Finds every open contradiction.", "fields": ["kind", "state"]}
+      ]
+    },
+    {
       "role": "task_reference",
       "description": "One thing an issue is about: a file or folder of a repo's main branch, another issue, a screen or tool, or a website link. The id is a digest of the issue, kind, repo and target, so an issue refers to the same thing once. Whether a file or folder still exists is not stored.",
       "fields": [

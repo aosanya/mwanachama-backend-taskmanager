@@ -113,6 +113,11 @@ var sentinels = map[string]error{
 	"ErrRuleFileNotFound":              mwanachamataskmanager.ErrRuleFileNotFound,
 	"ErrDuplicateRuleCompatible":       mwanachamataskmanager.ErrDuplicateRuleCompatible,
 	"ErrRuleCompatibleNotFound":        mwanachamataskmanager.ErrRuleCompatibleNotFound,
+	"ErrInvalidRuleNote":               mwanachamataskmanager.ErrInvalidRuleNote,
+	"ErrInvalidRuleNoteFilter":         mwanachamataskmanager.ErrInvalidRuleNoteFilter,
+	"ErrRuleNoteCodeNotFound":          mwanachamataskmanager.ErrRuleNoteCodeNotFound,
+	"ErrRuleNoteNotFound":              mwanachamataskmanager.ErrRuleNoteNotFound,
+	"ErrRuleNoteResolved":              mwanachamataskmanager.ErrRuleNoteResolved,
 	"ErrStepRoleNotHeld":               mwanachamataskmanager.ErrStepRoleNotHeld,
 }
 

@@ -89,7 +89,7 @@ Every rule method is a declared operation in `taskmanager.operations.json`, so e
 | Tool | Route | Call |
 |---|---|---|
 | `taskmanager_rule_create` | `POST /rules` | `CreateRule` |
-| `taskmanager_rule_read` | `GET /rules/{ruleCode}` | `GetRuleByCode` |
+| `taskmanager_rule_read` | `GET /rules/{ruleCode}` | `ReadRule` |
 | `taskmanager_rule_update` | `PATCH /rules/{ruleCode}` | `UpdateRule` |
 | `taskmanager_rule_list` | `GET /rules?kind=&status=&tag=` | `ListRules` |
 | `taskmanager_rule_set_status` | `PUT /rules/{ruleCode}/status` | `SetRuleStatus` |
@@ -106,15 +106,19 @@ Every rule method is a declared operation in `taskmanager.operations.json`, so e
 | `taskmanager_rule_overlap_list` | `GET /rules/overlaps` | `ListRuleOverlaps` |
 | `taskmanager_rule_compatible_add` | `POST /rules/{ruleCode}/compatible/{otherCode}` | `AddRuleCompatible` |
 | `taskmanager_rule_compatible_remove` | `DELETE /rules/{ruleCode}/compatible/{otherCode}` | `RemoveRuleCompatible` |
+| `taskmanager_rule_note_add` | `POST /rules/{ruleCode}/notes` | `AddRuleNote` |
+| `taskmanager_rule_note_list` | `GET /rules/notes?rule=&kind=&state=&related=&since=&limit=` | `ListRuleNotes` |
+| (no tool) | `GET /rules/{ruleCode}/notes` | `ListRuleNotes` |
+| `taskmanager_rule_note_resolve` | `PUT /rules/notes/{noteID}/resolve` | `ResolveRuleNote` |
 
 - The path parameter is `ruleCode`, not `code`, because the create, update and supersede bodies are whole rule records that already carry a `code`; two arguments arriving under one name are refused when the table is built.
 - `list` repeats `status` and `tag`: `?tag=style&tag=data` returns the records carrying both. `GET /tasks/{taskID}/rules` is how an agent reads the linked, suggested and mentioned rules before starting an issue.
 - **Questions over the routes** (ISS-253 on the wire): `kind` accepts `question` on create and on `taskmanager_rule_list`, whose `status` takes `open`, `answered` and `dropped`. `priority` (questions only) and `answered_by` ride on the create, update and read bodies as optional fields; `answered_by` is set by answering, never sent. The answer body is `{decision_code}`. A decision code that does not exist, or a question that does not, is 404; a missing `decision_code`, a code that is not a question, a decision code that names a rule or question, a dropped question, a bad priority, or a priority on a rule or decision is 400. `GET /tasks/{taskID}/rules` carries a fourth list, `questions`: the open questions linked to the issue or sharing a tag with it, P1 first, never repeated under `linked`.
-- Errors: `ErrInvalidRule` and `ErrInvalidRuleFile` are 400, `ErrRuleNotFound` and `ErrRuleFileNotFound` 404, `ErrDuplicateRuleFile`, `ErrDuplicateRuleCompatible` and `ErrRuleChanged` 409, `ErrRuleCompatibleNotFound` 404; a bad link relation is `ErrInvalidRelationship`, 400.
+- Errors: `ErrInvalidRule` and `ErrInvalidRuleFile` are 400, `ErrRuleNotFound` and `ErrRuleFileNotFound` 404, `ErrDuplicateRuleFile`, `ErrDuplicateRuleCompatible` and `ErrRuleChanged` 409, `ErrRuleCompatibleNotFound` 404; a bad link relation is `ErrInvalidRelationship`, 400. The note errors are in the Notes section.
 
 ### Who may write
 
-Rules belong to the agency, not to one backlog, so access reuses the backlog levels over the whole board. A person with no grants anywhere, the instance owner and a caller with no id see everything. Otherwise reading a rule, a decision, its issues or its files needs Can see on at least one backlog, and every write (create, update, set status, supersede, link, unlink, add or remove a file) needs Can move on at least one. A refusal is `ErrBacklogForbidden`, 403. Reading the rules of an issue follows the issue: a person who cannot see the issue gets 404.
+Rules belong to the agency, not to one backlog, so access reuses the backlog levels over the whole board. A person with no grants anywhere, the instance owner and a caller with no id see everything. Otherwise reading a rule, a decision, its issues or its files needs Can see on at least one backlog, and every write (create, update, set status, supersede, link, unlink, add or remove a file, resolve a note) needs Can move on at least one. Adding a note is the exception: Can see is enough (see Notes). A refusal is `ErrBacklogForbidden`, 403. Reading the rules of an issue follows the issue: a person who cannot see the issue gets 404.
 
 ## Reading by backlog
 
@@ -145,14 +149,97 @@ The research in `automatic-checks.md` found that matching rules by tag gives abo
   - **Rules only**: both codes must be of kind `rule`. A decision or a question, or the same code twice, is `ErrInvalidRule`, 400; an unknown code is `ErrRuleNotFound`, 404; a pair already recorded is `ErrDuplicateRuleCompatible`, 409; removing a pair that was not recorded is `ErrRuleCompatibleNotFound`, 404.
   - **Superseded or retired**: the rows stay when a rule is superseded or retired, so putting a retired rule back in force brings its pairs back. A pair with such a rule is not shown on the read view and is not counted by the overlap read, which lists in-force rules only.
   - **Overlap read**: `ListRuleOverlaps` now answers `{items, hidden_compatible}` instead of a bare list. A pair that would be listed and is recorded compatible is left out of `items` and counted in `hidden_compatible`, so a reader can see that something was hidden. The count is of pairs that would otherwise have been listed, whichever reason made them meet.
-  - **Rule read**: `ReadRule` (`taskmanager_rule_read`, `GET /rules/{ruleCode}`) returns the record with `compatible`, the codes of the rules judged compatible with it, in code order and an empty list when there are none. `GetRuleByCode` still returns the bare record for the module's own use.
+  - **Rule read**: `ReadRule` (`taskmanager_rule_read`, `GET /rules/{ruleCode}`) returns the record with `compatible`, the codes of the rules judged compatible with it, in code order and an empty list when there are none, and with the Log's `notes` and `note_count` (see Notes). `GetRuleByCode` still returns the bare record for the module's own use.
 - **No supersede check**: there is none, because the old rule of a supersede is `superseded`, never in force, so it is never in the pair list. Carrying the set over (below) is what keeps the replacement in the check. Rules relate to each other by supersede and by the compatible judgement below; the only other links are rule to issue (`applies_to`, `decided_in`, `broken_by`).
 - **Reading, not judging**: the list says two rules meet, not that they disagree. The issues come from `visibleRuleSubjects`, which narrows to the backlogs the caller can see, so an issue in a hidden backlog never appears in `shared_issues`, and it loads the tag names of every untagged row in one batched read (500 ids at a time), so the number of queries does not grow with the number of issues; smart backlogs use the same function and now also match on the tagging rows, so an issue whose own tag list is empty but that has tagging rows matches a tag rule. A person or the AI judge reads each pair next. No AI judge is built here.
 - **Lint finding**: `Lint` (`taskmanager_task_lint`) returns a `rules` list beside its issue items on the first unfiltered page. The list is added only to the first page of an unfiltered lint (no `taskID`, `backlog` or `step`, `offset` 0), so it comes once and not on every page, and a lint of one backlog or step does not pay for the rule file checks. Each item is an in-force rule with one `rule_file_missing` finding for every file link that `ListRuleFiles` flags `missing`, which is the attached `RepoPathChecker`'s answer. With no checker attached, or a retired, proposed or superseded rule, there is nothing. A check that fails is not a finding, as in `ListRuleFiles`.
 
+## Notes (ISS-271)
+
+Every rule, decision and question has a Log of dated notes, like an issue's Log. A note carries a person's, a worker's or the judge's reason, so a contradiction or a judgement is found where the record is read as well as computed from conditions. The owner decided on 2026-11-25 that notes sit beside `applies_when`, the overlap read and the compatible link, and replace none of them (see Notes beside the older checks).
+
+### The object
+
+One object, `rule_note`, declared in the blueprint and in both spec examples (`rule_notes`), with a store role of the same name.
+
+| Field | Meaning |
+|---|---|
+| `id` | A uuid minted by the server |
+| `rule_id`, `rule_code` | The record whose Log it belongs to. The code is kept beside the id so a list of notes from many records reads without a lookup; a code never changes |
+| `kind` | `note` (the default), `contradiction`, `compatible` or `question`. Any other value is `ErrInvalidRuleNote`, 400 |
+| `source` | `person` (the default), `worker` or `judge`, as an issue note's kind is `person` or `worker`. The loader's judge sends `judge`, so its verdicts go straight in marked as the judge. Any other value is 400 |
+| `state` | `open` or `resolved` on a `contradiction`; empty on every other kind. A contradiction starts `open` |
+| `text` | Required, trimmed, at most 4000 characters. Never changed |
+| `related_codes` | A list of codes (`R-9`, `D-3`, `Q-5`) of other records the note is about. Each is trimmed, blanks and repeats are dropped, at most 20 |
+| `links` | A list of links to the work: a commit, a file, a drawing, a CI run |
+| `author_id` | Set by the hub from the caller, whatever the body says; `source` says what kind of writer it was, not who |
+| `created_at` | Set by the hub, to the nanosecond, so the Log has one order |
+| `resolved_at`, `resolved_by`, `resolution`, `resolved_by_code` | Empty until a contradiction is resolved. `resolved_by` is the caller. `resolution` is optional words, at most 4000 characters. `resolved_by_code` is the optional code of the rule or decision that settled it |
+
+### Adding
+
+`AddRuleNote(draft)` adds to the Log of any record, a rule, a decision or a question, in any status: a superseded or retired record still takes notes, because the reason it left force is the kind of thing a note holds. Nothing already in a Log is changed or deleted; there is no route that edits or removes a note, and the only change a note ever takes is the resolution below.
+
+The request is one whole body, bound as a struct the way `POST /rules` is, so the body takes exactly `kind`, `source`, `text`, `related_codes` and `links` and any other key is refused with 400 before anything runs: a typo such as `relatedCodes` or `related_code` can no longer save a contradiction with no related code, and `author_id` in the body is refused, not ignored. The author and the record code are never read from the body: the author is the caller and the code is the path's `ruleCode`.
+
+The checks run in this order, and the first to fail answers, so a request that fails two checks always gets the same status:
+
+| Check | Answer |
+|---|---|
+| The caller has Can see on at least one backlog | `ErrBacklogForbidden`, 403 |
+| The record named in the path exists | `ErrRuleNotFound`, 404 |
+| `kind` and `source` are in their lists; `text` is not empty and not over the maximum | `ErrInvalidRuleNote`, 400 |
+| `related_codes` has no more than 20 codes | `ErrInvalidRuleNote`, 400 |
+| No related code is the record's own code | `ErrInvalidRuleNote`, 400 |
+| Every related code names an existing rule, decision or question | `ErrRuleNoteCodeNotFound`, 404 |
+
+Nothing is saved when a check fails.
+
+### Resolving
+
+`ResolveRuleNote(request)` takes a whole body of exactly `resolution` and `resolved_by_code` (any other key is 400, and the resolver and the note come from the caller and the path, never the body) and sets `state` to `resolved` and `resolved_at`, `resolved_by` (the caller), `resolution` and `resolved_by_code`, and changes nothing else: the text, kind, source, author, codes and links stay as written. It needs Can move on a backlog, as the other rule writes do. The checks, in order:
+
+| Check | Answer |
+|---|---|
+| The caller has Can move on at least one backlog | `ErrBacklogForbidden`, 403 |
+| The note exists | `ErrRuleNoteNotFound`, 404 |
+| The note is a `contradiction` | otherwise `ErrInvalidRuleNote`, 400 |
+| The note is still `open` | otherwise `ErrRuleNoteResolved`, 409 |
+| `resolution` is not over the maximum | `ErrInvalidRuleNote`, 400 |
+| `resolved_by_code`, when sent, names an existing record | `ErrRuleNoteCodeNotFound`, 404 |
+| That record is a rule or a decision, not a question | `ErrInvalidRuleNote`, 400 |
+
+The write puts `state = open` in the `WHERE` of its own `UPDATE`, so two people resolving one note at once make one resolution and the other gets 409 with the first one's words standing. A resolved note cannot be reopened.
+
+### Reading
+
+- **One record's Log**: `GET /rules/{ruleCode}/notes`, oldest first, with the filters of the list below apart from `rule`. This route has no tool of its own: its action is `taskmanager.rule.note_list_of` and `taskmanager_rule_note_list` with `rule=<code>` is the same call. An unknown code is 404.
+- **Every record's notes**: `GET /rules/notes`, tool `taskmanager_rule_note_list`, oldest first. Filters, all optional: `rule` (a code; 404 if it does not exist), `kind` (repeat it for several), `state` (`open` or `resolved`; only a contradiction has one, so the filter leaves every other kind out), `related` (a code), `since` (an RFC 3339 time, strictly newer notes only) and `limit` (1 to 200, default 200, keeps the newest). An unknown kind or state, a `since` that is not a time or a `limit` outside 1 to 200 is `ErrInvalidRuleNoteFilter`, 400.
+  - Every open contradiction is one call: `kind=contradiction&state=open`.
+  - `related=D-3` finds a note where `D-3` is on either record: the notes written on `D-3` and the notes on other records that name `D-3` in `related_codes`. A code that does not exist finds nothing; it is not an error in a filter.
+  - The order is `created_at` then `id`, so a note appended later is always after an earlier one.
+- **On the record**: `ReadRule` (tool `taskmanager_rule_read`, `GET /rules/{ruleCode}`) returns the record with three more members: `compatible`, the codes of the rules judged compatible with it (see Contradiction check), `notes`, its latest 50 notes oldest first, each with its `kind`, `source` and `state`, and `note_count`, how many its Log holds in all. A record with no notes has `notes: []` and `note_count: 0`. `GetRuleByCode` stays the plain record for the module's own use.
+
+### Access
+
+Follows `rule_access.go`. Adding and reading need Can see on at least one backlog, the same as the other rule reads, the way an issue's Log takes a note from anyone who can see the issue. Resolving needs Can move. A person with no grants anywhere, the instance owner and a caller with no id are not held back. A caller who can see no backlog gets `ErrBacklogForbidden`, 403, on every note route.
+
+### Status mapping
+
+Five sentinel errors, each standing alone: none wraps `ErrInvalidRule` or another, so the route layer's map, which has no order, can never answer 400 where the answer is 404. `ErrInvalidRuleNote` and `ErrInvalidRuleNoteFilter` are 400; `ErrRuleNoteCodeNotFound` and `ErrRuleNoteNotFound` 404; `ErrRuleNoteResolved` 409. An unknown record in a path is the existing `ErrRuleNotFound`, 404. A test holds that no note sentinel satisfies `errors.Is` against another.
+
+### Notes beside the older checks
+
+| Kept | How it sits with notes |
+|---|---|
+| `applies_when` and the overlap read | They still say which rules meet. A person or the judge who reads a pair records the verdict as a `contradiction` note with the two codes in `related_codes`, or as a `compatible` note |
+| The compatible link (ISS-238) | A stored pair that leaves the overlap read and is counted in `hidden_compatible`. A note never writes it and it never writes a note |
+| The `compatible` note kind | Free words with a reason in a record's Log. It does not hide a pair; to hide one, record the link |
+| `ReadRule` | One answer: the record, `compatible`, `notes` and `note_count`. `GetRuleByCode` stays the bare record for the module's own use |
+
 ## Open
 
-- The AI judge of each pair, which waits on its experiment (ISS-243).
+- The AI judge of each pair of rules posts its verdicts as notes with source `judge` (ISS-243, ISS-238); it is built in the loader, not here.
 - The issue scale is low to critical in this module, while a question's is `P1` to `P3`; the two are not mapped to each other.
 
 - Whether `body` is plain text or Markdown.

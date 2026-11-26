@@ -1370,7 +1370,7 @@
     "read_rule": {
       "method": "GET", "path": "/rules/{ruleCode}", "call": "ReadRule", "action": "taskmanager.rule.read",
       "title": "Read a rule, decision or question",
-      "description": "Read one rule, decision or question by its code, such as R-12, D-3 or Q-5: kind, title, body, status, tags, what it supersedes or is superseded by, who decided and when, and for a question its priority and answered_by (the decision that settled it), and compatible: the codes of the rules a person judged compatible with this one (taskmanager_rule_compatible_add), without any that is superseded or retired. A code that does not exist is refused with 404. A person needs Can see on a backlog.",
+      "description": "Read one rule, decision or question by its code, such as R-12, D-3 or Q-5: kind, title, body, status, tags, what it supersedes or is superseded by, who decided and when, and for a question its priority and answered_by (the decision that settled it). It also carries compatible, the codes of the rules a person judged compatible with this one (taskmanager_rule_compatible_add), without any that is superseded or retired, and notes, the latest 50 notes of its Log oldest first, each with its kind, source and state, and note_count, how many the Log holds in all; taskmanager_rule_note_list reads the rest. A code that does not exist is refused with 404. A person needs Can see on a backlog.",
       "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person needs Can see on a backlog."},
                {"from": "path", "as": "ruleCode", "description": "The code of the rule or decision, such as R-12 or D-3."}],
       "returns": [{"body": true}]
@@ -1543,6 +1543,41 @@
                {"from": "path", "as": "ruleCode", "description": "The code of the rule."},
                {"from": "path", "as": "fileID", "description": "The file link to remove, from the list."}],
       "returns": [{"body": true}]
+    },
+    "add_rule_note": {
+      "method": "POST", "path": "/rules/{ruleCode}/notes", "status": 201, "call": "AddRuleNote", "action": "taskmanager.rule.note_add",
+      "title": "Add a note to a rule, decision or question",
+      "description": "Add one dated note to the Log of a rule, decision or question, in any status. Anyone who can see a backlog may add one. The writer (author_id) and the time are set by the hub from the caller; nothing already in a Log is changed or removed. kind is note (the default), contradiction (this record and another cannot both hold; it starts open until someone resolves it with taskmanager_rule_note_resolve), compatible (they were checked and fit together) or question; any other is refused with 400. source is person (the default), worker or judge, the way an issue note's kind is person or worker; the AI judge sends judge. text is required, trimmed and at most 4000 characters (400 otherwise). related_codes lists the codes (R-9, D-3, Q-5) of other records the note is about, at most 20: a code that does not exist is refused with 404 and the record's own code with 400, and nothing is saved either way. links are the commit, file, drawing or CI run the note is about. A ruleCode that does not exist is refused with 404.",
+      "args": [{"from": "body", "whole": true},
+               {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is writing, from the session; recorded as the note's author. A person needs Can see on a backlog."},
+               {"from": "path", "as": "ruleCode", "into": "RuleCode", "description": "The code of the rule, decision or question whose Log it goes in."}],
+      "returns": [{"body": true}]
+    },
+    "list_rule_notes": {
+      "method": "GET", "path": "/rules/notes", "call": "ListRuleNotes", "action": "taskmanager.rule.note_list",
+      "title": "List notes on rules, decisions and questions",
+      "description": "List the notes of every rule, decision and question the caller may read, oldest first, each with its rule_code, kind, source, state, text, related_codes, links, author_id and time (a resolved contradiction also resolved_at, resolved_by, resolution and resolved_by_code). Narrow with rule (one record's code, such as R-12; 404 when it does not exist), kind (note, contradiction, compatible or question; repeat it for several), state (open or resolved; only a contradiction has one, so every open contradiction is kind=contradiction&state=open), related (a code, such as D-3: notes written on that record and notes that name it in related_codes), since (an RFC 3339 time: only strictly newer notes) and limit (1 to 200, default 200, keeps the newest). An unknown kind or state, a since that is not a time, or a limit outside 1 to 200 is refused with 400. Read-only. A person needs Can see on a backlog.",
+      "args": [{"from": "query", "whole": true},
+               {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session. A person needs Can see on a backlog."}],
+      "returns": [{"body": true}]
+    },
+    "list_notes_of_rule": {
+      "method": "GET", "path": "/rules/{ruleCode}/notes", "call": "ListRuleNotes", "action": "taskmanager.rule.note_list_of", "tool": false,
+      "title": "List the notes of one rule, decision or question",
+      "description": "List the notes in the Log of one record, oldest first; the same filters as the notes of every record apart from rule. A code that does not exist is refused with 404. A person needs Can see on a backlog.",
+      "args": [{"from": "query", "whole": true},
+               {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is asking, from the session. A person needs Can see on a backlog."},
+               {"from": "path", "as": "ruleCode", "into": "Rule", "description": "The code of the record."}],
+      "returns": [{"body": true}]
+    },
+    "resolve_rule_note": {
+      "method": "PUT", "path": "/rules/notes/{noteID}/resolve", "call": "ResolveRuleNote", "action": "taskmanager.rule.note_resolve",
+      "title": "Resolve a contradiction note",
+      "description": "Mark one open contradiction note resolved: its state becomes resolved and resolved_at and resolved_by (the caller) are set. This is the only change a note ever takes; its text, kind, source, author, codes and links stay as written. resolution is optional words saying how it was settled (at most 4000 characters), and resolved_by_code is the optional code of the rule or decision that settled it: a code that does not exist is refused with 404 and a question's code with 400. A note that is not a contradiction is refused with 400, a note already resolved with 409, an unknown note with 404, and nothing is saved in any of those cases. A person needs Can move on a backlog.",
+      "args": [{"from": "body", "whole": true},
+               {"from": "caller", "as": "requester_id", "into": "RequesterID", "description": "Who is resolving, from the session; recorded as resolved_by. A person needs Can move on a backlog."},
+               {"from": "path", "as": "noteID", "into": "NoteID", "description": "The contradiction note, from a notes list."}],
+      "returns": [{"body": true}]
     }
   },
 
@@ -1595,6 +1630,11 @@
     "ErrRuleFileNotFound": 404,
     "ErrDuplicateRuleCompatible": 409,
     "ErrRuleCompatibleNotFound": 404,
+    "ErrInvalidRuleNote": 400,
+    "ErrInvalidRuleNoteFilter": 400,
+    "ErrRuleNoteCodeNotFound": 404,
+    "ErrRuleNoteNotFound": 404,
+    "ErrRuleNoteResolved": 409,
     "ErrTaskNotFound": 404,
     "ErrInvalidTaskNote": 400,
     "ErrInvalidTaskNoteFilter": 400,

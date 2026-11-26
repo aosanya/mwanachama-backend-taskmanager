@@ -20,8 +20,15 @@ func TestToolsAreNamedForTheirModule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tools) != len(routes.Shape()) {
-		t.Fatalf("got %d tools for %d operations", len(tools), len(routes.Shape()))
+	withoutATool := map[string]bool{"taskmanager.rule.note_list_of": true}
+	want := 0
+	for _, route := range routes.Shape() {
+		if !withoutATool[route.Action] {
+			want++
+		}
+	}
+	if len(tools) != want {
+		t.Fatalf("got %d tools for %d operations that have one", len(tools), want)
 	}
 	seen := map[string]bool{}
 	for _, tool := range tools {
@@ -40,6 +47,9 @@ func TestToolShapeNeedsNoBoard(t *testing.T) {
 	bound, err := routes.BuildToolsFor(declaredManager(t), routes.Mount{})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(shape) != len(bound) {
+		t.Fatalf("shape has %d tools, bound has %d", len(shape), len(bound))
 	}
 	for i := range shape {
 		if shape[i].Name != bound[i].Name {

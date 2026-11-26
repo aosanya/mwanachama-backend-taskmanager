@@ -57,7 +57,11 @@ type (
 	RuleFileLink       = models.RuleFileLink
 	RuleFileResult     = models.RuleFileResult
 	RuleCompatible     = models.RuleCompatible
-	RuleView           = models.RuleView
+	RuleNote           = models.RuleNote
+	RuleNoteFilter     = models.RuleNoteFilter
+	RuleNoteDraft      = models.RuleNoteDraft
+	RuleNoteResolution = models.RuleNoteResolution
+	RuleWithNotes      = models.RuleWithNotes
 	TaskNoteFilter     = models.TaskNoteFilter
 	WorkerCaps         = models.WorkerCaps
 	TaskCapsChange     = models.TaskCapsChange

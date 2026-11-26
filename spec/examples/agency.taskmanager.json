@@ -169,6 +169,12 @@
       "description": "A pair of rules a person judged compatible, so the overlap read stops listing it."
     },
     {
+      "role": "rule_note",
+      "name": "rule_note",
+      "table": "rule_notes",
+      "description": "One dated note in the Log of a rule, decision or question, with the codes it is about."
+    },
+    {
       "role": "task_reference",
       "name": "task_reference",
       "table": "task_references",
