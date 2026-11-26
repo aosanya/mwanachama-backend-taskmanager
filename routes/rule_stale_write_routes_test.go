@@ -71,7 +71,7 @@ func TestASupersedeFromAStaleReadAnswers409(t *testing.T) {
 
 func TestAnAnswerFromAStaleReadAnswers409(t *testing.T) {
 	h := newRuleFixture(t).h
-	question := h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "question", "title": "Which tabs?"})["code"].(string)
+	question := h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "question", "target_role": "Product owner", "title": "Which tabs?"})["code"].(string)
 	decision := h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "decision", "title": "Use spaces"})["code"].(string)
 	changeRuleStatusBeforeNextUpdate(h, ruleTableOf(h), "dropped")
 

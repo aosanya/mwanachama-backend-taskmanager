@@ -24,6 +24,7 @@ var (
 type Groups func(ctx context.Context, callerID string) ([]string, error)
 type GroupExists func(ctx context.Context, groupID string) (bool, error)
 type InstanceOwner func(ctx context.Context, callerID string) (bool, error)
+type RoleHolder func(ctx context.Context, callerID, role string) (bool, error)
 
 func (m *taskManager) UseGroups(g Groups) {
 	m.groups = g
@@ -33,6 +34,9 @@ func (m *taskManager) UseGroupExists(g GroupExists) {
 }
 func (m *taskManager) UseInstanceOwner(o InstanceOwner) {
 	m.instanceOwner = o
+}
+func (m *taskManager) UseRoleHolder(h RoleHolder) {
+	m.roleHolder = h
 }
 func (m *taskManager) UseRoleSync(r RoleSync) {
 	m.roleSync = r

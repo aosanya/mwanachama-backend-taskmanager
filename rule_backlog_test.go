@@ -31,7 +31,7 @@ func newBacklogRuleFixture(t *testing.T) backlogRuleFixture {
 
 func (f backlogRuleFixture) record(t *testing.T, kind, title string, tags ...string) mwanachamataskmanager.RuleRecord {
 	t.Helper()
-	made, err := f.mgr.CreateRule(context.Background(), "owner", mwanachamataskmanager.RuleRecord{Kind: kind, Title: title, Tags: tags})
+	made, err := f.mgr.CreateRule(context.Background(), "owner", mwanachamataskmanager.RuleRecord{Kind: kind, Title: title, Tags: tags, TargetRole: roleOfKind(kind)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestBacklogQuestions_ListsOnlyOpenQuestionsSharingATagP1First(t *testing.T)
 	ctx := context.Background()
 	f := newBacklogRuleFixture(t)
 	plain := f.record(t, "question", "plain", "style")
-	urgent, err := f.mgr.CreateRule(ctx, "owner", mwanachamataskmanager.RuleRecord{Kind: "question", Title: "urgent", Priority: "P1", Tags: []string{"data"}})
+	urgent, err := f.mgr.CreateRule(ctx, "owner", mwanachamataskmanager.RuleRecord{Kind: "question", TargetRole: askedRole, Title: "urgent", Priority: "P1", Tags: []string{"data"}})
 	if err != nil {
 		t.Fatal(err)
 	}

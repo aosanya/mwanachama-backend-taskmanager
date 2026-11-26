@@ -123,7 +123,10 @@ func (m *taskManager) CreateRule(ctx context.Context, requesterID string, rule R
 	if err := settleNewPriority(&rule); err != nil {
 		return RuleRecord{}, err
 	}
-	rule.AnsweredBy = ""
+	if err := settleQuestionShape(&rule); err != nil {
+		return RuleRecord{}, err
+	}
+	rule.AnsweredBy, rule.Answer = "", ""
 	appliesWhen, err := appliesWhenOfKind(rule.Kind, rule.AppliesWhen)
 	if err != nil {
 		return RuleRecord{}, err

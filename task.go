@@ -115,6 +115,7 @@ type TaskManager interface {
 	UseGroupExists(g GroupExists)
 	UseInstanceOwner(o InstanceOwner)
 	UseRoleSync(r RoleSync)
+	UseRoleHolder(h RoleHolder)
 	UsePartyRows(rows PartyRows)
 	CreateTaskAs(ctx context.Context, requesterID string, task Task) (Task, error)
 	UpdateTaskAs(ctx context.Context, requesterID string, task Task) (Task, error)
@@ -307,6 +308,7 @@ type TaskManager interface {
 	SetRuleStatus(ctx context.Context, requesterID, code, status string) (RuleRecord, error)
 	SupersedeRule(ctx context.Context, requesterID, code string, replacement RuleRecord) (RuleRecord, error)
 	AnswerQuestion(ctx context.Context, requesterID, code, decisionCode string) (RuleRecord, error)
+	AnswerQuestionWith(ctx context.Context, requesterID, code string, answer QuestionAnswer) (RuleRecord, error)
 	LinkRule(ctx context.Context, requesterID, code, issueID, relation string) error
 	UnlinkRule(ctx context.Context, requesterID, code, issueID, relation string) error
 	ListRulesOfIssue(ctx context.Context, requesterID, issueID string) (IssueRules, error)
@@ -620,6 +622,7 @@ type taskManager struct {
 	groupExists   GroupExists
 	instanceOwner InstanceOwner
 	roleSync      RoleSync
+	roleHolder    RoleHolder
 	partyRows     PartyRows
 	pathChecker   RepoPathChecker
 }

@@ -151,7 +151,7 @@ func (m *taskManager) setStatusRead(ctx context.Context, rule RuleRecord, status
 	}
 	rule.Status = status
 	if status == questionOpen || status == questionDropped {
-		rule.AnsweredBy = ""
+		rule.AnsweredBy, rule.Answer = "", ""
 	}
 	rule.UpdatedAt = stampAfter(rule.UpdatedAt)
 	if err := m.saveRuleFrom(ctx, m.db, rule, readStatus); err != nil {
@@ -161,24 +161,7 @@ func (m *taskManager) setStatusRead(ctx context.Context, rule RuleRecord, status
 }
 
 func (m *taskManager) AnswerQuestion(ctx context.Context, requesterID, code, decisionCode string) (RuleRecord, error) {
-	if err := m.requireRuleAccess(ctx, requesterID, true); err != nil {
-		return RuleRecord{}, err
-	}
-	if strings.TrimSpace(decisionCode) == "" {
-		return RuleRecord{}, fmt.Errorf("%w: answering a question needs the code of the decision that settles it", ErrInvalidRule)
-	}
-	question, err := m.GetRuleByCode(ctx, requesterID, code)
-	if err != nil {
-		return RuleRecord{}, err
-	}
-	if err := checkAnswerable(question); err != nil {
-		return RuleRecord{}, err
-	}
-	decision, err := m.GetRuleByCode(ctx, requesterID, decisionCode)
-	if err != nil {
-		return RuleRecord{}, err
-	}
-	return m.answerRead(ctx, question, decision)
+	return m.AnswerQuestionWith(ctx, requesterID, code, QuestionAnswer{DecisionCode: decisionCode})
 }
 
 func checkAnswerable(question RuleRecord) error {
@@ -199,7 +182,7 @@ func (m *taskManager) answerRead(ctx context.Context, question, decision RuleRec
 		return RuleRecord{}, fmt.Errorf("%w: a question is answered by a decision, and %s is a %s", ErrInvalidRule, decision.Code, decision.Kind)
 	}
 	readStatus := question.Status
-	question.Status, question.AnsweredBy = questionAnswered, decision.Code
+	question.Status, question.AnsweredBy, question.Answer = questionAnswered, decision.Code, ""
 	question.UpdatedAt = stampAfter(question.UpdatedAt)
 	if err := m.saveRuleFrom(ctx, m.db, question, readStatus); err != nil {
 		return RuleRecord{}, fmt.Errorf("AnswerQuestion: %w", err)

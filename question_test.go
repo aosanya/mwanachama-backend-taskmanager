@@ -11,7 +11,7 @@ import (
 
 func mustCreateQuestion(t *testing.T, mgr mwanachamataskmanager.TaskManager, title, priority string) mwanachamataskmanager.RuleRecord {
 	t.Helper()
-	q, err := mgr.CreateRule(context.Background(), "owner", mwanachamataskmanager.RuleRecord{Kind: "question", Title: title, Priority: priority})
+	q, err := mgr.CreateRule(context.Background(), "owner", mwanachamataskmanager.RuleRecord{Kind: "question", TargetRole: askedRole, Title: title, Priority: priority})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestQuestions_PriorityIsP1ToP3OnQuestionsOnly(t *testing.T) {
 		t.Fatalf("default priority %q, want P2", q.Priority)
 	}
 	for _, bad := range []string{"P0", "P4", "high", "p1"} {
-		if _, err := mgr.CreateRule(ctx, "owner", mwanachamataskmanager.RuleRecord{Kind: "question", Title: "x", Priority: bad}); !errors.Is(err, mwanachamataskmanager.ErrInvalidRule) {
+		if _, err := mgr.CreateRule(ctx, "owner", mwanachamataskmanager.RuleRecord{Kind: "question", TargetRole: askedRole, Title: "x", Priority: bad}); !errors.Is(err, mwanachamataskmanager.ErrInvalidRule) {
 			t.Fatalf("%s: err %v, want ErrInvalidRule", bad, err)
 		}
 	}

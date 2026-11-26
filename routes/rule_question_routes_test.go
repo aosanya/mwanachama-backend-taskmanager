@@ -9,11 +9,11 @@ func TestAQuestionIsAskedPrioritisedAnsweredAndListedOverTheRoutes(t *testing.T)
 	f := newRuleFixture(t)
 	h := f.h
 
-	plain := h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "question", "title": "Is body Markdown?", "tags": []string{"docs"}})
+	plain := h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "question", "target_role": "Product owner", "title": "Is body Markdown?", "tags": []string{"docs"}})
 	if plain["code"] != "Q-1" || plain["status"] != "open" || plain["priority"] != "P2" {
 		t.Fatalf("got %v", plain)
 	}
-	urgent := h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "question", "title": "Who signs off?", "priority": "P1"})
+	urgent := h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "question", "target_role": "Product owner", "title": "Who signs off?", "priority": "P1"})
 	if urgent["code"] != "Q-2" || urgent["priority"] != "P1" {
 		t.Fatalf("got %v", urgent)
 	}
@@ -33,7 +33,11 @@ func TestAQuestionIsAskedPrioritisedAnsweredAndListedOverTheRoutes(t *testing.T)
 		t.Run(c.name, func(t *testing.T) {
 			sub := *h
 			sub.t = t
-			sub.expect(http.StatusBadRequest, "bob", "POST", "/rules", map[string]any{"kind": c.kind, "title": "x", "priority": c.prio})
+			body := map[string]any{"kind": c.kind, "title": "x", "priority": c.prio}
+			if c.kind == "question" {
+				body["target_role"] = "Product owner"
+			}
+			sub.expect(http.StatusBadRequest, "bob", "POST", "/rules", body)
 		})
 	}
 
@@ -94,8 +98,8 @@ func TestAQuestionIsAskedPrioritisedAnsweredAndListedOverTheRoutes(t *testing.T)
 func TestTheRulesOfAnIssueCarryItsOpenQuestionsOverTheRoutes(t *testing.T) {
 	f := newRuleFixture(t)
 	h := f.h
-	h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "question", "title": "Linked one", "priority": "P3"})
-	h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "question", "title": "Unrelated one"})
+	h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "question", "target_role": "Product owner", "title": "Linked one", "priority": "P3"})
+	h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "question", "target_role": "Product owner", "title": "Unrelated one"})
 	h.expect(http.StatusNoContent, "bob", "POST", "/rules/Q-1/links", map[string]any{"issue_id": f.issue, "relation": "applies_to"})
 
 	read := h.expect(http.StatusOK, "ann", "GET", "/tasks/"+f.issue+"/rules", nil)
@@ -119,7 +123,7 @@ func TestABacklogRuleListNeverHoldsQuestionsOverTheRoutes(t *testing.T) {
 	f := newRuleFixture(t)
 	h := f.h
 	h.expect(http.StatusOK, "boss", "PATCH", "/tasks/"+f.issue, map[string]any{"tags": []string{"docs"}})
-	h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "question", "title": "Open", "tags": []string{"docs"}})
+	h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "question", "target_role": "Product owner", "title": "Open", "tags": []string{"docs"}})
 	h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "rule", "title": "Plain", "tags": []string{"docs"}})
 
 	if got := f.list("ann", "/backlogs/docs/rules"); len(got) != 1 || got[0]["code"] != "R-1" {

@@ -241,15 +241,15 @@ func TestQuestionLinks_AnOpenQuestionShowsOnTheIssueItIsLinkedToOrSharesATagWith
 	ctx := context.Background()
 	mgr := newTestManager(t)
 	linked := mustCreateQuestion(t, mgr, "Linked", "P3")
-	tagged, err := mgr.CreateRule(ctx, "owner", mwanachamataskmanager.RuleRecord{Kind: "question", Title: "Tagged", Priority: "P1", Tags: []string{"git"}})
+	tagged, err := mgr.CreateRule(ctx, "owner", mwanachamataskmanager.RuleRecord{Kind: "question", TargetRole: askedRole, Title: "Tagged", Priority: "P1", Tags: []string{"git"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	unrelated, err := mgr.CreateRule(ctx, "owner", mwanachamataskmanager.RuleRecord{Kind: "question", Title: "Unrelated", Priority: "P1", Tags: []string{"css"}})
+	unrelated, err := mgr.CreateRule(ctx, "owner", mwanachamataskmanager.RuleRecord{Kind: "question", TargetRole: askedRole, Title: "Unrelated", Priority: "P1", Tags: []string{"css"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	dropped, err := mgr.CreateRule(ctx, "owner", mwanachamataskmanager.RuleRecord{Kind: "question", Title: "Dropped", Priority: "P1", Tags: []string{"git"}})
+	dropped, err := mgr.CreateRule(ctx, "owner", mwanachamataskmanager.RuleRecord{Kind: "question", TargetRole: askedRole, Title: "Dropped", Priority: "P1", Tags: []string{"git"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +382,7 @@ func TestRuleLinks_ASupersededRuleTypedInAnIssueIsMentionedAsItsReplacement(t *t
 func TestRuleLinks_AnOpenQuestionSharingATagWithTheIssueIsNotAlsoMentioned(t *testing.T) {
 	ctx := context.Background()
 	mgr := newTestManager(t)
-	tagged, err := mgr.CreateRule(ctx, "owner", mwanachamataskmanager.RuleRecord{Kind: "question", Title: "Tagged", Priority: "P1", Tags: []string{"git"}})
+	tagged, err := mgr.CreateRule(ctx, "owner", mwanachamataskmanager.RuleRecord{Kind: "question", TargetRole: askedRole, Title: "Tagged", Priority: "P1", Tags: []string{"git"}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,7 +13,11 @@ func newRuleNoteFixture(t *testing.T) *ruleFixture {
 	t.Helper()
 	f := newRuleFixture(t)
 	for _, kind := range []string{"rule", "rule", "decision", "question"} {
-		f.h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": kind, "title": "a " + kind})
+		body := map[string]any{"kind": kind, "title": "a " + kind}
+		if kind == "question" {
+			body["target_role"] = "Product owner"
+		}
+		f.h.expect(http.StatusCreated, "bob", "POST", "/rules", body)
 	}
 	return f
 }

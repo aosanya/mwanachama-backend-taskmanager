@@ -43,6 +43,11 @@ func (m ruleWritesMarked) SupersedeRule(ctx context.Context, requesterID, code s
 	return rule, markRuleChanged(err)
 }
 
+func (m ruleWritesMarked) AnswerQuestionWith(ctx context.Context, requesterID, code string, answer mwanachamataskmanager.QuestionAnswer) (mwanachamataskmanager.RuleRecord, error) {
+	rule, err := m.TaskManager.AnswerQuestionWith(ctx, requesterID, code, answer)
+	return rule, markRuleChanged(err)
+}
+
 func (m ruleWritesMarked) AnswerQuestion(ctx context.Context, requesterID, code, decisionCode string) (mwanachamataskmanager.RuleRecord, error) {
 	rule, err := m.TaskManager.AnswerQuestion(ctx, requesterID, code, decisionCode)
 	return rule, markRuleChanged(err)

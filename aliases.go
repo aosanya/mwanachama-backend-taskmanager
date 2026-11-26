@@ -52,6 +52,8 @@ type (
 	TaskNote           = models.TaskNote
 	RuleRecord         = models.RuleRecord
 	RulePatch          = models.RulePatch
+	QuestionOption     = models.QuestionOption
+	QuestionAnswer     = models.QuestionAnswer
 	RuleFilter         = models.RuleFilter
 	RuleFile           = models.RuleFile
 	RuleFileLink       = models.RuleFileLink

@@ -81,7 +81,7 @@ func TestRules_ARecordNeedsAKindAndATitle(t *testing.T) {
 
 func mustCreateRule(t *testing.T, mgr mwanachamataskmanager.TaskManager, kind, title string) mwanachamataskmanager.RuleRecord {
 	t.Helper()
-	r, err := mgr.CreateRule(context.Background(), "owner", mwanachamataskmanager.RuleRecord{Kind: kind, Title: title})
+	r, err := mgr.CreateRule(context.Background(), "owner", mwanachamataskmanager.RuleRecord{Kind: kind, Title: title, TargetRole: roleOfKind(kind)})
 	if err != nil {
 		t.Fatal(err)
 	}

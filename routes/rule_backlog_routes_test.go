@@ -44,7 +44,7 @@ func TestABacklogListNarrowsByTheTagQueryOverTheRoutes(t *testing.T) {
 	h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "rule", "title": "Both", "tags": []string{"docs", "style"}})
 	h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "rule", "title": "Docs only", "tags": []string{"Docs"}})
 	h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "decision", "title": "Style decision", "tags": []string{"style"}})
-	h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "question", "title": "Which docs?", "tags": []string{"docs"}})
+	h.expect(http.StatusCreated, "bob", "POST", "/rules", map[string]any{"kind": "question", "target_role": "Product owner", "title": "Which docs?", "tags": []string{"docs"}})
 
 	if got := f.list("ann", "/backlogs/docs/rules"); len(got) != 2 {
 		t.Fatalf("rules %v", got)

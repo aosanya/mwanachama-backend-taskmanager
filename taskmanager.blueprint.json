@@ -1540,6 +1540,9 @@
         {"name": "decided_at", "type": "string", "description": "When it was decided, as a date."},
         {"name": "priority", "type": "string", "description": "P1, P2 or P3, on a question only and empty on a rule or decision; P1 is answered first."},
         {"name": "answered_by", "type": "string", "description": "The code of the decision that settles a question; empty until it is answered."},
+        {"name": "target_role", "type": "string", "description": "On a question only: the agency role whose holders answer it; required when a question is made, empty on a rule or decision."},
+        {"name": "options", "type": "json", "description": "On a question only: the answers offered, each {text, recommended, reason}; at most one is recommended, carries a one-line reason and comes first."},
+        {"name": "answer", "type": "text", "description": "On a question only: the words that closed it when an option or a typed answer was chosen; empty when a decision settled it or it is still open."},
         {"name": "created_at", "type": "timestamp", "description": "When the record was made."},
         {"name": "updated_at", "type": "timestamp", "description": "When the record last changed."}
       ],
