@@ -185,12 +185,12 @@ func TestTheRuleToolsAreNamedAfterTheirActions(t *testing.T) {
 }
 
 func TestAnAgentCreatesAndReadsARuleThroughTheTools(t *testing.T) {
-	h := newAccessHub(t, map[string][]string{})
-	made, err := h.invoke("agent", "taskmanager_rule_create", map[string]any{"kind": "rule", "title": "Tests first", "tags": []string{"process"}})
+	h := newRuleFixture(t).h
+	made, err := h.invoke("bob", "taskmanager_rule_create", map[string]any{"kind": "rule", "title": "Tests first", "tags": []string{"process"}})
 	if err != nil || made["code"] != "R-1" {
 		t.Fatalf("got %v, %v", made, err)
 	}
-	read, err := h.invoke("agent", "taskmanager_rule_read", map[string]any{"ruleCode": "R-1"})
+	read, err := h.invoke("bob", "taskmanager_rule_read", map[string]any{"ruleCode": "R-1"})
 	if err != nil || read["title"] != "Tests first" {
 		t.Fatalf("got %v, %v", read, err)
 	}

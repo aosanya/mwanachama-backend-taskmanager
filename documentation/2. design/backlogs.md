@@ -34,6 +34,7 @@ With `UseGroupTags` set, the `see` level is replaced by reach (ISS-220, D28, D32
 - `move` and `edit` stay per group and need reach first: a group with `move` on a backlog it does not reach can do nothing there. `give_backlog_access` takes `move` or `edit` only; a stored `see` grant is ignored on read.
 - The owner pass is gone: `UseInstanceOwner` no longer exists. The owner reaches a backlog through the assumed group, as anyone does. The owner group still holds `edit` on every backlog for the levels.
 - A call with no person is not limited, which keeps the hub's own jobs working.
+- Reading a rule, a decision or a question needs the reach of any backlog; writing one needs `move` on a backlog the caller reaches (ISS-220, `requireRuleAccess`).
 - Without `UseGroupTags` reach is off and the old group levels apply. The hub turns reach on only after its cleanup has tagged the backlogs that exist (F5).
 - The operations that had no caller and return a task or a todo now take one and follow their issue: `get_task_todo`, `list_task_todos`, `create_task_todo`, `dispatch_task_todo`, `link_todo_to_run`, `list_projects_for_task`, `list_deliverables_for_task`, `list_acceptance_criteria_for_task` and `get_workflow_run_closure`. A todo with no issue is reached by no person. The earlier methods without a caller stay for the hub's own jobs.
 

@@ -203,19 +203,19 @@ func TestTheNoteToolsExistAndTheOverlapAndCompatibleToolsStillDo(t *testing.T) {
 }
 
 func TestAnAgentAddsAJudgeNoteAndResolvesItThroughTheTools(t *testing.T) {
-	h := newAccessHub(t, map[string][]string{})
+	h := newRuleFixture(t).h
 	for _, title := range []string{"A", "B"} {
-		if _, err := h.invoke("agent", "taskmanager_rule_create", map[string]any{"kind": "rule", "title": title}); err != nil {
+		if _, err := h.invoke("bob", "taskmanager_rule_create", map[string]any{"kind": "rule", "title": title}); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	note, err := h.invoke("agent", "taskmanager_rule_note_add", map[string]any{"ruleCode": "R-1", "kind": "contradiction", "source": "judge", "text": "clash", "related_codes": []string{"R-2"}})
-	if err != nil || note["state"] != "open" || note["source"] != "judge" || note["author_id"] != "agent" {
+	note, err := h.invoke("bob", "taskmanager_rule_note_add", map[string]any{"ruleCode": "R-1", "kind": "contradiction", "source": "judge", "text": "clash", "related_codes": []string{"R-2"}})
+	if err != nil || note["state"] != "open" || note["source"] != "judge" || note["author_id"] != "bob" {
 		t.Fatalf("got %v, %v", note, err)
 	}
-	done, err := h.invoke("agent", "taskmanager_rule_note_resolve", map[string]any{"noteID": note["id"], "resolution": "fine"})
-	if err != nil || done["state"] != "resolved" || done["resolved_by"] != "agent" {
+	done, err := h.invoke("bob", "taskmanager_rule_note_resolve", map[string]any{"noteID": note["id"], "resolution": "fine"})
+	if err != nil || done["state"] != "resolved" || done["resolved_by"] != "bob" {
 		t.Fatalf("got %v, %v", done, err)
 	}
 }

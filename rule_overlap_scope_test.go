@@ -19,7 +19,7 @@ func TestRuleOverlap_AnIssueInABacklogTheCallerCannotSeeStaysOutOfSharedIssues(t
 	hidden := mustCreate(t, mgr, mwanachamataskmanager.Task{Title: "in the first backlog", Tags: []string{"css", "app"}})
 	ruleInForceWhen(t, mgr, "Use rem", tagWhen("css"))
 	ruleInForceWhen(t, mgr, "Keep it small", tagWhen("app"))
-	if _, err := mgr.GiveBacklogAccess(ctx, "software", devGroup, "see"); err != nil {
+	if _, err := giveSee(mgr, ctx, "software", devGroup); err != nil {
 		t.Fatal(err)
 	}
 
