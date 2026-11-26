@@ -129,19 +129,7 @@ func summarize(backlogs []models.Backlog, tasks []Task) models.BacklogList {
 }
 
 func (m *taskManager) ListBacklogs(ctx context.Context) (models.BacklogList, error) {
-	backlogs, err := m.backlogs(ctx)
-	if err != nil {
-		return models.BacklogList{}, err
-	}
-	tasks, err := m.placedTasks(ctx)
-	if err != nil {
-		return models.BacklogList{}, fmt.Errorf("ListBacklogs: %w", err)
-	}
-	list := summarize(backlogs, tasks)
-	if err := m.countSmartIssues(ctx, "", &list, backlogs); err != nil {
-		return models.BacklogList{}, err
-	}
-	return list, nil
+	return m.backlogListCountedFor(ctx, "")
 }
 
 func (m *taskManager) summaryOf(ctx context.Context, backlogID string) (models.BacklogSummary, error) {

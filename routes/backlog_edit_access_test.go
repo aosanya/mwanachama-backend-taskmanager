@@ -21,6 +21,7 @@ func writesOnABacklog(backlog, stepName string) map[string]probeCall {
 		"give_backlog_access":        {"PUT", b + "/access/contributors", map[string]string{"level": "move"}},
 		"take_backlog_access":        {"DELETE", b + "/access/contributors", nil},
 		"add_backlog_tag":            {"POST", b + "/tags", map[string]string{"tag": "emea"}},
+		"set_backlog_rules":          {"PUT", b + "/rules", map[string]any{"rules": map[string]any{"match": "all", "rules": []map[string]string{{"field": "title", "operator": "contains", "value": "x"}}}}},
 	}
 }
 

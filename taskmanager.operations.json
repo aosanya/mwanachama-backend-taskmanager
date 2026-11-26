@@ -261,10 +261,11 @@
       "returns": [{"body": true}]
     },
     "set_backlog_rules": {
-      "method": "PUT", "path": "/backlogs/{backlogID}/rules", "call": "SetBacklogRules", "action": "taskmanager.backlog.rules_set",
+      "method": "PUT", "path": "/backlogs/{backlogID}/rules", "call": "SetBacklogRulesAs", "action": "taskmanager.backlog.rules_set",
       "title": "Set a smart backlog's rules",
       "description": "Replace the rules of a smart backlog. The same rules as another smart backlog are refused with that backlog's id and name.",
-      "args": [{"from": "path", "as": "backlogID", "description": "The smart backlog."},
+      "args": [{"from": "caller", "as": "requester_id", "description": "Who is asking, from the session; a person needs Can edit on the backlog, and the issue count in the answer holds only what this person reaches."},
+               {"from": "path", "as": "backlogID", "description": "The smart backlog."},
                {"from": "body", "as": "rules", "required": true, "description": "{match: all or any, rules: [{field, operator, value}]}."}],
       "returns": [{"body": true}]
     },

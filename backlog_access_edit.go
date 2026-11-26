@@ -22,21 +22,24 @@ func (m *taskManager) RenameBacklogAs(ctx context.Context, requesterID, backlogI
 	if err := m.requireEditOn(ctx, requesterID, backlogID); err != nil {
 		return BacklogSummary{}, err
 	}
-	return m.RenameBacklog(ctx, backlogID, name)
+	written, err := m.RenameBacklog(ctx, backlogID, name)
+	return m.countedFor(ctx, requesterID, written, err)
 }
 
 func (m *taskManager) ArchiveBacklogAs(ctx context.Context, requesterID, backlogID string) (BacklogSummary, error) {
 	if err := m.requireEditOn(ctx, requesterID, backlogID); err != nil {
 		return BacklogSummary{}, err
 	}
-	return m.ArchiveBacklog(ctx, backlogID)
+	written, err := m.ArchiveBacklog(ctx, backlogID)
+	return m.countedFor(ctx, requesterID, written, err)
 }
 
 func (m *taskManager) UnarchiveBacklogAs(ctx context.Context, requesterID, backlogID string) (BacklogSummary, error) {
 	if err := m.requireEditOn(ctx, requesterID, backlogID); err != nil {
 		return BacklogSummary{}, err
 	}
-	return m.UnarchiveBacklog(ctx, backlogID)
+	written, err := m.UnarchiveBacklog(ctx, backlogID)
+	return m.countedFor(ctx, requesterID, written, err)
 }
 
 func (m *taskManager) DeleteBacklogAs(ctx context.Context, requesterID, backlogID string) error {

@@ -69,7 +69,7 @@ func (m *taskManager) loggedChanges(ctx context.Context, backlog string, filter 
 }
 
 func (m *taskManager) scopedTasksWithDeleted(ctx context.Context, backlog string, tags []string, requesterID string) (*gorm.DB, error) {
-	q, err := m.narrowToPlace(ctx, m.store.Query(ctx, roleTask), TaskFilter{Backlog: backlog})
+	q, err := m.narrowToPlace(ctx, m.store.Query(ctx, roleTask), TaskFilter{Backlog: backlog, RequesterID: requesterID})
 	if err != nil {
 		return nil, err
 	}

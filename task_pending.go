@@ -152,7 +152,7 @@ func (m *taskManager) pendingBase(ctx context.Context, filter PendingFilter, clo
 
 func (m *taskManager) scopedTasks(ctx context.Context, backlog, step string, tags []string, requesterID string) (*gorm.DB, error) {
 	q := m.store.Query(ctx, roleTask).Where("deleted = ?", false)
-	q, err := m.narrowToPlace(ctx, q, TaskFilter{Backlog: backlog, Step: step})
+	q, err := m.narrowToPlace(ctx, q, TaskFilter{Backlog: backlog, Step: step, RequesterID: requesterID})
 	if err != nil {
 		return nil, err
 	}

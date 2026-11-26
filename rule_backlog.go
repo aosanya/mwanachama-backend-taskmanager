@@ -23,7 +23,7 @@ func (m *taskManager) backlogIssueTags(ctx context.Context, requesterID, backlog
 	if !visible.Sees(backlogID) {
 		return nil, fmt.Errorf("%w: reading the rules of a backlog needs Can see on it", ErrBacklogForbidden)
 	}
-	issues, err := m.ListTasks(ctx, TaskFilter{Backlog: backlogID})
+	issues, err := m.ListTasks(ctx, TaskFilter{Backlog: backlogID, RequesterID: requesterID})
 	if err != nil {
 		return nil, err
 	}

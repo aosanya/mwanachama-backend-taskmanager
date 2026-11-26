@@ -142,7 +142,7 @@ func (m *taskManager) backlogVisibility(ctx context.Context, requesterID string)
 	return visibility, nil
 }
 func (m *taskManager) ListBacklogsFor(ctx context.Context, requesterID string) (models.BacklogList, error) {
-	list, err := m.ListBacklogs(ctx)
+	list, err := m.backlogListCountedFor(ctx, requesterID)
 	if err != nil {
 		return models.BacklogList{}, err
 	}
@@ -151,13 +151,6 @@ func (m *taskManager) ListBacklogsFor(ctx context.Context, requesterID string) (
 		return models.BacklogList{}, err
 	}
 	kept := make([]models.BacklogSummary, 0, len(list.Items))
-	backlogs, err := m.backlogs(ctx)
-	if err != nil {
-		return models.BacklogList{}, err
-	}
-	if err := m.countSmartIssues(ctx, requesterID, &list, backlogs); err != nil {
-		return models.BacklogList{}, err
-	}
 	for _, item := range list.Items {
 		if visible.Sees(item.ID) {
 			item.Level = visible.LevelOf(item.ID)

@@ -38,6 +38,21 @@ With `UseGroupTags` set, the `see` level is replaced by reach (ISS-220, D28, D32
 - Without `UseGroupTags` reach is off and the old group levels apply. The hub turns reach on only after its cleanup has tagged the backlogs that exist (F5).
 - The operations that had no caller and return a task or a todo now take one and follow their issue: `get_task_todo`, `list_task_todos`, `create_task_todo`, `dispatch_task_todo`, `link_todo_to_run`, `list_projects_for_task`, `list_deliverables_for_task`, `list_acceptance_criteria_for_task` and `get_workflow_run_closure`. A todo with no issue is reached by no person. The earlier methods without a caller stay for the hub's own jobs.
 
+### What a smart backlog shows to two groups
+
+A smart backlog stores no reach tag (`add_backlog_tag` refuses it). Reach comes first, then its rules (ISS-221, D73): the rules only ever see the tasks the caller reaches, so the same rules give two groups two lists and two counts.
+
+| Caller | Smart backlog on the list | Issues listed and counted |
+|---|---|---|
+| A group whose tags reach one area | yes | the matches in that area |
+| A group carrying `all` | yes | every match |
+| A group with no tag, or no group | no | none |
+| No person (the hub's own jobs) | yes | every match |
+
+- The count is the caller's on `list_backlogs`, on `count_backlog_rules` and in the answer of a write that returns the backlog: `create_backlog`, `rename_backlog`, `archive_backlog`, `unarchive_backlog` and `set_backlog_rules`, which carries the caller for this and, like every other change to a backlog, needs Can edit on it.
+- `list_backlog_rules`, `list_backlog_decisions` and `list_backlog_questions` of a smart backlog take their tags from the matched tasks the caller reaches.
+- The Tag rule compares label tags and the project name only. A backlog's reach tags are never part of what a rule matches, so a rule with `sprint 1` matches the label `sprint 1` and not a reach tag of that name.
+
 Design: the hub's `task-tags.md` sections 3, 4 and 7.
 
 ## What the manager does

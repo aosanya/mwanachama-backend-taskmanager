@@ -18,6 +18,9 @@ func TestSettingTheRulesOfASmartBacklogAnswersWithTheCallersOwnCount(t *testing.
 	}
 	smart := h.expect(http.StatusCreated, "boss", "POST", "/backlogs", map[string]any{"name": "Sprint", "rules": titled("sprint")})["id"].(string)
 
+	h.expect(http.StatusForbidden, "eve", "PUT", "/backlogs/"+smart+"/rules", map[string]any{"rules": titled("sprint work")})
+	h.expect(http.StatusOK, "boss", "PUT", "/backlogs/"+smart+"/access/g-emea", map[string]string{"level": "edit"})
+
 	for caller, want := range map[string]float64{"eve": 1, "boss": 2} {
 		got := h.expect(http.StatusOK, caller, "PUT", "/backlogs/"+smart+"/rules", map[string]any{"rules": titled("sprint work")})
 		if got["issues"] != want {

@@ -34,7 +34,10 @@ func (m *taskManager) CreateBacklogAs(ctx context.Context, requesterID, name str
 		return models.BacklogSummary{}, err
 	}
 	made, err := m.CreateBacklogWithRules(ctx, name, steps, rules)
-	if err != nil || rules != nil || len(first) == 0 {
+	if rules != nil {
+		return m.countedFor(ctx, requesterID, made, err)
+	}
+	if err != nil || len(first) == 0 {
 		return made, err
 	}
 	return m.changeBacklog(ctx, made.ID, func(b *models.Backlog) error {

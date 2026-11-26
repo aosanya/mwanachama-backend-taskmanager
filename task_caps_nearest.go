@@ -27,7 +27,7 @@ func (m *taskManager) nearestTaskIDs(ctx context.Context, filter CapsNearestFilt
 	if len(filter.TaskIDs) > 0 {
 		q = q.Where("id IN ?", []string(filter.TaskIDs))
 	}
-	q, err := m.narrowToPlace(ctx, q, TaskFilter{Backlog: filter.Backlog})
+	q, err := m.narrowToPlace(ctx, q, TaskFilter{Backlog: filter.Backlog, RequesterID: filter.RequesterID})
 	if err != nil {
 		return nil, err
 	}
