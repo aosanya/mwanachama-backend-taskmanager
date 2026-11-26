@@ -67,6 +67,8 @@ Superseding takes the old record's code and the replacement's fields. It creates
 - `UpdateRule` refuses a `superseded` or `retired` record with `ErrInvalidRule`: the words of a record that has left force are the history and stay as they are.
 - Every write that changes a record (`UpdateRule`, `SetRuleStatus`, `SupersedeRule`, `AnswerQuestion`) puts the status it read in the `WHERE` of its own `UPDATE`. A write that matches no row returns `ErrRuleChanged`: the record changed meanwhile, read it and try again. So a stale write cannot bring a superseded record back, and two supersedes of one record make one replacement (the second one's transaction rolls back, replacement and code number included). `ErrRuleChanged` wraps `ErrInvalidRule` but answers 409, so a client can tell read-again-and-retry from bad input. The status table is a map with no order, so the route layer marks the four rule writes' error with its own type (`routes/rule_changed.go`) and matches that type first; mapping the sentinel alone answers 400 on some runs.
 - `UpdateRule` takes an optional `expected_updated_at` (a field of the body, so the route and the tool both carry it). Left out, nothing changes and the last write wins. Sent, it must equal the stored `updated_at` or the write is refused with `ErrRuleStale` (409, and it does not wrap `ErrInvalidRule`, so the status table needs no wrapper); a blank value is 400. The stamp is also put in the `WHERE` of the write, so a change landing between the check and the write answers 409 as `ErrRuleChanged`. Every rule write moves `updated_at` strictly forward, one second past the previous stamp when the clock has not moved, so a read from before any write is always stale.
+- **Order of refusals** (ISS-272): `UpdateRule` looks at the status first. A `superseded` or `retired` record answers `ErrInvalidRule` (400) even when the `expected_updated_at` sent is stale, because the words of such a record never change and a retry cannot help; only a record that may still be edited is checked for a stale stamp.
+- **The stamp rule** (ISS-272): each of `UpdateRule`, `SetRuleStatus`, `SupersedeRule` (on the old record) and `AnswerQuestion` stamps the record with the later of the clock and one second past its previous stamp, so a read taken in the same second as a supersede or an answer is stale too. Tests read a record, supersede it or answer it at once, and check that the stamp moved past the read and that an update from the older read is refused with 409.
 - The memory backend does not reproduce a true race, so the tests replay it as an interleaved sequence: read the record, change it through the API, then write from the stale read.
 
 ## Links
@@ -127,12 +129,13 @@ A backlog's Rules and Decisions views list the records whose tags match the tags
 
 | Tool | Route | Call |
 |---|---|---|
-| `taskmanager_backlog_rules_list` | `GET /backlogs/{backlogID}/rules?status=` | `ListBacklogRules` |
-| `taskmanager_backlog_decisions_list` | `GET /backlogs/{backlogID}/decisions?status=` | `ListBacklogDecisions` |
-| `taskmanager_backlog_questions_list` | `GET /backlogs/{backlogID}/questions?status=` | `ListBacklogQuestions` |
+| `taskmanager_backlog_rules_list` | `GET /backlogs/{backlogID}/rules?status=&tag=` | `ListBacklogRules` |
+| `taskmanager_backlog_decisions_list` | `GET /backlogs/{backlogID}/decisions?status=&tag=` | `ListBacklogDecisions` |
+| `taskmanager_backlog_questions_list` | `GET /backlogs/{backlogID}/questions?status=&tag=` | `ListBacklogQuestions` |
 
 - **Matching**: the backlog's tags are the distinct tags of the issues in it, compared without regard to letter case; a record is listed when it carries at least one of them (the same test the suggested rules of an issue use, not the every-tag test of `taskmanager_rule_list`). A backlog whose issues carry no tag lists nothing. Kind in the query is ignored: the first tool returns rules, the second decisions and the third questions. Tag narrows the list further: a record must be in the backlog's scope and carry every tag given, without regard to case (ISS-272).
 - **Statuses** (decision 175): `status` repeats. With none given the rules list returns `in_force` and `proposed`, the decisions list `decided` and `proposed`, so superseded and retired records are hidden until asked for. A status of the other kind is refused with 400, as is an unknown backlog.
+- **Narrowing by tag** (ISS-272): `tag` repeats, as on `taskmanager_rule_list`, and narrows the matched list further: a record stays when it carries every tag given, compared without regard to letter case. A tag no listed record carries gives an empty list, not an error. The three lists and their tools take it the same way.
 - **Access**: the caller needs Can see on that backlog, otherwise 403 (`ErrBacklogForbidden`); the rule access of the agency-wide list applies as well.
 - A superseded record carries `superseded_by`, so the app can show the code of its replacement from the same answer.
 
